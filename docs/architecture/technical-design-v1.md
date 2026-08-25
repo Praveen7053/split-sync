@@ -34885,16 +34885,16335 @@ The following rules are mandatory for V1:
 - Derived balances must be based on committed source data.
 - The transaction architecture must preserve the local-first and offline-first principles of SplitSync.
 
-24. API Design Principles
+## 24. API Design Principles
 
-25. Versioning Strategy
+### 24.1 Purpose
 
-26. Package Naming
+This section defines the API design principles for SplitSync V1.
 
-27. Configuration Strategy
+The API layer provides controlled communication between:
 
-28. Environment Strategy
+```text
+Android Application
+        ↓
+HTTPS / REST API
+        ↓
+Spring Boot Backend
+        ↓
+Application Services
+        ↓
+Persistence Layer
+        ↓
+MySQL
+```
 
-29. Logging Strategy
+The API must support:
 
-30. Testing Structure
+```text
+Authentication
+Authorization
+Group Management
+Expense Management
+Expense Splits
+Settlements
+Membership
+Synchronization
+Conflict Handling
+Device Management
+```
+
+The API must be designed around the Domain and Synchronization models rather than around direct database access.
+
+### 24.2 Core Principle
+
+The API follows:
+
+```text
+Stable
++
+Versioned
++
+Resource-Oriented
++
+Secure
++
+Idempotent
++
+Offline-Aware
++
+Synchronization-Friendly
+```
+
+### 24.3 REST API
+
+SplitSync V1 uses:
+
+```text
+REST
++
+HTTPS
++
+JSON
+```
+
+for Android-to-Backend communication.
+
+The API must expose business operations through well-defined HTTP endpoints.
+
+### 24.4 API Versioning
+
+The API must be versioned.
+
+Example:
+
+```text
+/api/v1/...
+```
+
+Versioning prevents future API changes from unexpectedly breaking existing Android clients.
+
+### 24.5 Versioning Principle
+
+A breaking API change should require a new API version.
+
+Example:
+
+```text
+/api/v1/expenses
+```
+
+may continue to operate while:
+
+```text
+/api/v2/expenses
+```
+
+introduces a breaking contract.
+
+### 24.6 HTTPS
+
+All production API communication must use:
+
+```text
+HTTPS
+```
+
+Plain HTTP must not be used for sensitive application data in production.
+
+### 24.7 JSON
+
+The standard API payload format is:
+
+```text
+JSON
+```
+
+JSON structures must use consistent naming conventions and data types.
+
+### 24.8 Resource-Oriented Design
+
+Core resources include:
+
+```text
+users
+devices
+groups
+memberships
+expenses
+expense-splits
+settlements
+invitations
+sync
+conflicts
+```
+
+The exact endpoint structure may evolve during implementation while preserving the underlying Domain concepts.
+
+### 24.9 API Must Not Expose Database Structure
+
+The API must not simply expose:
+
+```text
+MySQL Tables
+```
+
+as direct CRUD endpoints.
+
+Instead:
+
+```text
+HTTP Request
+      ↓
+API Contract
+      ↓
+Application Service
+      ↓
+Domain Operation
+      ↓
+Persistence
+```
+
+### 24.10 API and Domain Model
+
+The API must represent Domain concepts such as:
+
+```text
+Group
+Expense
+ExpenseSplit
+Settlement
+Membership
+```
+
+rather than exposing internal persistence details.
+
+### 24.11 API and Synchronization Model
+
+Synchronization APIs must represent:
+
+```text
+SyncOperation
+SyncState
+Change Cursor
+Conflict
+```
+
+and must not depend on complete database replacement.
+
+### 24.12 Authentication
+
+Protected APIs require authentication.
+
+Conceptually:
+
+```text
+Request
+   ↓
+Authentication
+   ↓
+Authenticated User
+   ↓
+Authorization
+   ↓
+Domain Operation
+```
+
+### 24.13 Authorization
+
+Authentication answers:
+
+```text
+Who are you?
+```
+
+Authorization answers:
+
+```text
+What are you allowed to do?
+```
+
+Both are required.
+
+### 24.14 Server-Side Authorization
+
+The backend must independently validate authorization.
+
+The client must never be trusted to decide:
+
+```text
+User is Group Owner
+```
+
+or:
+
+```text
+User can modify Expense
+```
+
+### 24.15 Group Authorization
+
+For Group-related APIs:
+
+```text
+Authenticated User
+      ↓
+Group Membership
+      ↓
+Role / Permission
+      ↓
+Allowed Operation
+```
+
+### 24.16 Resource Ownership
+
+Where applicable, the backend must validate ownership or permission before allowing mutation.
+
+Example:
+
+```text
+Update Group
+      ↓
+Check Group Permission
+      ↓
+Allow / Reject
+```
+
+### 24.17 HTTP Methods
+
+Standard HTTP methods should be used according to operation semantics:
+
+```text
+GET
+POST
+PUT
+PATCH
+DELETE
+```
+
+The exact method selected must match the Domain operation.
+
+### 24.18 GET
+
+`GET` is used for retrieving data.
+
+Examples:
+
+```text
+GET /api/v1/groups
+GET /api/v1/groups/{groupId}
+GET /api/v1/groups/{groupId}/expenses
+```
+
+GET requests should not modify Domain state.
+
+### 24.19 POST
+
+`POST` is used for creating resources or executing operations where creation semantics apply.
+
+Examples:
+
+```text
+POST /api/v1/groups
+POST /api/v1/groups/{groupId}/expenses
+POST /api/v1/groups/{groupId}/settlements
+```
+
+### 24.20 PUT
+
+`PUT` may be used when replacing a resource representation is appropriate.
+
+The application should not use PUT merely because an endpoint performs an update.
+
+### 24.21 PATCH
+
+`PATCH` may be used for partial updates.
+
+Example:
+
+```text
+PATCH /api/v1/groups/{groupId}
+```
+
+### 24.22 DELETE
+
+`DELETE` may be used where the Domain supports deletion.
+
+For financial records, deletion semantics must follow the Domain lifecycle and synchronization rules.
+
+### 24.23 Financial Data Deletion
+
+Expenses and Settlements must not be physically deleted through a generic API simply because a User requests deletion.
+
+Where required, the API should use:
+
+```text
+Tombstone
++
+Deletion Operation
++
+Synchronization
+```
+
+according to the Domain model.
+
+### 24.24 API Request Validation
+
+Every request must be validated.
+
+Validation includes:
+
+```text
+Required Fields
+Data Types
+Value Ranges
+Format
+Domain Rules
+Authorization
+```
+
+### 24.25 API Response Validation
+
+The backend should return responses that conform to the documented API contract.
+
+The Android client should also safely handle unexpected or incomplete responses.
+
+### 24.26 Request DTOs
+
+The backend should use dedicated Request DTOs.
+
+Example:
+
+```text
+CreateExpenseRequest
+UpdateExpenseRequest
+CreateSettlementRequest
+CreateGroupRequest
+```
+
+The API should not directly bind requests to JPA entities.
+
+### 24.27 Response DTOs
+
+The backend should use Response DTOs.
+
+Example:
+
+```text
+ExpenseResponse
+GroupResponse
+SettlementResponse
+SyncResponse
+ConflictResponse
+```
+
+This prevents persistence models from becoming public API contracts.
+
+### 24.28 DTO and Entity Separation
+
+The architectural boundary is:
+
+```text
+API DTO
+   ↓
+Application / Domain Model
+   ↓
+Persistence Entity
+```
+
+The API must not require the Android client to understand JPA/Hibernate entity structures.
+
+### 24.29 Request IDs
+
+Requests may include a:
+
+```text
+requestId
+```
+
+or equivalent correlation identifier.
+
+This supports:
+
+```text
+Tracing
+Debugging
+Diagnostics
+```
+
+### 24.30 Operation IDs
+
+Synchronization requests must include or reference:
+
+```text
+operationId
+```
+
+where applicable.
+
+The Operation ID must remain stable across retries.
+
+### 24.31 Idempotency
+
+Synchronization APIs must be idempotent.
+
+Example:
+
+```text
+POST Operation O100
+      ↓
+Backend applies O100
+      ↓
+Response lost
+      ↓
+Retry O100
+      ↓
+Backend detects O100
+      ↓
+ALREADY_APPLIED
+```
+
+No duplicate financial record should be created.
+
+### 24.32 Idempotency Key
+
+For synchronization operations:
+
+```text
+operationId
+```
+
+should serve as the primary idempotency identity.
+
+If a separate HTTP-level idempotency key is required later, it must remain consistent with the synchronization Operation ID model.
+
+### 24.33 Idempotency Storage
+
+The backend must persist enough information to determine whether an operation was already processed.
+
+Conceptually:
+
+```text
+operationId
++
+result
++
+entityId
++
+processedAt
+```
+
+### 24.34 Retry Safety
+
+The API must be designed for retries.
+
+Possible retry causes:
+
+```text
+Network Timeout
+Connection Reset
+Application Restart
+Backend Response Lost
+P2P-to-Backend Transition
+```
+
+The same operation must remain safe to retry.
+
+### 24.35 Timeout Safety
+
+A client timeout does not necessarily mean:
+
+```text
+Backend Operation Failed
+```
+
+The client must be able to safely retry using:
+
+```text
+operationId
+```
+
+### 24.36 Error Response Structure
+
+API errors should use a consistent structure.
+
+Conceptually:
+
+```json
+{
+  "code": "VALIDATION_ERROR",
+  "message": "Invalid expense split.",
+  "requestId": "R1001"
+}
+```
+
+The exact fields may be expanded during implementation.
+
+### 24.37 Error Code
+
+Clients should rely primarily on:
+
+```text
+error.code
+```
+
+rather than parsing human-readable messages.
+
+Example:
+
+```text
+AUTHENTICATION_REQUIRED
+AUTHORIZATION_DENIED
+VALIDATION_ERROR
+CONFLICT
+RATE_LIMITED
+SERVER_ERROR
+```
+
+### 24.38 Error Message
+
+The:
+
+```text
+message
+```
+
+field is intended for safe human-readable information.
+
+It must not expose:
+
+```text
+Stack Traces
+SQL Queries
+Internal Class Names
+Secrets
+Security-Sensitive Details
+```
+
+### 24.39 HTTP Status Codes
+
+The API should use standard HTTP semantics.
+
+Typical examples:
+
+```text
+200 OK
+201 Created
+204 No Content
+400 Bad Request
+401 Unauthorized
+403 Forbidden
+404 Not Found
+409 Conflict
+422 Unprocessable Entity
+429 Too Many Requests
+500 Internal Server Error
+502 Bad Gateway
+503 Service Unavailable
+504 Gateway Timeout
+```
+
+The exact status-code mapping must remain consistent across the API.
+
+### 24.40 400 Bad Request
+
+Use for malformed or invalid requests where appropriate.
+
+Example:
+
+```text
+Malformed JSON
+Missing required request structure
+Invalid request parameter
+```
+
+### 24.41 401 Unauthorized
+
+Use when authentication is missing or invalid.
+
+Example:
+
+```text
+Expired / Invalid Authentication
+```
+
+### 24.42 403 Forbidden
+
+Use when the User is authenticated but lacks permission.
+
+Example:
+
+```text
+Authenticated User
++
+Not Group Owner
++
+Owner-only Operation
+```
+
+### 24.43 404 Not Found
+
+Use when an accessible resource does not exist or when the API contract requires a not-found response.
+
+Security-sensitive resources may use a different response strategy to avoid information disclosure.
+
+### 24.44 409 Conflict
+
+Use when the requested operation conflicts with current Domain state.
+
+Examples:
+
+```text
+Version Conflict
+Concurrent Update
+Duplicate Resource State
+```
+
+### 24.45 422 Unprocessable Entity
+
+May be used for Domain validation failures when the request structure is valid but the requested Domain operation is invalid.
+
+Example:
+
+```text
+Expense Split Total ≠ Expense Total
+```
+
+### 24.46 429 Too Many Requests
+
+Use when the client exceeds applicable rate limits.
+
+The response may include:
+
+```text
+Retry-After
+```
+
+where appropriate.
+
+### 24.47 5xx Errors
+
+Server-side failures should use appropriate `5xx` status codes.
+
+The client should treat temporary server failures as potentially retryable.
+
+### 24.48 API Pagination
+
+Collection endpoints should support pagination where result sets may become large.
+
+Example:
+
+```text
+GET /api/v1/groups/{groupId}/expenses?page=0&size=50
+```
+
+The exact pagination contract may evolve.
+
+### 24.49 Synchronization Pagination
+
+Synchronization endpoints must support incremental retrieval and pagination.
+
+Example:
+
+```text
+cursor = C500
+limit = 100
+```
+
+Response:
+
+```text
+C501-C600
+```
+
+### 24.50 Cursor-Based Synchronization
+
+Synchronization should prefer:
+
+```text
+Cursor-Based Pagination
+```
+
+over offset-based pagination for change feeds.
+
+Conceptually:
+
+```text
+GET /api/v1/sync/changes?cursor=C500
+```
+
+### 24.51 Cursor Semantics
+
+The cursor represents:
+
+```text
+Last Successfully Applied Change
+```
+
+The client must not advance the cursor until the returned changes have been safely persisted locally.
+
+### 24.52 Sync Push API
+
+The synchronization API should provide a mechanism for sending local operations.
+
+Conceptually:
+
+```text
+POST /api/v1/sync/push
+```
+
+Request:
+
+```text
+SyncOperations
+```
+
+Response:
+
+```text
+Operation Results
+```
+
+The exact endpoint structure may be refined during implementation.
+
+### 24.53 Sync Pull API
+
+The synchronization API should provide a mechanism for retrieving remote changes.
+
+Conceptually:
+
+```text
+GET /api/v1/sync/changes
+```
+
+Parameters may include:
+
+```text
+cursor
+groupId
+limit
+```
+
+according to the final synchronization protocol.
+
+### 24.54 Sync Push Result
+
+A synchronization push should return operation-level results.
+
+Example:
+
+```json
+{
+  "operationId": "O100",
+  "status": "APPLIED"
+}
+```
+
+Possible statuses:
+
+```text
+APPLIED
+ALREADY_APPLIED
+CONFLICT
+REJECTED
+RETRYABLE
+```
+
+### 24.55 Sync Batch Result
+
+A batch response may contain:
+
+```text
+O100 → APPLIED
+O101 → CONFLICT
+O102 → REJECTED
+O103 → ALREADY_APPLIED
+```
+
+Each operation should be independently identifiable.
+
+### 24.56 Sync API and Transaction Boundaries
+
+A synchronization API request must not imply that every operation in the request belongs to one Domain transaction.
+
+For example:
+
+```text
+O100
+O101
+O102
+```
+
+may have independent results.
+
+### 24.57 Sync Dependencies
+
+If operations have dependencies:
+
+```text
+O100 → Create Group
+O101 → Create Expense
+```
+
+the API must either:
+
+```text
+Process in dependency order
+```
+
+or:
+
+```text
+Return dependency failure
+```
+
+without incorrectly applying O101.
+
+### 24.58 Sync API and Conflicts
+
+A conflict response should provide enough safe information for the client to create the required Conflict state.
+
+It should not expose unrelated private data.
+
+### 24.59 Conflict Response
+
+Conceptually:
+
+```json
+{
+  "operationId": "O200",
+  "status": "CONFLICT",
+  "entityId": "E10",
+  "serverVersion": 8
+}
+```
+
+The exact payload depends on the Conflict Data Model.
+
+### 24.60 API and Local IDs
+
+The API must preserve stable entity identifiers.
+
+Example:
+
+```text
+Offline expenseId = E100
+```
+
+After synchronization:
+
+```text
+Backend expenseId = E100
+```
+
+The API must not create a different identity merely because the Expense originated offline.
+
+### 24.61 API and Device Identity
+
+Synchronization requests should include enough information for the backend to associate an operation with:
+
+```text
+User
++
+Device
++
+Operation
+```
+
+The backend must validate these relationships.
+
+### 24.62 API and Origin Identity
+
+An operation's:
+
+```text
+originUserId
+originDeviceId
+```
+
+must remain stable.
+
+The receiving backend must not silently replace the origin identity with the device currently submitting a forwarded operation where the protocol requires preserving original origin.
+
+### 24.63 API and Forwarded Operations
+
+If an operation originated on Device A and later reaches the backend through Device B:
+
+```text
+Origin:
+Device A
+
+Transporting Device:
+Device B
+```
+
+the protocol must preserve the distinction.
+
+### 24.64 API and Group Scope
+
+Synchronization requests should explicitly identify the required synchronization scope where appropriate.
+
+However:
+
+```text
+groupId
+```
+
+is a scope request, not an authorization grant.
+
+### 24.65 API and Membership
+
+Membership APIs must validate:
+
+```text
+Group
+User
+Role
+Status
+Permission
+```
+
+before applying changes.
+
+### 24.66 API and Expense Creation
+
+Conceptually:
+
+```text
+POST /api/v1/groups/{groupId}/expenses
+```
+
+The backend validates:
+
+```text
+Authentication
+Authorization
+Group
+Amount
+Currency
+Participants
+Expense Splits
+```
+
+before persistence.
+
+### 24.67 API and Expense Update
+
+Conceptually:
+
+```text
+PATCH /api/v1/groups/{groupId}/expenses/{expenseId}
+```
+
+The request may include:
+
+```text
+baseVersion
+```
+
+or equivalent version information for conflict detection.
+
+### 24.68 API and Settlement Creation
+
+Conceptually:
+
+```text
+POST /api/v1/groups/{groupId}/settlements
+```
+
+The backend validates:
+
+```text
+Group
+Payer
+Receiver
+Amount
+Authorization
+```
+
+before persistence.
+
+### 24.69 API and Group Creation
+
+Conceptually:
+
+```text
+POST /api/v1/groups
+```
+
+The backend creates:
+
+```text
+Group
++
+Initial Membership
+```
+
+within the required transaction boundary.
+
+### 24.70 API and Group Retrieval
+
+Conceptually:
+
+```text
+GET /api/v1/groups/{groupId}
+```
+
+The backend must verify that the requesting User is authorized to access the Group.
+
+### 24.71 API and Expense Retrieval
+
+Conceptually:
+
+```text
+GET /api/v1/groups/{groupId}/expenses
+```
+
+The response must be limited to the authorized Group scope.
+
+### 24.72 API and Settlement Retrieval
+
+Conceptually:
+
+```text
+GET /api/v1/groups/{groupId}/settlements
+```
+
+The response must be authorized and paginated where required.
+
+### 24.73 API and Balance Retrieval
+
+Balances are derived from:
+
+```text
+Expenses
++
+Expense Splits
++
+Settlements
+```
+
+If a balance endpoint is exposed, the response must be treated as derived information rather than an independent synchronization source of truth.
+
+### 24.74 API and Search
+
+Search APIs should only expose data within the User's authorized scope.
+
+Example:
+
+```text
+Search Group Expenses
+      ↓
+Authorization
+      ↓
+Query
+```
+
+### 24.75 API and Filtering
+
+Filtering should be performed server-side when required for large datasets.
+
+The API must still enforce authorization before returning results.
+
+### 24.76 API and Sorting
+
+Sorting parameters should use a controlled set of supported fields.
+
+The API must not directly expose arbitrary database column names.
+
+### 24.77 API and Query Parameters
+
+Query parameters should be:
+
+```text
+Validated
+Bounded
+Typed
+```
+
+The API must avoid allowing unrestricted database expressions through query parameters.
+
+### 24.78 API and Input Limits
+
+Requests should have reasonable limits for:
+
+```text
+Payload Size
+Batch Size
+Page Size
+String Length
+Number of Items
+```
+
+This protects both Android and backend resources.
+
+### 24.79 Sync Batch Size
+
+Synchronization batch size should be bounded.
+
+Example:
+
+```text
+maxOperationsPerRequest
+```
+
+prevents an accidentally huge synchronization request from overwhelming the backend.
+
+### 24.80 API Timeout
+
+Client and server requests should have defined timeouts.
+
+A timeout must not cause:
+
+```text
+New Operation ID
+```
+
+to be generated automatically.
+
+### 24.81 API Retry
+
+Only operations classified as retryable should be automatically retried.
+
+Examples:
+
+```text
+Timeout
+503
+Temporary Network Failure
+429
+```
+
+### 24.82 API Authentication Headers
+
+Authentication information should be transmitted through the standard secure authentication mechanism selected for V1.
+
+The exact token format is defined in the Authentication and Security Architecture.
+
+### 24.83 API Authorization Headers
+
+Authorization must be derived from authenticated identity and backend-side access control.
+
+The client must not be allowed to override:
+
+```text
+role
+membership
+permissions
+```
+
+through ordinary request payload fields.
+
+### 24.84 API Security Headers
+
+Production API communication should use appropriate security headers and HTTPS configuration.
+
+The exact deployment configuration is outside the Domain API contract.
+
+### 24.85 API Content Type
+
+JSON requests should use:
+
+```text
+Content-Type: application/json
+```
+
+where applicable.
+
+Responses should use an appropriate JSON content type.
+
+### 24.86 API Date and Time
+
+Date/time values must use a consistent representation.
+
+The API should prefer:
+
+```text
+ISO 8601
+```
+
+or an equivalent explicitly defined representation.
+
+The exact format must be documented and consistent across endpoints.
+
+### 24.87 API Currency
+
+Monetary values must use a representation that avoids floating-point precision errors.
+
+The API contract must define:
+
+```text
+Amount
+Currency
+Precision
+```
+
+consistently.
+
+### 24.88 Monetary Amounts
+
+The API must not rely on binary floating-point values for financial calculations.
+
+A suitable representation such as:
+
+```text
+minor units
+```
+
+or:
+
+```text
+BigDecimal
+```
+
+must be selected consistently between Android and Backend.
+
+### 24.89 API Enum Values
+
+Enums should use stable explicit values.
+
+Example:
+
+```text
+EQUAL
+EXACT
+PERCENTAGE
+SHARES
+```
+
+The client must safely handle unknown future enum values where possible.
+
+### 24.90 API Backward Compatibility
+
+Non-breaking changes should preserve existing clients.
+
+Examples of generally non-breaking changes:
+
+```text
+Adding optional response fields
+Adding new endpoints
+Adding optional request fields
+```
+
+Breaking changes require versioning or another explicit compatibility strategy.
+
+### 24.91 API Contract Stability
+
+The API contract should not change merely because internal implementation changes.
+
+For example:
+
+```text
+JPA Entity Change
+```
+
+must not automatically require:
+
+```text
+Android API Contract Change
+```
+
+### 24.92 API Documentation
+
+Every public API endpoint should document:
+
+```text
+HTTP Method
+Path
+Authentication
+Authorization
+Request
+Response
+Error Codes
+Status Codes
+Idempotency
+Pagination
+Versioning
+```
+
+### 24.93 API Documentation Example
+
+Conceptually:
+
+```text
+POST /api/v1/sync/push
+
+Authentication:
+Required
+
+Authorization:
+Authenticated Device
+
+Request:
+SyncOperation[]
+
+Response:
+SyncOperationResult[]
+
+Possible Errors:
+401
+403
+409
+422
+429
+500
+503
+```
+
+### 24.94 API Correlation
+
+For debugging synchronization:
+
+```text
+requestId
++
+operationId
++
+deviceId
+```
+
+should be traceable where appropriate.
+
+### 24.95 API Observability
+
+Backend logs and metrics should support:
+
+```text
+Request Count
+Error Count
+Latency
+Sync Operation Count
+Conflict Count
+Retry Count
+```
+
+without exposing sensitive payload data.
+
+### 24.96 API Rate Limiting
+
+The backend may apply rate limits to protect:
+
+```text
+Authentication
+Synchronization
+P2P-related backend operations
+General API Requests
+```
+
+Rate limits must not prevent reasonable offline-first operation.
+
+### 24.97 API and Offline Operation
+
+The API must never assume:
+
+```text
+Every local operation immediately reaches backend.
+```
+
+Instead:
+
+```text
+Local Operation
+      ↓
+SyncOperation
+      ↓
+Eventually API Request
+```
+
+### 24.98 API and Online Operation
+
+When Internet is available:
+
+```text
+Local Save
+      ↓
+SyncOperation
+      ↓
+Backend API
+      ↓
+Synchronization Result
+```
+
+The User does not need to wait for the backend before the local operation becomes available.
+
+### 24.99 API and P2P Operation
+
+P2P does not use the Backend API directly.
+
+Instead:
+
+```text
+P2P
+ ↓
+Sync Engine
+ ↓
+Local Device
+```
+
+Backend synchronization uses:
+
+```text
+Sync Engine
+ ↓
+REST API
+ ↓
+Backend
+```
+
+Both channels operate on the same synchronization concepts.
+
+### 24.100 API and Eventual Consistency
+
+The API must support the fact that:
+
+```text
+Device A
+```
+
+and:
+
+```text
+Device B
+```
+
+may temporarily have different states.
+
+Incremental synchronization allows them to converge over time.
+
+### 24.101 API and Complete Database Download
+
+The API should not require the Android client to repeatedly download the entire Group database.
+
+Preferred:
+
+```text
+Initial Sync
+      ↓
+Incremental Changes
+      ↓
+Incremental Changes
+      ↓
+Incremental Changes
+```
+
+### 24.102 API and Initial Synchronization
+
+Initial synchronization may use:
+
+```text
+Initial Group Snapshot
++
+Synchronization Cursor
+```
+
+After initial synchronization:
+
+```text
+Cursor-Based Incremental Sync
+```
+
+should be used.
+
+### 24.103 API and Snapshot Consistency
+
+If an initial snapshot is provided, it must have well-defined consistency semantics.
+
+The client must know:
+
+```text
+Snapshot State
++
+Starting Cursor
+```
+
+so that subsequent changes can be applied without gaps.
+
+### 24.104 API and Sync Cursor Recovery
+
+If a cursor becomes invalid or too old:
+
+```text
+Cursor Invalid
+      ↓
+Backend Requests Resynchronization
+      ↓
+Initial / Snapshot Sync
+      ↓
+New Cursor
+```
+
+The local application must preserve local data while performing the required recovery.
+
+### 24.105 API and Data Privacy
+
+API responses must contain only the information required by the requesting operation.
+
+The backend must not expose:
+
+```text
+Unrelated Groups
+Unrelated Users
+Unnecessary Phone Numbers
+Unnecessary Emails
+Private Financial Information
+```
+
+### 24.106 API and User Data
+
+User profile APIs must follow the minimum-data principle.
+
+For Group functionality, a User may only need:
+
+```text
+userId
+displayName
+```
+
+rather than the complete User profile.
+
+### 24.107 API and Device Data
+
+Device information returned through APIs should be minimized.
+
+Only information required for:
+
+```text
+Device Management
+Synchronization
+Security
+```
+
+should be exposed.
+
+### 24.108 API and Sensitive Information
+
+The API must never return:
+
+```text
+Passwords
+Private Keys
+Raw Authentication Secrets
+```
+
+in ordinary API responses.
+
+### 24.109 API and Database Errors
+
+Internal database exceptions must be converted into safe API errors.
+
+The API must not expose:
+
+```text
+SQL statements
+Table names
+Stack traces
+JPA internals
+```
+
+to clients.
+
+### 24.110 API and Exception Handling
+
+The backend should have centralized exception handling.
+
+Conceptually:
+
+```text
+Controller
+      ↓
+Exception
+      ↓
+Global Exception Handler
+      ↓
+API Error Response
+```
+
+This ensures consistent error structures.
+
+### 24.111 API and Domain Exceptions
+
+Domain-specific failures should map to documented API error codes.
+
+Example:
+
+```text
+InvalidExpenseSplitException
+      ↓
+VALIDATION_ERROR
+```
+
+### 24.112 API and Unexpected Exceptions
+
+Unexpected backend exceptions should result in a generic:
+
+```text
+SERVER_ERROR
+```
+
+response.
+
+Detailed diagnostics remain in secure backend logs.
+
+### 24.113 API and Transactions
+
+API design must align with the Transaction Boundary model.
+
+For example:
+
+```text
+POST /expenses
+```
+
+must not return:
+
+```text
+201 Created
+```
+
+until the required backend transaction has successfully committed.
+
+### 24.114 API and Successful Response
+
+A successful mutation response should contain enough information for the Android application to update its local synchronization state.
+
+For example:
+
+```text
+operationId
+entityId
+status
+version
+changeCursor
+```
+
+where applicable.
+
+### 24.115 API and Resource Version
+
+Mutable resources should expose version information where required by synchronization.
+
+Example:
+
+```json
+{
+  "expenseId": "E100",
+  "version": 6
+}
+```
+
+### 24.116 API and Optimistic Concurrency
+
+The backend should use optimistic concurrency where appropriate.
+
+Conceptually:
+
+```text
+Client Base Version = 5
+Backend Current Version = 5
+      ↓
+Update Allowed
+```
+
+If:
+
+```text
+Client Base Version = 5
+Backend Current Version = 6
+```
+
+then:
+
+```text
+Conflict
+```
+
+may be returned.
+
+### 24.117 API and ETags
+
+HTTP-level mechanisms such as:
+
+```text
+ETag
+If-Match
+```
+
+may be used where appropriate for resource APIs.
+
+However, synchronization operations must continue to follow the explicit:
+
+```text
+operationId
++
+version
+```
+
+model.
+
+### 24.118 API and Sync Operation Version
+
+For synchronization, the request may include:
+
+```text
+baseVersion
+```
+
+to allow the backend to detect concurrent modifications.
+
+### 24.119 API and Change Feed
+
+The synchronization API should expose changes in an ordered manner.
+
+Conceptually:
+
+```text
+Change Sequence
+      ↓
+C100
+C101
+C102
+```
+
+The client uses the sequence/cursor to continue from the correct position.
+
+### 24.120 API and Authorization During Pull
+
+Pull requests must be authorized at the time of the request.
+
+A User who previously had access to:
+
+```text
+G1
+```
+
+but no longer has access must not continue receiving new G1 changes simply because the local device still has an old cursor.
+
+### 24.121 API and Authorization During Push
+
+Similarly, a previously authorized operation must not automatically remain authorized forever.
+
+The backend must validate current applicable permissions according to the Domain and Security model.
+
+### 24.122 API and Revoked Device
+
+If a Device is revoked:
+
+```text
+API Request
+      ↓
+Device Validation
+      ↓
+REVOKED
+      ↓
+Reject
+```
+
+The local application must preserve local data according to the security policy.
+
+### 24.123 API and Synchronization Recovery
+
+If the backend reports:
+
+```text
+SYNC_STATE_INVALID
+```
+
+the client may need to perform:
+
+```text
+Resynchronization
+```
+
+rather than continuously retrying the same invalid cursor.
+
+### 24.124 API and Conflict Recovery
+
+If:
+
+```text
+CONFLICT
+```
+
+is returned:
+
+```text
+Create Conflict State
+      ↓
+Stop Automatic Retry of Same Mutation
+      ↓
+Resolve
+      ↓
+Create Resolution Operation if Required
+```
+
+### 24.125 API and Operation Result Consistency
+
+The backend should return deterministic results for repeated identical:
+
+```text
+operationId
+```
+
+requests.
+
+Example:
+
+```text
+First:
+O100 → APPLIED
+
+Retry:
+O100 → ALREADY_APPLIED
+```
+
+### 24.126 API and Request Ordering
+
+The API should not assume that requests arrive in creation order.
+
+Example:
+
+```text
+O101
+```
+
+may arrive before:
+
+```text
+O100
+```
+
+The synchronization protocol must use:
+
+```text
+Dependencies
++
+Versions
++
+Operation State
+```
+
+to handle such cases safely.
+
+### 24.127 API and Out-of-Order Operations
+
+If an operation arrives before its dependency:
+
+```text
+O101
+    ↓
+Dependency O100 missing
+```
+
+the backend may return:
+
+```text
+DEPENDENCY_NOT_SATISFIED
+```
+
+or use a protocol-supported pending mechanism.
+
+The client must not assume that network arrival order equals Domain order.
+
+### 24.128 API and Clock Independence
+
+The API must not rely solely on device wall-clock timestamps to determine authoritative ordering.
+
+Device clocks may differ.
+
+Synchronization ordering should use:
+
+```text
+Server Sequence
+Operation Identity
+Version
+```
+
+as defined by the synchronization architecture.
+
+### 24.129 API and Server Time
+
+The backend may provide server timestamps for:
+
+```text
+CreatedAt
+UpdatedAt
+ProcessedAt
+```
+
+where appropriate.
+
+These should have clearly documented semantics.
+
+### 24.130 API and Monetary Precision
+
+The API must preserve exact monetary values.
+
+The same representation must be used consistently between:
+
+```text
+Android
+Backend
+Database
+```
+
+### 24.131 API and Currency
+
+Each financial amount should have a defined currency context.
+
+Example:
+
+```text
+amount
+currency
+```
+
+The API must not silently convert currencies unless currency conversion is an explicit Domain feature.
+
+### 24.132 API and Split Methods
+
+The API must support the Domain-defined split methods:
+
+```text
+EQUAL
+EXACT
+PERCENTAGE
+SHARES
+```
+
+Validation must occur on the backend as well as locally.
+
+### 24.133 API and Split Validation
+
+The backend must independently verify:
+
+```text
+Equal Split
+Exact Split
+Percentage Split
+Shares Split
+```
+
+according to the Domain rules.
+
+### 24.134 API and Settlement Validation
+
+The backend must validate:
+
+```text
+Payer
+Receiver
+Amount
+Group
+Membership
+```
+
+before persisting a Settlement.
+
+### 24.135 API and Group Lifecycle
+
+The API must follow the Group lifecycle defined by the Domain model.
+
+Operations such as:
+
+```text
+Create
+Update
+Join
+Leave
+Invite
+Archive
+Delete
+```
+
+must only be exposed where supported by the final Domain rules.
+
+### 24.136 API and Unsupported Operations
+
+If an operation is not supported by V1:
+
+```text
+Do Not Expose a Fake Endpoint
+```
+
+The backend should return a documented unsupported-operation response where appropriate.
+
+### 24.137 API and API Contract Testing
+
+The API contract must be tested for:
+
+```text
+Request Validation
+Response Structure
+Authentication
+Authorization
+Status Codes
+Error Codes
+Idempotency
+Pagination
+Synchronization
+Conflict Handling
+```
+
+### 24.138 API and Integration Testing
+
+Integration tests should verify:
+
+```text
+Android
+    ↓
+REST API
+    ↓
+Spring Boot
+    ↓
+MySQL
+```
+
+for important synchronization scenarios.
+
+### 24.139 API and Backward Compatibility Testing
+
+Existing API contracts should be tested when introducing:
+
+```text
+New Fields
+New Endpoints
+New API Versions
+```
+
+### 24.140 API and Security Testing
+
+API security tests must include:
+
+```text
+Authentication Bypass
+Authorization Bypass
+IDOR
+Replay
+Duplicate Operations
+Invalid Tokens
+Revoked Devices
+Malformed Requests
+Rate Limiting
+Sensitive Data Exposure
+```
+
+### 24.141 API and Performance
+
+The API should be designed to support:
+
+```text
+Small Groups
+Large Groups
+Multiple Devices
+Large Expense Histories
+Incremental Synchronization
+```
+
+without requiring complete dataset transfer.
+
+### 24.142 API and Scalability
+
+Synchronization APIs should support:
+
+```text
+Pagination
+Batching
+Incremental Changes
+Efficient Queries
+Indexed Lookup
+```
+
+to support increasing data volume.
+
+### 24.143 API and Caching
+
+Caching may be used for appropriate read-only data.
+
+However, cached data must not bypass:
+
+```text
+Authorization
+Version Validation
+Synchronization Consistency
+```
+
+### 24.144 API and Cache Invalidation
+
+Mutable Group/Expense data must have a clear cache invalidation strategy if caching is introduced.
+
+The synchronization system remains responsible for authoritative change propagation.
+
+### 24.145 API and Observability
+
+Each API request should be traceable through:
+
+```text
+requestId
+operationId
+```
+
+where applicable.
+
+This is especially important for synchronization failures.
+
+### 24.146 API and Logging
+
+Logs should record enough information to diagnose:
+
+```text
+API Failure
+Sync Failure
+Conflict
+Authorization Failure
+Performance Issue
+```
+
+without exposing sensitive financial or authentication information unnecessarily.
+
+### 24.147 API and Documentation Source of Truth
+
+The API contract should have one clearly maintained source of truth.
+
+OpenAPI/Swagger may be used to document:
+
+```text
+Endpoints
+Request Schemas
+Response Schemas
+Error Responses
+Authentication
+```
+
+### 24.148 API and OpenAPI
+
+If OpenAPI is adopted:
+
+```text
+OpenAPI Specification
+      ↓
+API Contract
+      ↓
+Backend Implementation
+      ↓
+Android Client Integration
+```
+
+The specification should remain synchronized with implementation.
+
+### 24.149 API and API Evolution
+
+Future API evolution should prefer:
+
+```text
+Backward-Compatible Extension
+```
+
+where possible.
+
+Breaking changes require:
+
+```text
+Versioning
+```
+
+or another explicitly documented migration mechanism.
+
+### 24.150 API Design Summary
+
+```text
+API Design
+│
+├── Protocol
+│   ├── REST
+│   ├── HTTPS
+│   └── JSON
+│
+├── Versioning
+│   └── /api/v1
+│
+├── Security
+│   ├── Authentication
+│   ├── Authorization
+│   ├── HTTPS
+│   └── Data Minimization
+│
+├── Domain
+│   ├── Groups
+│   ├── Expenses
+│   ├── Expense Splits
+│   ├── Settlements
+│   └── Memberships
+│
+├── Synchronization
+│   ├── Push
+│   ├── Pull
+│   ├── Cursor
+│   ├── Operation ID
+│   ├── Idempotency
+│   └── Conflicts
+│
+├── Reliability
+│   ├── Retry
+│   ├── Pagination
+│   ├── Batching
+│   └── Error Handling
+│
+└── Maintainability
+    ├── DTOs
+    ├── API Contracts
+    ├── Documentation
+    ├── Versioning
+    └── Testing
+```
+
+### 24.151 API Design Invariants
+
+The following rules are mandatory for V1:
+
+- All production API communication must use HTTPS.
+- The API must use versioning.
+- V1 endpoints must use the `/api/v1` namespace or equivalent versioning strategy.
+- REST must be used for Backend communication in V1.
+- JSON must be the standard API payload format.
+- API contracts must represent Domain concepts rather than database tables.
+- API DTOs must remain separate from JPA persistence entities.
+- Authentication must be required for protected APIs.
+- Authorization must be enforced independently by the backend.
+- Client-provided roles and permissions must never be trusted as authorization authority.
+- Group access must be validated server-side.
+- Device authorization must be validated server-side.
+- Synchronization APIs must be designed for offline-created operations.
+- Synchronization must support stable Operation IDs.
+- Retries must reuse the same Operation ID.
+- Synchronization operations must be idempotent.
+- Duplicate operations must never create duplicate financial records.
+- Timeout handling must account for uncertain backend execution.
+- API errors must use consistent machine-readable error codes.
+- Human-readable error messages must not be the primary client decision mechanism.
+- API responses must not expose stack traces or internal implementation details.
+- API responses must not expose passwords, private keys, or raw authentication secrets.
+- Sensitive personal and financial information must be minimized.
+- Financial amounts must use an exact representation that avoids floating-point precision errors.
+- Currency representation must be explicit and consistent.
+- Date/time representation must be explicitly defined and consistent.
+- Enum values must remain stable and documented.
+- Collection endpoints must support pagination where required.
+- Synchronization change retrieval must support incremental cursor-based synchronization.
+- Synchronization cursors must represent successfully applied remote changes.
+- The API must support operation-level synchronization results.
+- Synchronization batches must not automatically imply one large Domain transaction.
+- Independent synchronization operations should be independently result-addressable.
+- Operation dependencies must be respected.
+- Conflicts must be explicitly represented.
+- Conflict responses must provide enough information for safe client-side Conflict state creation.
+- The backend must validate Domain rules independently from Android.
+- Expense Split validation must be performed server-side.
+- Settlement validation must be performed server-side.
+- Membership authorization must be performed server-side.
+- API mutation responses must only indicate success after the relevant backend transaction has committed.
+- API synchronization must not require complete database downloads for normal incremental operation.
+- Initial synchronization must establish a valid starting synchronization state.
+- Invalid synchronization cursors must have a defined recovery path.
+- API requests must have reasonable payload and batch-size limits.
+- Rate limiting must be supported where required.
+- Retryable API failures must be distinguishable from permanent failures.
+- Authentication failures must have a defined recovery flow.
+- Authorization failures must not be blindly retried.
+- Validation failures must not be blindly retried.
+- Backend `5xx` failures should be handled as potentially retryable according to the specific error.
+- `409 Conflict` should be used consistently for applicable concurrency/conflict situations.
+- The API must not rely solely on client device clocks for authoritative synchronization ordering.
+- Server-side ordering/cursor mechanisms must be used where required for synchronization.
+- Stable entity IDs must survive synchronization.
+- Offline-created IDs must not be replaced merely because data reaches the backend.
+- Origin User and Device identity must remain distinguishable from the Device currently transporting an operation.
+- Backend synchronization and P2P synchronization must use compatible synchronization concepts.
+- Data synchronized through P2P must not be duplicated when later sent through the Backend.
+- Data synchronized through the Backend must not be duplicated when later exchanged through P2P.
+- API design must preserve the local-first architecture.
+- Backend unavailability must not make the Android application unusable.
+- API design must support eventual consistency across authorized devices.
+- API contracts must be documented and tested.
+- Breaking API changes must use an explicit versioning or migration strategy.
+
+## 25. Versioning Strategy
+
+### 25.1 Purpose
+
+This section defines the versioning strategy for SplitSync V1.
+
+Versioning applies to:
+
+- API contracts.
+- Android application versions.
+- Backend versions.
+- Database schema versions.
+- Local Room database migrations.
+- Synchronization protocol versions.
+- SyncOperation formats.
+- Peer-to-peer protocol versions.
+- Domain model evolution.
+- Stored data formats.
+
+The primary goal is:
+
+```text
+Allow the application to evolve
+without breaking existing data,
+existing clients, or synchronization.
+```
+
+### 25.2 Core Principle
+
+SplitSync follows:
+
+```text
+Explicit Versioning
++
+Backward Compatibility
++
+Safe Migration
++
+Protocol Compatibility
++
+Data Preservation
+```
+
+### 25.3 Versioning Layers
+
+SplitSync has multiple independent versioning layers:
+
+```text
+Application Version
+        ↓
+API Version
+        ↓
+Database Schema Version
+        ↓
+Sync Protocol Version
+        ↓
+P2P Protocol Version
+        ↓
+Domain / Data Model Version
+```
+
+These versions must not be treated as one single number.
+
+### 25.4 Application Version
+
+The Android application has its own version.
+
+Conceptually:
+
+```text
+Version Name:
+1.0.0
+
+Version Code:
+1
+```
+
+The exact Android versioning mechanism follows standard Android practices.
+
+### 25.5 Application Version Format
+
+V1 should use Semantic Versioning semantics where practical:
+
+```text
+MAJOR.MINOR.PATCH
+```
+
+Example:
+
+```text
+1.0.0
+1.1.0
+1.1.1
+2.0.0
+```
+
+### 25.6 Major Version
+
+A major version indicates potentially breaking changes.
+
+Example:
+
+```text
+1.x.x
+    ↓
+2.0.0
+```
+
+Possible reasons:
+
+```text
+Breaking API Contract
+Breaking Sync Protocol
+Major Domain Model Change
+Incompatible Data Format
+```
+
+### 25.7 Minor Version
+
+A minor version represents backward-compatible feature additions.
+
+Example:
+
+```text
+1.0.0
+    ↓
+1.1.0
+```
+
+Examples:
+
+```text
+New Optional API Field
+New Optional Feature
+New Non-Breaking Endpoint
+New UI Capability
+```
+
+### 25.8 Patch Version
+
+A patch version represents backward-compatible fixes.
+
+Example:
+
+```text
+1.1.0
+    ↓
+1.1.1
+```
+
+Examples:
+
+```text
+Bug Fix
+Security Fix
+Performance Fix
+Minor UI Fix
+```
+
+### 25.9 API Version
+
+The Backend API must have an explicit version.
+
+V1:
+
+```text
+/api/v1
+```
+
+Example:
+
+```text
+/api/v1/groups
+/api/v1/expenses
+/api/v1/sync/push
+```
+
+### 25.10 API Major Versioning
+
+Breaking API changes require a new API version.
+
+Example:
+
+```text
+/api/v1
+```
+
+continues to support existing clients while:
+
+```text
+/api/v2
+```
+
+supports the new contract.
+
+### 25.11 API Minor Changes
+
+Non-breaking API changes should normally remain within the same API major version.
+
+Example:
+
+```text
+/api/v1
+```
+
+may gain:
+
+```text
+New Optional Response Field
+```
+
+without requiring:
+
+```text
+/api/v2
+```
+
+### 25.12 API Patch Changes
+
+Bug fixes that do not alter the public contract do not require a new API namespace.
+
+Example:
+
+```text
+/api/v1
+```
+
+continues unchanged while the backend implementation is fixed.
+
+### 25.13 API Compatibility Principle
+
+The backend should preferably support:
+
+```text
+Older Android Client
++
+Current API
+```
+
+for a reasonable compatibility window.
+
+The exact supported-version policy may be defined during deployment planning.
+
+### 25.14 API Deprecation
+
+An API feature that will be removed should first be marked:
+
+```text
+DEPRECATED
+```
+
+before removal.
+
+Conceptually:
+
+```text
+Active
+   ↓
+Deprecated
+   ↓
+Migration Period
+   ↓
+Removed
+```
+
+### 25.15 API Removal
+
+A breaking endpoint should not be removed immediately after introducing its replacement.
+
+Example:
+
+```text
+/v1/old-endpoint
+```
+
+should remain available during the supported migration period if required.
+
+### 25.16 Android Client Compatibility
+
+The Android application must be designed to tolerate compatible backend changes.
+
+For example:
+
+```text
+Backend adds optional response field
+```
+
+The older Android client should continue functioning.
+
+### 25.17 Unknown Response Fields
+
+The Android client should ignore unknown response fields where the serialization framework allows this safely.
+
+Example:
+
+```json
+{
+  "expenseId": "E100",
+  "amount": 500,
+  "newFutureField": "..."
+}
+```
+
+An older client should continue processing the fields it understands.
+
+### 25.18 Unknown Enum Values
+
+The Android client should safely handle unknown enum values when future backend versions introduce them.
+
+The client must avoid crashing merely because a newer server returns a value unknown to the older client.
+
+### 25.19 Required Field Changes
+
+Changing an existing API field from:
+
+```text
+Optional
+```
+
+to:
+
+```text
+Required
+```
+
+is potentially breaking.
+
+Such a change must not be introduced into an existing API contract without a compatibility strategy.
+
+### 25.20 Field Removal
+
+Removing an existing API field may break older clients.
+
+Therefore:
+
+```text
+Field Removal
+```
+
+should be treated as a potentially breaking change.
+
+### 25.21 Field Type Changes
+
+Changing:
+
+```text
+amount: number
+```
+
+to:
+
+```text
+amount: string
+```
+
+is a breaking API change unless an explicit compatibility mechanism is provided.
+
+### 25.22 Endpoint Changes
+
+Changing:
+
+```text
+POST /api/v1/sync/push
+```
+
+to:
+
+```text
+PUT /api/v1/sync/push
+```
+
+is a breaking contract change.
+
+A new version or compatibility layer should be used.
+
+### 25.23 Database Schema Versioning
+
+The backend database schema must be versioned through controlled migrations.
+
+Conceptually:
+
+```text
+Schema V1
+   ↓
+Migration V1 → V2
+   ↓
+Schema V2
+```
+
+The application must not depend on manually modified production tables.
+
+### 25.24 Database Migration Principle
+
+Every schema change must have:
+
+```text
+Migration
++
+Validation
++
+Rollback / Recovery Strategy
+```
+
+where supported by the migration system.
+
+### 25.25 Backend Migration
+
+Backend database migrations should be managed through a dedicated migration mechanism.
+
+Examples include:
+
+```text
+Flyway
+Liquibase
+```
+
+The exact framework can be selected during implementation.
+
+### 25.26 Migration Must Be Deterministic
+
+A migration should produce a predictable schema state.
+
+Example:
+
+```text
+Schema V4
+    ↓
+Migration V4 → V5
+    ↓
+Schema V5
+```
+
+### 25.27 Android Room Versioning
+
+The local Room database must have an explicit schema version.
+
+Example:
+
+```text
+Room DB Version 1
+        ↓
+Room DB Version 2
+```
+
+### 25.28 Room Migration
+
+When the local schema changes:
+
+```text
+Existing Local Database
+        ↓
+Migration
+        ↓
+New Local Database Schema
+```
+
+The migration must preserve valid user data.
+
+### 25.29 No Destructive Migration by Default
+
+For production data:
+
+```text
+DROP TABLE
+```
+
+must not be used as a default migration strategy.
+
+Data preservation is the priority.
+
+### 25.30 Room Migration Testing
+
+Every Room migration should be tested against:
+
+```text
+Old Schema
+    ↓
+Migration
+    ↓
+New Schema
+```
+
+The resulting data must remain valid.
+
+### 25.31 Database Version vs Application Version
+
+These versions are independent.
+
+Example:
+
+```text
+Android App:
+1.4.0
+
+Room Schema:
+7
+```
+
+There is no requirement that:
+
+```text
+App Version = DB Version
+```
+
+### 25.32 Backend Schema vs API Version
+
+These are also independent.
+
+Example:
+
+```text
+API:
+v1
+
+MySQL Schema:
+v12
+```
+
+The backend may evolve its internal schema without changing the public API.
+
+### 25.33 Sync Protocol Version
+
+Synchronization requires its own protocol version.
+
+Example:
+
+```text
+syncProtocolVersion = 1
+```
+
+This version identifies the structure and semantics of synchronization messages.
+
+### 25.34 Why Sync Protocol Has Its Own Version
+
+The synchronization protocol may evolve independently from:
+
+```text
+Android UI
+API
+Database
+```
+
+For example:
+
+```text
+Android App 1.5
+API v1
+Sync Protocol v2
+```
+
+can be a valid combination.
+
+### 25.35 Sync Protocol Compatibility
+
+Before exchanging synchronization data, the communicating components must know whether their protocol versions are compatible.
+
+Conceptually:
+
+```text
+Client Sync Version
+        ↓
+Backend Supported Versions
+        ↓
+Compatible?
+   ┌────┴────┐
+  Yes        No
+   │          │
+Continue   Reject / Upgrade
+```
+
+### 25.36 Sync Message Version
+
+Synchronization payloads may include:
+
+```text
+protocolVersion
+```
+
+or equivalent metadata.
+
+Example:
+
+```json
+{
+  "protocolVersion": 1,
+  "operationId": "O100"
+}
+```
+
+### 25.37 SyncOperation Version
+
+The structure of a SyncOperation may evolve.
+
+If required, the operation may include:
+
+```text
+operationVersion
+```
+
+to identify its payload format.
+
+### 25.38 SyncOperation Compatibility
+
+The backend must not assume that every client sends the newest operation structure.
+
+Where practical:
+
+```text
+Older Operation Format
+        ↓
+Compatibility Layer
+        ↓
+Current Internal Model
+```
+
+### 25.39 Sync Data Model Version
+
+The synchronization system may also maintain a data-model version.
+
+This is useful when the structure of synchronized Domain data changes significantly.
+
+Example:
+
+```text
+syncDataVersion = 1
+```
+
+### 25.40 P2P Protocol Version
+
+P2P synchronization requires an independent protocol version.
+
+Example:
+
+```text
+p2pProtocolVersion = 1
+```
+
+### 25.41 P2P Version Negotiation
+
+When two devices connect:
+
+```text
+Device A
+P2P Version = 2
+
+Device B
+P2P Version = 1
+```
+
+they must determine whether a compatible protocol exists.
+
+Conceptually:
+
+```text
+Connect
+   ↓
+Exchange Capabilities
+   ↓
+Select Compatible Version
+   ↓
+Start Sync
+```
+
+### 25.42 P2P Incompatible Versions
+
+If no compatible protocol exists:
+
+```text
+Reject Synchronization
+```
+
+The devices must not attempt to interpret unsupported messages.
+
+Local data remains unchanged.
+
+### 25.43 P2P Backward Compatibility
+
+Where practical, a newer P2P implementation should support older compatible protocol versions.
+
+Example:
+
+```text
+P2P v2
+    ↓
+Supports v1
+```
+
+This allows gradual application upgrades.
+
+### 25.44 P2P Capability Negotiation
+
+Future protocol negotiation may advertise:
+
+```text
+Protocol Version
+Supported Features
+Compression
+Encryption
+Supported Operations
+```
+
+The exact capability set is implementation-dependent.
+
+### 25.45 Feature Versioning
+
+New features should be introduced independently where possible.
+
+Example:
+
+```text
+Feature:
+Recurring Expense
+
+Supported:
+Android 2.x
+Backend v1
+```
+
+A feature should not require a complete API major-version change if it can be added compatibly.
+
+### 25.46 Feature Flags
+
+Feature flags may be used for controlled rollout.
+
+Example:
+
+```text
+FEATURE_RECURRING_EXPENSE = false
+```
+
+Feature flags must not be used as a substitute for proper schema or protocol versioning.
+
+### 25.47 Domain Model Versioning
+
+The Domain Model may evolve over time.
+
+Example:
+
+```text
+Expense V1
+    ↓
+Expense V2
+```
+
+A Domain Model change must determine whether it affects:
+
+```text
+Database
+API
+Sync Protocol
+P2P Protocol
+```
+
+### 25.48 Domain Change Classification
+
+Every Domain Model change should be classified as:
+
+```text
+Non-Breaking
+Breaking
+Migration Required
+Synchronization Impacting
+```
+
+### 25.49 Adding Optional Domain Fields
+
+Adding an optional field is generally easier to make backward-compatible.
+
+Example:
+
+```text
+Expense
++
+optional note
+```
+
+Older clients may ignore the field.
+
+### 25.50 Adding Required Domain Fields
+
+Adding a new required field to existing synchronized records requires a migration/default strategy.
+
+Example:
+
+```text
+Existing Expense
+    ↓
+New Required Field
+```
+
+The system must define how old records receive the new value.
+
+### 25.51 Domain Field Rename
+
+Renaming:
+
+```text
+createdAt
+```
+
+to:
+
+```text
+creationTime
+```
+
+is potentially breaking for:
+
+```text
+API
+Database
+Sync Payload
+P2P
+```
+
+A migration or compatibility mapping is required.
+
+### 25.52 Domain Field Type Change
+
+Changing the type of an existing field may require:
+
+```text
+Database Migration
++
+API Versioning
++
+Sync Migration
+```
+
+depending on the field.
+
+### 25.53 Domain Entity Split
+
+If one entity becomes multiple entities:
+
+```text
+Old Entity
+    ↓
+New Entity A
++
+New Entity B
+```
+
+a controlled migration strategy is required.
+
+### 25.54 Domain Entity Merge
+
+If multiple entities become one:
+
+```text
+Entity A
++
+Entity B
+    ↓
+Entity C
+```
+
+existing synchronized data must be migrated without losing identity or history.
+
+### 25.55 Entity Identity Stability
+
+Entity IDs should remain stable across compatible versions.
+
+Example:
+
+```text
+expenseId = E100
+```
+
+must continue identifying the same logical Expense.
+
+### 25.56 Operation Identity Stability
+
+Operation IDs must remain immutable.
+
+Example:
+
+```text
+operationId = O100
+```
+
+must not change during:
+
+```text
+Retry
+Migration
+Synchronization
+Conflict Handling
+```
+
+### 25.57 Versioning and Idempotency
+
+Versioning must not break idempotency.
+
+An operation created under an older protocol version must remain uniquely identifiable.
+
+### 25.58 Versioning and Conflict Detection
+
+Conflict detection may depend on:
+
+```text
+Entity Version
++
+Base Version
+```
+
+These versions are different from:
+
+```text
+Application Version
+API Version
+```
+
+They must not be confused.
+
+### 25.59 Entity Version
+
+A mutable Domain entity may have its own version:
+
+```text
+Expense Version = 6
+```
+
+This represents the state version of that Expense.
+
+### 25.60 Entity Version vs Application Version
+
+Example:
+
+```text
+Android App = 1.5.0
+Expense Version = 6
+```
+
+The two values have completely different meanings.
+
+### 25.61 Entity Version vs Sync Protocol
+
+Example:
+
+```text
+Sync Protocol = 2
+Expense Version = 6
+```
+
+Again, these versions must remain conceptually separate.
+
+### 25.62 Version Matrix
+
+The system may maintain a compatibility matrix such as:
+
+```text
+Component             Version
+--------------------------------
+Android App           1.0.0
+API                   v1
+Room Schema           1
+Backend Schema        1
+Sync Protocol         1
+P2P Protocol          1
+```
+
+A later release may become:
+
+```text
+Component             Version
+--------------------------------
+Android App           1.1.0
+API                   v1
+Room Schema           2
+Backend Schema        3
+Sync Protocol         1
+P2P Protocol          1
+```
+
+### 25.63 Version Compatibility Matrix
+
+Compatibility should be explicitly documented.
+
+Example:
+
+```text
+                  Backend API v1
+Android 1.0       Supported
+Android 1.1       Supported
+Android 2.0       Requires API v2
+```
+
+The exact matrix will be maintained as the system evolves.
+
+### 25.64 Minimum Supported Version
+
+The backend may define:
+
+```text
+minimumSupportedClientVersion
+```
+
+where necessary.
+
+Example:
+
+```text
+Android < 1.2
+    ↓
+No Longer Supported
+```
+
+The exact policy is a deployment decision.
+
+### 25.65 Forced Upgrade
+
+A forced upgrade should only be used when continued operation would be unsafe.
+
+Examples:
+
+```text
+Security Vulnerability
+Incompatible Sync Protocol
+Unsupported Data Format
+Critical Backend Contract Change
+```
+
+### 25.66 Recommended Upgrade
+
+For normal feature releases:
+
+```text
+Recommended Upgrade
+```
+
+is preferable to blocking the User.
+
+### 25.67 Upgrade Flow
+
+Conceptually:
+
+```text
+Application Start
+      ↓
+Check Compatibility
+      ↓
+Supported?
+   ┌──┴──┐
+  Yes    No
+   │      │
+Continue Upgrade Required
+```
+
+### 25.68 Upgrade and Local Data
+
+Updating the Android application must not automatically delete local data.
+
+Correct:
+
+```text
+Old App
+   ↓
+Upgrade
+   ↓
+Room Migration
+   ↓
+Existing Data Preserved
+```
+
+### 25.69 Upgrade and Pending SyncOperations
+
+Pending SyncOperations must survive application upgrades.
+
+Example:
+
+```text
+App 1.0
+   ↓
+O100 PENDING
+   ↓
+App Upgrade
+   ↓
+O100 Still Available
+```
+
+### 25.70 Upgrade and Sync State
+
+The migration must preserve:
+
+```text
+SyncState
+Cursor
+Pending Operations
+Conflict State
+```
+
+where they remain compatible with the new version.
+
+### 25.71 Upgrade and Conflict State
+
+Existing unresolved conflicts must not be silently deleted during an application upgrade.
+
+### 25.72 Upgrade and P2P State
+
+If a P2P protocol changes, existing local synchronization state must remain safe.
+
+An incompatible P2P session should fail safely rather than corrupt local data.
+
+### 25.73 Backend Deployment Strategy
+
+Backend changes should be deployed in a compatibility-aware sequence where required.
+
+A preferred approach is:
+
+```text
+Expand
+   ↓
+Migrate
+   ↓
+Switch
+   ↓
+Contract
+```
+
+### 25.74 Expand Phase
+
+The backend first adds new structures without immediately removing old ones.
+
+Example:
+
+```text
+Add New Column
+```
+
+while retaining:
+
+```text
+Old Column
+```
+
+### 25.75 Migrate Phase
+
+Existing data is migrated or dual-written where required.
+
+```text
+Old Data
+   ↓
+Migration
+   ↓
+New Representation
+```
+
+### 25.76 Switch Phase
+
+Application code begins using the new representation.
+
+```text
+New Code
+   ↓
+New Column / Structure
+```
+
+### 25.77 Contract Phase
+
+After all supported clients have migrated:
+
+```text
+Old Column / Endpoint
+```
+
+may be removed.
+
+### 25.78 API and Database Independent Deployment
+
+The backend should avoid requiring:
+
+```text
+API Change
++
+Database Destructive Migration
+```
+
+in one irreversible step when a compatibility-preserving deployment is possible.
+
+### 25.79 Backward-Compatible Database Changes
+
+Prefer changes such as:
+
+```text
+Add Nullable Column
+Add New Table
+Add New Index
+```
+
+before:
+
+```text
+Remove Old Column
+Change Existing Type
+```
+
+### 25.80 Database Migration and Synchronization
+
+If a database migration changes synchronized data structures:
+
+```text
+Database Migration
++
+Sync Compatibility
+```
+
+must be considered together.
+
+### 25.81 Sync Protocol Breaking Change
+
+A breaking Sync Protocol change may require:
+
+```text
+New Protocol Version
++
+Compatibility Period
++
+Migration Strategy
+```
+
+### 25.82 Sync Protocol Deprecation
+
+Old protocol versions should only be removed after all required communicating clients have migrated.
+
+Conceptually:
+
+```text
+Protocol v1
+   ↓
+Deprecated
+   ↓
+Migration Period
+   ↓
+Unsupported
+```
+
+### 25.83 Sync Data Migration
+
+If an old SyncOperation payload must be converted:
+
+```text
+Old Operation
+    ↓
+Migration Adapter
+    ↓
+Current Operation Model
+```
+
+The original:
+
+```text
+operationId
+```
+
+must remain stable.
+
+### 25.84 Sync Migration Safety
+
+Synchronization migration must never:
+
+```text
+Duplicate Expense
+Lose Expense
+Duplicate Settlement
+Lose Settlement
+Skip Remote Change
+Advance Cursor Incorrectly
+```
+
+### 25.85 Cursor Versioning
+
+If cursor semantics change incompatibly:
+
+```text
+Old Cursor
+```
+
+must not be interpreted as:
+
+```text
+New Cursor
+```
+
+unless explicitly compatible.
+
+The backend may require:
+
+```text
+Resynchronization
+```
+
+to establish a new valid cursor.
+
+### 25.86 Snapshot Versioning
+
+Initial synchronization snapshots should include enough metadata to identify:
+
+```text
+Snapshot Version
+Sync Protocol Version
+Starting Cursor
+```
+
+where required.
+
+### 25.87 P2P Data Migration
+
+If a newer device receives an older P2P operation:
+
+```text
+Old Format
+    ↓
+Validate
+    ↓
+Convert
+    ↓
+Current Domain Model
+```
+
+The conversion must be deterministic.
+
+### 25.88 P2P Version Rejection
+
+If conversion is not possible:
+
+```text
+Reject Operation
+```
+
+rather than guessing the meaning of unknown data.
+
+### 25.89 API Version vs P2P Version
+
+These versions are independent.
+
+Example:
+
+```text
+API:
+v1
+
+P2P:
+v2
+```
+
+A device may use:
+
+```text
+P2P v2
+```
+
+between devices while using:
+
+```text
+API v1
+```
+
+with the backend.
+
+### 25.90 Sync Protocol vs API Version
+
+Similarly:
+
+```text
+API v1
+Sync Protocol v2
+```
+
+is valid if the API contract supports the synchronization protocol.
+
+### 25.91 Version Negotiation
+
+Where two components communicate directly:
+
+```text
+Supported Versions
+```
+
+should be exchanged or otherwise known.
+
+Example:
+
+```text
+Client:
+v1, v2
+
+Server:
+v1, v2
+
+Selected:
+v2
+```
+
+### 25.92 Version Negotiation Failure
+
+If there is no compatible version:
+
+```text
+No Common Version
+      ↓
+Reject Communication
+```
+
+The failure must not corrupt local state.
+
+### 25.93 Version Metadata
+
+Where required, protocol messages should contain explicit version metadata.
+
+Example:
+
+```json
+{
+  "protocolVersion": 2,
+  "operationId": "O100"
+}
+```
+
+### 25.94 Version Validation
+
+A receiver must validate the version before interpreting the payload.
+
+```text
+Receive
+   ↓
+Read Version
+   ↓
+Supported?
+   ┌──┴──┐
+  Yes    No
+   │      │
+Parse   Reject / Migrate
+```
+
+### 25.95 Version and Security
+
+Security-related protocol changes may require immediate version enforcement.
+
+Example:
+
+```text
+P2P Protocol v1
+    ↓
+Security Vulnerability
+    ↓
+Reject v1
+    ↓
+Require v2
+```
+
+### 25.96 Version and Encryption
+
+If the encryption mechanism changes incompatibly:
+
+```text
+Security Protocol Version
+```
+
+must be updated independently from the application version.
+
+### 25.97 Version and Authentication
+
+Authentication protocol changes must maintain compatibility or use an explicit migration strategy.
+
+### 25.98 Version and Device Registration
+
+Device registration may record:
+
+```text
+appVersion
+protocolVersion
+deviceVersion
+```
+
+where required for compatibility management.
+
+### 25.99 Version and Backend Compatibility
+
+The backend may use client metadata to determine:
+
+```text
+Supported
+Deprecated
+Blocked
+```
+
+client versions.
+
+### 25.100 Version and Error Handling
+
+Unsupported versions should return a clear machine-readable error.
+
+Example:
+
+```json
+{
+  "code": "UNSUPPORTED_VERSION",
+  "message": "This protocol version is not supported."
+}
+```
+
+### 25.101 Version and HTTP Status
+
+The exact status code for unsupported versions must be standardized across the API.
+
+Possible strategies include:
+
+```text
+400
+426 Upgrade Required
+```
+
+depending on the exact contract.
+
+### 25.102 Version and Logging
+
+Version information should be included in relevant diagnostic logs:
+
+```text
+appVersion
+apiVersion
+syncProtocolVersion
+p2pProtocolVersion
+```
+
+This helps diagnose compatibility failures.
+
+### 25.103 Version and Monitoring
+
+The backend should monitor usage of:
+
+```text
+API Versions
+Client Versions
+Sync Protocol Versions
+```
+
+This allows safe deprecation decisions.
+
+### 25.104 Version and Rollout
+
+New versions should preferably be rolled out gradually.
+
+Conceptually:
+
+```text
+Development
+    ↓
+Testing
+    ↓
+Internal Release
+    ↓
+Limited Rollout
+    ↓
+General Availability
+```
+
+### 25.105 Version and Rollback
+
+Every release should have a defined rollback strategy where practical.
+
+Rollback must consider:
+
+```text
+Database Migration
+API Compatibility
+Sync Protocol
+Pending Operations
+```
+
+### 25.106 Version Rollback Safety
+
+A backend rollback must not cause:
+
+```text
+Newer Data Format
+      ↓
+Older Code
+      ↓
+Data Corruption
+```
+
+Therefore deployment compatibility must be tested before release.
+
+### 25.107 Version and Data Preservation
+
+Version changes must prioritize:
+
+```text
+User Data Preservation
+```
+
+especially for:
+
+```text
+Expenses
+Expense Splits
+Settlements
+Groups
+Memberships
+Pending SyncOperations
+Conflicts
+```
+
+### 25.108 Version and Historical Data
+
+Historical financial records must remain readable after application and backend upgrades.
+
+An upgrade must not make old:
+
+```text
+Expense
+Settlement
+```
+
+records inaccessible merely because the Domain model evolved.
+
+### 25.109 Version and Audit History
+
+If audit/history records exist, their historical meaning must remain stable across application versions.
+
+### 25.110 Version and Test Strategy
+
+Every version change affecting persistence or synchronization must include tests for:
+
+```text
+Migration
+Backward Compatibility
+Forward Compatibility where required
+Synchronization
+Conflict Handling
+Retry
+Idempotency
+P2P Compatibility
+```
+
+### 25.111 Migration Test Matrix
+
+Example:
+
+```text
+Old App
+   +
+Old DB
+   ↓
+Upgrade
+   ↓
+New App
+   +
+New DB
+```
+
+Verify:
+
+```text
+Existing Data
+Pending Sync
+Conflicts
+Authentication
+Group Access
+```
+
+### 25.112 Sync Compatibility Test Matrix
+
+Example:
+
+```text
+Client Sync v1
+        ↕
+Backend Sync v1
+```
+
+and:
+
+```text
+Client Sync v1
+        ↕
+Backend Sync v2
+```
+
+must have explicitly defined compatibility behavior.
+
+### 25.113 P2P Compatibility Test Matrix
+
+Example:
+
+```text
+Device A P2P v1
+        ↕
+Device B P2P v1
+```
+
+and:
+
+```text
+Device A P2P v2
+        ↕
+Device B P2P v1
+```
+
+must produce the defined compatibility result.
+
+### 25.114 API Compatibility Test Matrix
+
+Example:
+
+```text
+Android 1.0
+      ↓
+API v1
+
+Android 1.1
+      ↓
+API v1
+```
+
+must continue functioning when the API receives compatible changes.
+
+### 25.115 Version and Open Questions
+
+The following may be finalized during implementation:
+
+```text
+Exact Android Versioning Policy
+Exact API Deprecation Window
+Minimum Supported Android Version
+Minimum Supported App Version
+Sync Protocol Compatibility Window
+P2P Compatibility Window
+Backend Migration Framework
+Release Rollback Procedure
+```
+
+### 25.116 Versioning Summary
+
+```text
+Versioning
+│
+├── Application
+│   └── MAJOR.MINOR.PATCH
+│
+├── API
+│   └── /api/v1
+│
+├── Android Database
+│   └── Room Schema Version
+│
+├── Backend Database
+│   └── Migration Version
+│
+├── Synchronization
+│   ├── Protocol Version
+│   ├── Data Version
+│   └── Operation Version
+│
+├── P2P
+│   └── Protocol Version
+│
+├── Domain
+│   └── Model Evolution
+│
+└── Compatibility
+    ├── Backward Compatibility
+    ├── Migration
+    ├── Deprecation
+    ├── Negotiation
+    └── Safe Upgrade
+```
+
+### 25.117 Complete Versioning Flow
+
+```text
+New Feature / Change
+        ↓
+Classify Change
+        ↓
+Breaking?
+   ┌────┴────┐
+  No        Yes
+   │          │
+Compatible   New Version
+   │          │
+Migration?   Compatibility Strategy
+   │          │
+   └────┬─────┘
+        ↓
+Implement
+        ↓
+Migration / Compatibility Tests
+        ↓
+Deploy
+        ↓
+Monitor
+        ↓
+Deprecate Old Version When Safe
+        ↓
+Remove Only After Compatibility Window
+```
+
+### 25.118 Versioning Invariants
+
+The following rules are mandatory for V1:
+
+- Application versioning must remain separate from API versioning.
+- API versioning must remain separate from Database schema versioning.
+- Database schema versioning must remain separate from Sync Protocol versioning.
+- Sync Protocol versioning must remain separate from P2P Protocol versioning.
+- Entity versions must remain separate from application and protocol versions.
+- API V1 must have an explicit version namespace.
+- Breaking API changes must not silently replace the existing V1 contract.
+- Non-breaking API changes should remain backward-compatible.
+- API DTOs must remain independent from persistence entities.
+- Existing API clients should continue working with compatible backend changes.
+- Unknown optional response fields should be safely ignored where possible.
+- Unknown future enum values must not cause unnecessary client crashes.
+- Removing existing API fields must be treated as potentially breaking.
+- Changing existing API field types must be treated as potentially breaking.
+- Adding required fields to existing contracts requires a compatibility strategy.
+- Android Room schema changes must use controlled migrations.
+- Production local data must not be destroyed as a default migration strategy.
+- Backend schema changes must use controlled migrations.
+- Backend schema version must not be tied directly to API version.
+- Android database version must not be tied directly to Android application version.
+- Pending SyncOperations must survive application upgrades.
+- SyncState must survive compatible application upgrades.
+- Conflict state must survive compatible application upgrades.
+- Entity IDs must remain stable across compatible versions.
+- Operation IDs must remain stable across retries and migrations.
+- Sync Protocol changes must use explicit protocol versioning.
+- P2P Protocol changes must use explicit protocol versioning.
+- P2P peers must negotiate or otherwise determine protocol compatibility before exchanging data.
+- Incompatible P2P versions must fail safely without modifying Domain data.
+- Synchronization payload versions must be validated before interpretation.
+- Old synchronization data must be migrated or safely rejected when incompatible.
+- Cursor semantics must not change silently between incompatible protocol versions.
+- Breaking synchronization changes require a compatibility or migration strategy.
+- Version migration must never silently duplicate financial records.
+- Version migration must never silently lose financial records.
+- Version migration must never silently skip synchronization changes.
+- Version migration must preserve valid local data.
+- Backend deployments should prefer expand-and-contract migration strategies where practical.
+- Destructive database changes should be delayed until dependent clients have migrated.
+- API deprecation should precede API removal where compatibility is required.
+- Protocol deprecation should precede protocol removal where compatibility is required.
+- Forced upgrades should be reserved for cases where continued operation is unsafe or impossible.
+- Security-related version changes may require immediate enforcement.
+- Version compatibility must be tested before release.
+- Database migrations must be tested with realistic existing data.
+- Synchronization compatibility must be tested across supported client/server versions.
+- P2P compatibility must be tested across supported device versions.
+- Version information should be available in diagnostics and observability.
+- Release rollback must consider database, synchronization, and protocol compatibility.
+- Versioning must preserve the local-first architecture.
+- Versioning must preserve the offline-first behavior of SplitSync.
+- Versioning must support gradual system evolution without requiring simultaneous upgrades of every device.
+
+## 26. Package Naming
+
+### 26.1 Purpose
+
+This section defines the package naming conventions for the SplitSync V1 codebase.
+
+Package naming must provide:
+
+- Clear separation of responsibilities.
+- Consistent naming across Android and Backend.
+- Predictable source-code organization.
+- Easy navigation for developers.
+- Low coupling between architectural layers.
+- Consistent mapping between packages and modules.
+- Clear boundaries between Domain, Data, API, Synchronization, and infrastructure code.
+
+### 26.2 Core Principle
+
+Package names should be:
+
+```text
+Lowercase
++
+Descriptive
++
+Consistent
++
+Stable
++
+Architecture-Oriented
+```
+
+Java package names must use lowercase characters.
+
+Example:
+
+```text
+com.splitsync.android
+```
+
+Not:
+
+```text
+com.SplitSync.Android
+```
+
+### 26.3 Root Package
+
+The SplitSync Android application should use a root package based on the application's identity.
+
+Recommended:
+
+```text
+com.splitsync
+```
+
+Android-specific packages may use:
+
+```text
+com.splitsync.android
+```
+
+Backend packages may use:
+
+```text
+com.splitsync.backend
+```
+
+The exact root package should be finalized before implementation and then kept stable.
+
+### 26.4 Android Root Package
+
+The Android application should follow:
+
+```text
+com.splitsync.android
+```
+
+as its root package.
+
+Example:
+
+```text
+com.splitsync.android
+```
+
+### 26.5 Android Package Structure
+
+The Android package structure should reflect the architecture defined earlier:
+
+```text
+com.splitsync.android
+├── app
+├── core
+├── data
+├── domain
+├── sync
+├── security
+└── feature
+```
+
+### 26.6 Android App Package
+
+Application-level configuration and startup components belong under:
+
+```text
+com.splitsync.android.app
+```
+
+Examples:
+
+```text
+Application
+Startup
+Dependency Injection
+App Configuration
+```
+
+### 26.7 Android Core Package
+
+Shared infrastructure belongs under:
+
+```text
+com.splitsync.android.core
+```
+
+Possible subpackages:
+
+```text
+com.splitsync.android.core.common
+com.splitsync.android.core.database
+com.splitsync.android.core.network
+com.splitsync.android.core.security
+com.splitsync.android.core.util
+```
+
+### 26.8 Android Data Package
+
+Data-layer implementation belongs under:
+
+```text
+com.splitsync.android.data
+```
+
+Possible structure:
+
+```text
+com.splitsync.android.data
+├── local
+├── remote
+├── repository
+└── mapper
+```
+
+### 26.9 Android Local Package
+
+Local persistence belongs under:
+
+```text
+com.splitsync.android.data.local
+```
+
+Possible subpackages:
+
+```text
+com.splitsync.android.data.local.database
+com.splitsync.android.data.local.dao
+com.splitsync.android.data.local.entity
+```
+
+### 26.10 Android Remote Package
+
+Backend API communication belongs under:
+
+```text
+com.splitsync.android.data.remote
+```
+
+Possible subpackages:
+
+```text
+com.splitsync.android.data.remote.api
+com.splitsync.android.data.remote.dto
+```
+
+### 26.11 Android Repository Package
+
+Repository implementations belong under:
+
+```text
+com.splitsync.android.data.repository
+```
+
+Example:
+
+```text
+ExpenseRepositoryImpl
+GroupRepositoryImpl
+SettlementRepositoryImpl
+SyncRepositoryImpl
+```
+
+### 26.12 Android Mapper Package
+
+Mappings between layers belong under:
+
+```text
+com.splitsync.android.data.mapper
+```
+
+Examples:
+
+```text
+ExpenseEntityMapper
+ExpenseDtoMapper
+GroupEntityMapper
+```
+
+### 26.13 Android Domain Package
+
+Domain logic belongs under:
+
+```text
+com.splitsync.android.domain
+```
+
+Possible structure:
+
+```text
+com.splitsync.android.domain
+├── model
+├── repository
+├── usecase
+└── service
+```
+
+### 26.14 Android Domain Model Package
+
+Domain models belong under:
+
+```text
+com.splitsync.android.domain.model
+```
+
+Examples:
+
+```text
+User
+Device
+Group
+Membership
+Expense
+ExpenseSplit
+Settlement
+SyncOperation
+SyncState
+Conflict
+```
+
+### 26.15 Android Domain Repository Package
+
+Repository contracts belong under:
+
+```text
+com.splitsync.android.domain.repository
+```
+
+Example:
+
+```text
+ExpenseRepository
+GroupRepository
+SettlementRepository
+SyncRepository
+```
+
+The Domain layer should depend on repository interfaces rather than Data implementations.
+
+### 26.16 Android Use Case Package
+
+Application use cases belong under:
+
+```text
+com.splitsync.android.domain.usecase
+```
+
+Possible structure:
+
+```text
+com.splitsync.android.domain.usecase.expense
+com.splitsync.android.domain.usecase.group
+com.splitsync.android.domain.usecase.settlement
+com.splitsync.android.domain.usecase.sync
+```
+
+### 26.17 Android Domain Service Package
+
+Domain services that do not naturally belong to one entity may belong under:
+
+```text
+com.splitsync.android.domain.service
+```
+
+Examples:
+
+```text
+ExpenseSplitService
+BalanceCalculationService
+ConflictResolutionService
+```
+
+Only actual Domain services should be placed here.
+
+### 26.18 Android Synchronization Package
+
+Synchronization implementation belongs under:
+
+```text
+com.splitsync.android.sync
+```
+
+Possible structure:
+
+```text
+com.splitsync.android.sync
+├── engine
+├── push
+├── pull
+├── conflict
+├── state
+└── scheduler
+```
+
+### 26.19 Sync Engine Package
+
+The central synchronization engine belongs under:
+
+```text
+com.splitsync.android.sync.engine
+```
+
+Example:
+
+```text
+SyncEngine
+SyncCoordinator
+```
+
+### 26.20 Sync Push Package
+
+Push-related synchronization logic belongs under:
+
+```text
+com.splitsync.android.sync.push
+```
+
+Examples:
+
+```text
+PushProcessor
+PushResultHandler
+```
+
+### 26.21 Sync Pull Package
+
+Pull-related synchronization logic belongs under:
+
+```text
+com.splitsync.android.sync.pull
+```
+
+Examples:
+
+```text
+PullProcessor
+ChangeProcessor
+CursorManager
+```
+
+### 26.22 Sync Conflict Package
+
+Synchronization conflict handling belongs under:
+
+```text
+com.splitsync.android.sync.conflict
+```
+
+Examples:
+
+```text
+ConflictManager
+ConflictResolver
+```
+
+### 26.23 Sync State Package
+
+Synchronization state management belongs under:
+
+```text
+com.splitsync.android.sync.state
+```
+
+Examples:
+
+```text
+SyncStateManager
+SyncStateStore
+```
+
+### 26.24 Sync Scheduler Package
+
+Background synchronization scheduling belongs under:
+
+```text
+com.splitsync.android.sync.scheduler
+```
+
+Examples:
+
+```text
+SyncScheduler
+BackgroundSyncWorker
+```
+
+### 26.25 Android Security Package
+
+Security-related implementation belongs under:
+
+```text
+com.splitsync.android.security
+```
+
+Possible subpackages:
+
+```text
+com.splitsync.android.security.auth
+com.splitsync.android.security.crypto
+com.splitsync.android.security.device
+```
+
+### 26.26 Android Feature Package
+
+UI and feature-specific presentation code belongs under:
+
+```text
+com.splitsync.android.feature
+```
+
+Possible structure:
+
+```text
+com.splitsync.android.feature
+├── group
+├── expense
+├── settlement
+├── sync
+└── settings
+```
+
+### 26.27 Feature Package Principle
+
+Each feature package should contain feature-specific presentation code.
+
+Example:
+
+```text
+com.splitsync.android.feature.expense
+```
+
+may contain:
+
+```text
+ExpenseScreen
+ExpenseViewModel
+ExpenseUiState
+ExpenseUiEvent
+```
+
+Feature packages should not duplicate shared Domain or Data logic.
+
+### 26.28 Group Feature Package
+
+Group UI code belongs under:
+
+```text
+com.splitsync.android.feature.group
+```
+
+### 26.29 Expense Feature Package
+
+Expense UI code belongs under:
+
+```text
+com.splitsync.android.feature.expense
+```
+
+### 26.30 Settlement Feature Package
+
+Settlement UI code belongs under:
+
+```text
+com.splitsync.android.feature.settlement
+```
+
+### 26.31 Sync Feature Package
+
+Synchronization-related UI belongs under:
+
+```text
+com.splitsync.android.feature.sync
+```
+
+This package is for presentation code.
+
+Core synchronization implementation remains under:
+
+```text
+com.splitsync.android.sync
+```
+
+### 26.32 Settings Feature Package
+
+Settings UI belongs under:
+
+```text
+com.splitsync.android.feature.settings
+```
+
+### 26.33 Backend Root Package
+
+The Backend should use:
+
+```text
+com.splitsync.backend
+```
+
+as its root package.
+
+### 26.34 Backend Package Structure
+
+The Backend package structure should reflect the defined Spring Boot architecture:
+
+```text
+com.splitsync.backend
+├── config
+├── controller
+├── dto
+├── service
+├── domain
+├── repository
+├── entity
+├── sync
+├── security
+└── exception
+```
+
+### 26.35 Backend Configuration Package
+
+Spring Boot configuration belongs under:
+
+```text
+com.splitsync.backend.config
+```
+
+Examples:
+
+```text
+SecurityConfig
+DatabaseConfig
+JacksonConfig
+WebConfig
+```
+
+### 26.36 Backend Controller Package
+
+REST controllers belong under:
+
+```text
+com.splitsync.backend.controller
+```
+
+Possible structure:
+
+```text
+com.splitsync.backend.controller
+├── auth
+├── group
+├── expense
+├── settlement
+└── sync
+```
+
+### 26.37 Backend DTO Package
+
+API DTOs belong under:
+
+```text
+com.splitsync.backend.dto
+```
+
+Possible structure:
+
+```text
+com.splitsync.backend.dto.request
+com.splitsync.backend.dto.response
+com.splitsync.backend.dto.sync
+```
+
+### 26.38 Backend Request DTO Package
+
+Request models belong under:
+
+```text
+com.splitsync.backend.dto.request
+```
+
+Examples:
+
+```text
+CreateGroupRequest
+CreateExpenseRequest
+CreateSettlementRequest
+```
+
+### 26.39 Backend Response DTO Package
+
+Response models belong under:
+
+```text
+com.splitsync.backend.dto.response
+```
+
+Examples:
+
+```text
+GroupResponse
+ExpenseResponse
+SettlementResponse
+```
+
+### 26.40 Backend Sync DTO Package
+
+Synchronization-specific DTOs belong under:
+
+```text
+com.splitsync.backend.dto.sync
+```
+
+Examples:
+
+```text
+SyncPushRequest
+SyncPushResponse
+SyncChangeResponse
+SyncOperationDto
+```
+
+### 26.41 Backend Service Package
+
+Application services belong under:
+
+```text
+com.splitsync.backend.service
+```
+
+Possible structure:
+
+```text
+com.splitsync.backend.service
+├── auth
+├── group
+├── expense
+├── settlement
+└── sync
+```
+
+### 26.42 Backend Domain Package
+
+Backend Domain concepts belong under:
+
+```text
+com.splitsync.backend.domain
+```
+
+Possible structure:
+
+```text
+com.splitsync.backend.domain.model
+com.splitsync.backend.domain.service
+```
+
+### 26.43 Backend Repository Package
+
+Persistence repository interfaces and implementations belong under:
+
+```text
+com.splitsync.backend.repository
+```
+
+Possible subpackages:
+
+```text
+com.splitsync.backend.repository.group
+com.splitsync.backend.repository.expense
+com.splitsync.backend.repository.settlement
+com.splitsync.backend.repository.sync
+```
+
+The exact structure may be simplified if the project remains small.
+
+### 26.44 Backend Entity Package
+
+JPA persistence entities belong under:
+
+```text
+com.splitsync.backend.entity
+```
+
+Possible structure:
+
+```text
+com.splitsync.backend.entity.group
+com.splitsync.backend.entity.expense
+com.splitsync.backend.entity.settlement
+com.splitsync.backend.entity.sync
+```
+
+### 26.45 Backend Entity Separation
+
+JPA entities must not automatically become:
+
+```text
+API Response Models
+```
+
+The API should use DTOs.
+
+### 26.46 Backend Synchronization Package
+
+Synchronization implementation belongs under:
+
+```text
+com.splitsync.backend.sync
+```
+
+Possible structure:
+
+```text
+com.splitsync.backend.sync
+├── push
+├── pull
+├── conflict
+├── cursor
+└── operation
+```
+
+### 26.47 Backend Sync Operation Package
+
+Synchronization operation processing belongs under:
+
+```text
+com.splitsync.backend.sync.operation
+```
+
+Examples:
+
+```text
+SyncOperationProcessor
+OperationValidator
+OperationIdempotencyService
+```
+
+### 26.48 Backend Sync Conflict Package
+
+Conflict handling belongs under:
+
+```text
+com.splitsync.backend.sync.conflict
+```
+
+Examples:
+
+```text
+ConflictDetector
+ConflictService
+```
+
+### 26.49 Backend Sync Cursor Package
+
+Change cursor management belongs under:
+
+```text
+com.splitsync.backend.sync.cursor
+```
+
+Examples:
+
+```text
+CursorService
+ChangeFeedService
+```
+
+### 26.50 Backend Security Package
+
+Security implementation belongs under:
+
+```text
+com.splitsync.backend.security
+```
+
+Possible structure:
+
+```text
+com.splitsync.backend.security.auth
+com.splitsync.backend.security.authorization
+com.splitsync.backend.security.device
+```
+
+### 26.51 Backend Exception Package
+
+Exception classes belong under:
+
+```text
+com.splitsync.backend.exception
+```
+
+Examples:
+
+```text
+ValidationException
+AuthorizationException
+ConflictException
+ResourceNotFoundException
+UnsupportedVersionException
+```
+
+### 26.52 Package Naming by Responsibility
+
+Packages should represent responsibilities.
+
+Preferred:
+
+```text
+com.splitsync.backend.sync.operation
+```
+
+Avoid overly generic structures such as:
+
+```text
+com.splitsync.backend.misc
+com.splitsync.backend.other
+com.splitsync.backend.common2
+```
+
+### 26.53 Avoid Generic Packages
+
+Packages such as:
+
+```text
+utils
+helpers
+misc
+common
+stuff
+```
+
+should be avoided unless the package has a clearly defined shared responsibility.
+
+### 26.54 Utility Classes
+
+A utility package may exist when genuinely required:
+
+```text
+com.splitsync.android.core.util
+```
+
+or:
+
+```text
+com.splitsync.backend.util
+```
+
+However, Domain logic must not be hidden inside generic utility classes.
+
+### 26.55 Common Package
+
+Shared infrastructure may use:
+
+```text
+core.common
+```
+
+but the package should not become a dumping ground for unrelated classes.
+
+### 26.56 Package by Feature vs Layer
+
+SplitSync uses a hybrid organization:
+
+```text
+Top Level
+    ↓
+Architectural Layer
+    ↓
+Feature / Responsibility
+```
+
+Example:
+
+```text
+domain
+    └── usecase
+          └── expense
+```
+
+and:
+
+```text
+feature
+    └── expense
+```
+
+### 26.57 Android Architecture Mapping
+
+The package structure maps to the architecture:
+
+```text
+UI
+ ↓
+feature.*
+
+Domain
+ ↓
+domain.*
+
+Data
+ ↓
+data.*
+
+Synchronization
+ ↓
+sync.*
+
+Security
+ ↓
+security.*
+
+Infrastructure
+ ↓
+core.*
+```
+
+### 26.58 Backend Architecture Mapping
+
+The package structure maps to:
+
+```text
+REST API
+ ↓
+controller.*
+
+Application
+ ↓
+service.*
+
+Domain
+ ↓
+domain.*
+
+Persistence
+ ↓
+repository.*
+entity.*
+
+Synchronization
+ ↓
+sync.*
+
+Security
+ ↓
+security.*
+```
+
+### 26.59 Package Dependency Direction
+
+Android package dependencies should generally follow:
+
+```text
+feature
+   ↓
+domain
+   ↓
+repository interfaces
+
+data
+   ↓
+domain
+
+sync
+   ↓
+domain
+   ↓
+data / repository
+```
+
+The Domain layer must remain independent from Android UI implementation.
+
+### 26.60 Android Domain Dependency Rule
+
+The Domain package should not depend directly on:
+
+```text
+Android Activity
+Android Fragment
+Compose UI
+Room Entity
+Retrofit DTO
+```
+
+### 26.61 Android Data Dependency Rule
+
+Data implementation may depend on:
+
+```text
+Domain
+Room
+Retrofit
+Android Infrastructure
+```
+
+but Domain must not depend on Data implementations.
+
+### 26.62 Android Feature Dependency Rule
+
+Feature packages may depend on:
+
+```text
+Domain
+UI Infrastructure
+```
+
+and access data through Domain/use-case abstractions.
+
+### 26.63 Sync Dependency Rule
+
+Synchronization may depend on:
+
+```text
+Domain
+Repository
+Network
+Local Database
+```
+
+but synchronization logic should not be embedded inside UI packages.
+
+### 26.64 Backend Controller Dependency Rule
+
+Controllers should depend on:
+
+```text
+DTO
+Service
+```
+
+and should not directly manipulate:
+
+```text
+JPA Entity
+Repository
+```
+
+for normal Domain operations.
+
+### 26.65 Backend Service Dependency Rule
+
+Services coordinate:
+
+```text
+Domain Logic
+Repositories
+Transactions
+Authorization
+Synchronization
+```
+
+as appropriate.
+
+### 26.66 Backend Repository Dependency Rule
+
+Repositories are responsible for persistence access.
+
+They should not contain:
+
+```text
+REST Controller Logic
+UI Logic
+```
+
+### 26.67 Backend Entity Dependency Rule
+
+JPA entities belong to the persistence layer.
+
+They should not contain API-specific behavior.
+
+### 26.68 Package Naming and Class Naming
+
+Package names use:
+
+```text
+lowercase
+```
+
+Class names use:
+
+```text
+PascalCase
+```
+
+Example:
+
+```text
+com.splitsync.android.domain.model
+```
+
+with:
+
+```text
+Expense
+ExpenseSplit
+Settlement
+```
+
+### 26.69 Interface Naming
+
+Interfaces should use clear Domain or responsibility-based names.
+
+Example:
+
+```text
+ExpenseRepository
+SyncRepository
+ConflictResolver
+```
+
+The `I` prefix should generally be avoided.
+
+Avoid:
+
+```text
+IExpenseRepository
+```
+
+### 26.70 Implementation Naming
+
+Implementations may use:
+
+```text
+ExpenseRepositoryImpl
+```
+
+where the distinction is useful.
+
+### 26.71 DTO Naming
+
+DTO names should communicate API intent.
+
+Examples:
+
+```text
+CreateExpenseRequest
+UpdateExpenseRequest
+ExpenseResponse
+SyncPushRequest
+```
+
+Avoid:
+
+```text
+ExpenseDTO1
+ExpenseData
+TempExpense
+```
+
+### 26.72 Entity Naming
+
+Persistence entities should represent persistence concepts clearly.
+
+Example:
+
+```text
+ExpenseEntity
+ExpenseSplitEntity
+SettlementEntity
+```
+
+### 26.73 Domain Model Naming
+
+Domain models should not require the `Entity` suffix.
+
+Example:
+
+```text
+Expense
+ExpenseSplit
+Settlement
+```
+
+### 26.74 Mapper Naming
+
+Mapper names should clearly identify source and target.
+
+Examples:
+
+```text
+ExpenseEntityMapper
+ExpenseDtoMapper
+```
+
+or:
+
+```text
+ExpenseEntityToDomainMapper
+ExpenseDtoToDomainMapper
+```
+
+depending on implementation style.
+
+### 26.75 Sync Class Naming
+
+Synchronization classes should communicate their role.
+
+Examples:
+
+```text
+SyncEngine
+SyncCoordinator
+SyncOperationProcessor
+ConflictResolver
+CursorManager
+```
+
+### 26.76 Package Naming for Tests
+
+Test packages should mirror production packages.
+
+Example:
+
+```text
+Production:
+com.splitsync.android.domain.usecase.expense
+
+Test:
+com.splitsync.android.domain.usecase.expense
+```
+
+### 26.77 Android Test Package
+
+Unit and instrumentation tests should follow the same package hierarchy as the classes being tested.
+
+### 26.78 Backend Test Package
+
+Backend tests should mirror the corresponding production package.
+
+Example:
+
+```text
+com.splitsync.backend.service.expense
+```
+
+test:
+
+```text
+com.splitsync.backend.service.expense
+```
+
+### 26.79 Package Naming and Modules
+
+If the project is split into multiple Gradle modules, each module should preserve the same root namespace.
+
+Example:
+
+```text
+com.splitsync.android.core
+com.splitsync.android.domain
+com.splitsync.android.data
+com.splitsync.android.sync
+com.splitsync.android.feature.expense
+```
+
+### 26.80 Module and Package Relationship
+
+A package should not exist merely because a module exists.
+
+The module defines:
+
+```text
+Build / Dependency Boundary
+```
+
+The package defines:
+
+```text
+Code Organization / Responsibility
+```
+
+### 26.81 Android Example
+
+Recommended high-level structure:
+
+```text
+com.splitsync.android
+├── app
+├── core
+│   ├── common
+│   ├── database
+│   ├── network
+│   └── util
+├── data
+│   ├── local
+│   │   ├── dao
+│   │   ├── database
+│   │   └── entity
+│   ├── remote
+│   │   ├── api
+│   │   └── dto
+│   ├── mapper
+│   └── repository
+├── domain
+│   ├── model
+│   ├── repository
+│   ├── service
+│   └── usecase
+├── security
+├── sync
+│   ├── conflict
+│   ├── engine
+│   ├── pull
+│   ├── push
+│   ├── scheduler
+│   └── state
+└── feature
+    ├── expense
+    ├── group
+    ├── settlement
+    ├── settings
+    └── sync
+```
+
+### 26.82 Backend Example
+
+Recommended high-level structure:
+
+```text
+com.splitsync.backend
+├── config
+├── controller
+│   ├── auth
+│   ├── expense
+│   ├── group
+│   ├── settlement
+│   └── sync
+├── dto
+│   ├── request
+│   ├── response
+│   └── sync
+├── domain
+│   ├── model
+│   └── service
+├── entity
+│   ├── expense
+│   ├── group
+│   ├── settlement
+│   └── sync
+├── exception
+├── repository
+│   ├── expense
+│   ├── group
+│   ├── settlement
+│   └── sync
+├── security
+│   ├── auth
+│   ├── authorization
+│   └── device
+├── service
+│   ├── expense
+│   ├── group
+│   ├── settlement
+│   └── sync
+└── sync
+    ├── conflict
+    ├── cursor
+    ├── operation
+    ├── pull
+    └── push
+```
+
+### 26.83 Package Naming and Future Expansion
+
+New packages should follow the same naming rules.
+
+For a future feature:
+
+```text
+recurring expense
+```
+
+Android UI:
+
+```text
+com.splitsync.android.feature.recurringexpense
+```
+
+Domain:
+
+```text
+com.splitsync.android.domain.usecase.recurringexpense
+```
+
+Backend:
+
+```text
+com.splitsync.backend.service.recurringexpense
+```
+
+### 26.84 Package Naming and Refactoring
+
+Package restructuring is allowed during development.
+
+However, unnecessary package renaming should be avoided after release because it creates:
+
+```text
+Import Changes
+Migration Cost
+Potential Serialization Issues
+Build Changes
+```
+
+### 26.85 Package Naming and Public Contracts
+
+Internal package names should not become part of public API contracts.
+
+For example:
+
+```text
+com.splitsync.backend.entity.expense.ExpenseEntity
+```
+
+must not be exposed as an API contract.
+
+### 26.86 Package Naming and Serialization
+
+JSON serialization must use explicit DTO contracts rather than relying on package names.
+
+This allows internal classes to move without changing the API.
+
+### 26.87 Package Naming and Reflection
+
+If frameworks rely on reflection, package changes must be reviewed for:
+
+```text
+Component Scanning
+Entity Scanning
+Serialization
+Dependency Injection
+```
+
+### 26.88 Package Naming and Spring Boot
+
+Spring Boot component scanning should use the root package:
+
+```text
+com.splitsync.backend
+```
+
+so that required subpackages are discovered automatically.
+
+### 26.89 Package Naming and Android DI
+
+Android dependency injection configuration should be placed under an appropriate application/core package rather than mixed with Domain models.
+
+### 26.90 Package Naming and Database Entities
+
+Database entities must remain grouped according to their persistence responsibility.
+
+Example:
+
+```text
+entity.expense
+entity.group
+entity.settlement
+entity.sync
+```
+
+### 26.91 Package Naming and API Controllers
+
+Controllers should be grouped by API responsibility.
+
+Example:
+
+```text
+controller.expense
+controller.group
+controller.settlement
+controller.sync
+```
+
+### 26.92 Package Naming and Security
+
+Security-related classes should remain isolated from ordinary Domain packages.
+
+Example:
+
+```text
+security.auth
+security.authorization
+security.device
+```
+
+This makes security boundaries easier to review.
+
+### 26.93 Package Naming and Synchronization
+
+Synchronization code should remain clearly separated from ordinary CRUD logic.
+
+Preferred:
+
+```text
+sync.operation
+sync.cursor
+sync.conflict
+```
+
+rather than embedding synchronization behavior inside:
+
+```text
+expense
+group
+settlement
+```
+
+packages.
+
+### 26.94 Package Naming and Domain Logic
+
+Domain logic should not be hidden inside:
+
+```text
+controller
+repository
+util
+mapper
+```
+
+packages.
+
+Domain rules belong in:
+
+```text
+domain
+```
+
+or the appropriate application service layer.
+
+### 26.95 Package Naming and Utility Abuse
+
+If a method contains business rules such as:
+
+```text
+Calculate Expense Split
+Resolve Balance
+Validate Settlement
+```
+
+it should not automatically be placed in:
+
+```text
+Utils
+```
+
+It belongs in the appropriate Domain/service/use-case package.
+
+### 26.96 Package Naming and Circular Dependencies
+
+Package structure should help prevent circular dependencies.
+
+Avoid:
+
+```text
+A → B
+B → A
+```
+
+where possible.
+
+The architecture should prefer:
+
+```text
+Feature
+   ↓
+Domain
+   ↓
+Abstraction
+   ↑
+Data Implementation
+```
+
+### 26.97 Package Naming and Dependency Direction
+
+The package hierarchy should make architectural dependency direction visible.
+
+```text
+Presentation
+    ↓
+Domain
+    ↓
+Abstraction
+
+Data ───────────────→ Domain
+Sync ───────────────→ Domain
+Infrastructure ─────→ Required Layers
+```
+
+### 26.98 Package Naming and Shared Models
+
+Shared Domain models should not be duplicated across:
+
+```text
+Feature
+Data
+Sync
+Backend
+```
+
+Each architectural boundary should have its own representation where required.
+
+### 26.99 Package Naming and DTO Duplication
+
+It is acceptable for:
+
+```text
+Expense
+ExpenseDto
+ExpenseEntity
+```
+
+to represent the same logical concept at different architectural boundaries.
+
+They should not be treated as the same class merely to reduce the number of files.
+
+### 26.100 Package Naming and Clean Architecture
+
+Package naming should support the intended architectural separation:
+
+```text
+Presentation
+      ↓
+Domain
+      ↓
+Data / Infrastructure
+```
+
+rather than weakening the separation.
+
+### 26.101 Package Naming Summary
+
+```text
+Android
+com.splitsync.android
+│
+├── app
+├── core
+├── data
+├── domain
+├── security
+├── sync
+└── feature
+```
+
+```text
+Backend
+com.splitsync.backend
+│
+├── config
+├── controller
+├── dto
+├── domain
+├── entity
+├── exception
+├── repository
+├── security
+├── service
+└── sync
+```
+
+### 26.102 Naming Rules
+
+The following naming rules apply:
+
+```text
+Package:
+lowercase
+
+Class:
+PascalCase
+
+Method:
+camelCase
+
+Variable:
+camelCase
+
+Constant:
+UPPER_SNAKE_CASE
+```
+
+### 26.103 Package Naming Invariants
+
+The following rules are mandatory for V1:
+
+- Java package names must use lowercase characters.
+- Package names must be descriptive.
+- Package names must represent a clear responsibility.
+- The Android application must use a stable root package.
+- The Backend must use a stable root package.
+- Android and Backend root packages should remain distinguishable.
+- Android packages must reflect the defined architectural boundaries.
+- Backend packages must reflect the defined architectural boundaries.
+- Domain packages must remain independent from UI implementation.
+- Android Domain packages must not depend directly on Room entities.
+- Android Domain packages must not depend directly on Retrofit DTOs.
+- Android Domain packages must not depend directly on Android UI classes.
+- Data implementations may depend on Domain abstractions.
+- Feature packages must contain presentation-specific code.
+- Synchronization implementation must remain separate from UI feature packages.
+- Security implementation must remain clearly separated from ordinary Domain code.
+- Backend Controllers must not directly implement persistence logic.
+- Backend Controllers should use DTOs and application services.
+- Backend JPA entities must remain separate from API DTOs.
+- Backend repositories must remain separate from API controllers.
+- Backend synchronization code must remain separate from ordinary CRUD controllers/services where practical.
+- Generic packages such as `misc`, `stuff`, or `helpers` should be avoided.
+- Utility packages must not become a dumping ground for business logic.
+- Domain rules must not be hidden inside utility classes.
+- Package names must not be used as public API contracts.
+- API DTOs must remain independent from internal package structures.
+- Test packages should mirror production package structures.
+- Package names should remain consistent across Gradle modules.
+- Package dependency direction must follow the defined architecture.
+- Circular package dependencies should be avoided.
+- New features must follow the established package naming convention.
+- Package restructuring must not unnecessarily break public contracts.
+- Framework-specific package scanning must be considered when moving packages.
+- Package naming must make architectural responsibilities easy to identify.
+- Package structure must support maintainability as SplitSync grows.
+
+## 27. Configuration Strategy
+
+### 27.1 Purpose
+
+This section defines the configuration strategy for SplitSync V1.
+
+Configuration includes:
+
+- Android application configuration.
+- Backend application configuration.
+- Database configuration.
+- API configuration.
+- Synchronization configuration.
+- P2P configuration.
+- Security configuration.
+- Environment-specific configuration.
+- Runtime configuration.
+- Feature configuration.
+- Logging configuration.
+
+The primary goal is:
+
+```text
+Keep Configuration
+Separate From Business Logic
++
+Keep Secrets Out of Source Code
++
+Support Multiple Environments
++
+Allow Safe Runtime Changes
+```
+
+### 27.2 Core Principle
+
+SplitSync follows:
+
+```text
+Code
++
+External Configuration
++
+Environment-Specific Values
++
+Secure Secret Management
+```
+
+Configuration must not be hard-coded throughout the application.
+
+### 27.3 Configuration Categories
+
+Configuration is divided into:
+
+```text
+Static Configuration
+Environment Configuration
+Runtime Configuration
+Security Configuration
+Feature Configuration
+Infrastructure Configuration
+```
+
+### 27.4 Static Configuration
+
+Static configuration consists of values that normally remain unchanged for a particular application version.
+
+Examples:
+
+```text
+API Path
+Protocol Defaults
+Supported Sync Version
+Supported P2P Version
+Default Page Size
+```
+
+### 27.5 Environment Configuration
+
+Environment-specific configuration differs between:
+
+```text
+Development
+Testing
+Staging
+Production
+```
+
+Examples:
+
+```text
+Backend URL
+Database Host
+Database Port
+Logging Level
+External Service Configuration
+```
+
+### 27.6 Runtime Configuration
+
+Runtime configuration may change while the application is running or through controlled backend configuration.
+
+Examples:
+
+```text
+Sync Interval
+Retry Limits
+Feature Flags
+Rate Limits
+```
+
+Runtime configuration must have clearly defined ownership and persistence.
+
+### 27.7 Security Configuration
+
+Security-sensitive configuration includes:
+
+```text
+Authentication Configuration
+Encryption Configuration
+Key References
+Token Configuration
+Device Security Configuration
+```
+
+Secrets must not be committed to source control.
+
+### 27.8 Configuration Source Priority
+
+Configuration should follow a clearly defined precedence.
+
+Conceptually:
+
+```text
+Default
+   ↓
+Environment Configuration
+   ↓
+Runtime Configuration
+   ↓
+Explicit Override
+```
+
+The exact precedence must be documented for each configuration category.
+
+### 27.9 Configuration Must Be Explicit
+
+Every configuration value should have:
+
+```text
+Name
+Type
+Default / Required Status
+Purpose
+Allowed Range
+Environment Scope
+```
+
+### 27.10 Configuration Naming
+
+Configuration keys should use consistent naming.
+
+Example:
+
+```text
+API_BASE_URL
+SYNC_BATCH_SIZE
+SYNC_RETRY_LIMIT
+LOG_LEVEL
+```
+
+The exact naming convention may differ between Android and Backend configuration systems, but consistency within each system is mandatory.
+
+### 27.11 Android Configuration
+
+Android configuration should be separated into:
+
+```text
+Build-Time Configuration
+Runtime Configuration
+Secure Configuration
+```
+
+### 27.12 Android Build Configuration
+
+Build-time configuration may include:
+
+```text
+Application ID
+Version Code
+Version Name
+Build Type
+Environment
+API Base URL
+```
+
+### 27.13 Android Build Types
+
+The application should support at least:
+
+```text
+debug
+release
+```
+
+Additional environments may be represented through:
+
+```text
+productFlavors
+```
+
+where required.
+
+### 27.14 Android Environment Configuration
+
+Conceptually:
+
+```text
+Development
+    ↓
+Debug Build
+    ↓
+Development Backend
+```
+
+```text
+Production
+    ↓
+Release Build
+    ↓
+Production Backend
+```
+
+Production configuration must never accidentally point to development infrastructure.
+
+### 27.15 Android API Base URL
+
+The API base URL should be environment-specific.
+
+Example:
+
+```text
+Development:
+https://dev-api.example.com/
+
+Production:
+https://api.example.com/
+```
+
+The actual URLs must be supplied through environment/build configuration.
+
+### 27.16 Android API URL Must Not Be Scattered
+
+The API base URL must not be repeated throughout API classes.
+
+Preferred:
+
+```text
+Configuration
+      ↓
+Network Client
+      ↓
+API Services
+```
+
+### 27.17 Android Runtime Configuration
+
+Runtime settings may include:
+
+```text
+Sync Enabled
+Sync Frequency
+Background Sync Policy
+P2P Discovery Settings
+```
+
+These values should be managed through a controlled configuration mechanism.
+
+### 27.18 Android User Settings
+
+User preferences should be separated from application configuration.
+
+Examples:
+
+```text
+Theme
+Notification Preference
+Preferred Currency Display
+```
+
+These are:
+
+```text
+User Preferences
+```
+
+rather than:
+
+```text
+System Configuration
+```
+
+### 27.19 Android Local Configuration Storage
+
+Small runtime/user configuration values may be stored using:
+
+```text
+DataStore
+```
+
+where appropriate.
+
+The exact persistence technology should follow the Android architecture.
+
+### 27.20 Do Not Store Secrets in DataStore
+
+Sensitive secrets such as:
+
+```text
+Private Keys
+Long-Lived Tokens
+Passwords
+```
+
+must not be stored in ordinary preference storage.
+
+Secure storage mechanisms must be used.
+
+### 27.21 Android Secure Configuration
+
+Sensitive device-level configuration should use Android security facilities where appropriate.
+
+Examples:
+
+```text
+Credential References
+Cryptographic Key Material
+Secure Tokens
+```
+
+### 27.22 Android API Configuration
+
+The API client configuration should centralize:
+
+```text
+Base URL
+Timeout
+Headers
+Authentication
+Serialization
+Logging
+```
+
+### 27.23 Android Network Timeout
+
+Network timeout values should be configurable.
+
+Example:
+
+```text
+CONNECT_TIMEOUT
+READ_TIMEOUT
+WRITE_TIMEOUT
+```
+
+Reasonable defaults should be provided.
+
+### 27.24 Android Retry Configuration
+
+Retry policy should be centralized.
+
+Example:
+
+```text
+MAX_RETRY_COUNT
+INITIAL_BACKOFF
+MAX_BACKOFF
+```
+
+These values must not be hard-coded separately in every network operation.
+
+### 27.25 Synchronization Configuration
+
+Synchronization configuration may include:
+
+```text
+SYNC_BATCH_SIZE
+SYNC_RETRY_LIMIT
+SYNC_BACKOFF
+SYNC_INTERVAL
+SYNC_PAGE_SIZE
+```
+
+### 27.26 Sync Batch Size
+
+The batch size should be bounded.
+
+Example:
+
+```text
+SYNC_BATCH_SIZE = 50
+```
+
+The exact production value should be selected through testing.
+
+### 27.27 Sync Retry Configuration
+
+The Sync Engine should have controlled retry configuration:
+
+```text
+Initial Delay
+Maximum Delay
+Maximum Attempts
+```
+
+The system must avoid infinite retry loops.
+
+### 27.28 Sync Interval
+
+Background synchronization may have a configurable scheduling policy.
+
+Example:
+
+```text
+Minimum Sync Interval
+```
+
+The actual execution frequency must also respect:
+
+```text
+Android Background Execution Rules
+Battery Constraints
+Network Constraints
+```
+
+### 27.29 P2P Configuration
+
+P2P configuration may include:
+
+```text
+P2P Protocol Version
+Discovery Timeout
+Connection Timeout
+Message Size Limit
+Session Timeout
+```
+
+### 27.30 P2P Discovery Configuration
+
+Discovery timeout must prevent indefinite peer discovery.
+
+Example:
+
+```text
+DISCOVERY_TIMEOUT
+```
+
+### 27.31 P2P Message Size
+
+Incoming P2P messages must have a maximum permitted size.
+
+This protects against:
+
+```text
+Memory Exhaustion
+Malformed Messages
+Abusive Peers
+```
+
+### 27.32 Backend Configuration
+
+Backend configuration should be externalized from application code.
+
+Typical configuration includes:
+
+```text
+Server Port
+Database URL
+Database Credentials
+JWT / Authentication Configuration
+CORS
+Logging
+Synchronization Limits
+Rate Limits
+```
+
+### 27.33 Spring Boot Configuration
+
+The Backend may use standard Spring Boot configuration mechanisms such as:
+
+```text
+application.yml
+application.properties
+Environment Variables
+```
+
+The final format may be selected during implementation.
+
+### 27.34 Environment-Specific Backend Configuration
+
+Recommended structure:
+
+```text
+application.yml
+application-dev.yml
+application-test.yml
+application-prod.yml
+```
+
+The exact naming may vary.
+
+### 27.35 Development Configuration
+
+Development configuration may include:
+
+```text
+Local Database
+Debug Logging
+Development API Settings
+Test Credentials / References
+```
+
+Development configuration must never be used accidentally in production.
+
+### 27.36 Test Configuration
+
+Test configuration should use isolated infrastructure.
+
+Example:
+
+```text
+Test Database
+Test Authentication
+Test External Services
+```
+
+Tests must not depend on production data.
+
+### 27.37 Staging Configuration
+
+If staging is used:
+
+```text
+Staging Backend
+Staging Database
+Staging Authentication
+```
+
+must remain isolated from production.
+
+### 27.38 Production Configuration
+
+Production configuration must use:
+
+```text
+Production Database
+Production Authentication
+Production Security Configuration
+Production Logging
+```
+
+and must have restricted administrative access.
+
+### 27.39 Environment Isolation
+
+The following must remain isolated:
+
+```text
+Development
+      ≠
+Test
+      ≠
+Staging
+      ≠
+Production
+```
+
+### 27.40 Database Configuration
+
+Backend database configuration should include:
+
+```text
+Database URL
+Database Name
+Username
+Password / Secret Reference
+Connection Pool
+Migration Configuration
+```
+
+### 27.41 Database Credentials
+
+Database credentials must not be hard-coded.
+
+Unsafe:
+
+```java
+String password = "myPassword";
+```
+
+Preferred:
+
+```text
+Environment / Secret Manager
+        ↓
+Application Configuration
+        ↓
+Database Connection
+```
+
+### 27.42 Secret Management
+
+Secrets should be supplied through secure deployment mechanisms.
+
+Possible approaches include:
+
+```text
+Environment Variables
+Secret Manager
+Vault
+Cloud Secret Store
+```
+
+The exact mechanism depends on deployment infrastructure.
+
+### 27.43 Source Control and Secrets
+
+The following must never be committed to source control:
+
+```text
+Database Passwords
+Production API Keys
+Private Keys
+JWT Signing Secrets
+Encryption Secrets
+Cloud Credentials
+```
+
+### 27.44 Configuration Templates
+
+The repository may contain safe configuration templates.
+
+Example:
+
+```text
+application.example.yml
+```
+
+The template may contain:
+
+```text
+DB_URL=${DB_URL}
+DB_USERNAME=${DB_USERNAME}
+DB_PASSWORD=${DB_PASSWORD}
+```
+
+but must not contain real production secrets.
+
+### 27.45 Environment Variables
+
+Environment variables may be used for deployment-sensitive configuration.
+
+Example:
+
+```text
+DB_URL
+DB_USERNAME
+DB_PASSWORD
+JWT_SECRET
+```
+
+### 27.46 Secret References
+
+Where a secret manager is used, configuration should preferably contain a:
+
+```text
+Secret Reference
+```
+
+rather than the secret value itself.
+
+### 27.47 Configuration Validation
+
+The application should validate required configuration during startup.
+
+Example:
+
+```text
+Backend Startup
+      ↓
+Load Configuration
+      ↓
+Validate Required Values
+      ↓
+Valid?
+   ┌──┴──┐
+  Yes    No
+   │      │
+Start   Fail Fast
+```
+
+### 27.48 Fail Fast
+
+Missing critical configuration should cause startup failure rather than allowing the application to operate in an unsafe state.
+
+Example:
+
+```text
+Production DB Password Missing
+      ↓
+Startup Failure
+```
+
+### 27.49 Optional Configuration
+
+Optional configuration may use safe defaults.
+
+Example:
+
+```text
+LOG_LEVEL
+```
+
+may default to:
+
+```text
+INFO
+```
+
+if not explicitly configured.
+
+### 27.50 Configuration Defaults
+
+Defaults must be:
+
+```text
+Safe
+Documented
+Reasonable
+Environment-Appropriate
+```
+
+A default must not accidentally enable insecure behavior.
+
+### 27.51 Security-Sensitive Defaults
+
+Security-sensitive settings should prefer secure defaults.
+
+Example:
+
+```text
+HTTPS Required = true
+```
+
+rather than:
+
+```text
+HTTPS Required = false
+```
+
+### 27.52 Debug Configuration
+
+Debug configuration must not accidentally be enabled in production.
+
+Example:
+
+```text
+SQL Logging
+Verbose Network Logging
+Debug Authentication Logging
+```
+
+must be controlled by environment.
+
+### 27.53 Production Logging
+
+Production logging should normally use:
+
+```text
+INFO
+WARN
+ERROR
+```
+
+with sensitive data excluded.
+
+### 27.54 Development Logging
+
+Development may use:
+
+```text
+DEBUG
+```
+
+where useful.
+
+However, even development logs must not unnecessarily expose:
+
+```text
+Passwords
+Tokens
+Private Keys
+Sensitive Financial Data
+```
+
+### 27.55 SQL Logging
+
+SQL logging should generally be disabled or tightly controlled in production.
+
+### 27.56 API Logging
+
+API request/response logging must be carefully configured.
+
+Do not log complete sensitive request bodies by default.
+
+### 27.57 Sync Logging
+
+Synchronization logs should include safe diagnostic identifiers such as:
+
+```text
+operationId
+requestId
+entityId
+errorCode
+```
+
+where appropriate.
+
+### 27.58 Configuration and Observability
+
+Observability configuration may include:
+
+```text
+Log Level
+Metrics Enabled
+Tracing Enabled
+Request ID
+Sampling
+```
+
+These values should be environment-specific.
+
+### 27.59 Configuration and API Version
+
+The active API version may be defined by:
+
+```text
+Code
+```
+
+rather than external runtime configuration when it is part of the public contract.
+
+Example:
+
+```text
+/api/v1
+```
+
+should not be dynamically changed in production without an explicit deployment strategy.
+
+### 27.60 Configuration and Sync Protocol Version
+
+The supported synchronization protocol version should be explicitly defined.
+
+Example:
+
+```text
+SYNC_PROTOCOL_VERSION=1
+```
+
+If this value changes incompatibly, the versioning strategy must be followed.
+
+### 27.61 Configuration and P2P Protocol Version
+
+P2P protocol support should be explicit.
+
+Example:
+
+```text
+P2P_PROTOCOL_VERSION=1
+```
+
+Devices must not advertise support for a protocol they cannot actually process.
+
+### 27.62 Supported Version Range
+
+Where protocol negotiation is used, configuration may define:
+
+```text
+MIN_SUPPORTED_VERSION
+MAX_SUPPORTED_VERSION
+```
+
+Example:
+
+```text
+P2P_MIN_VERSION=1
+P2P_MAX_VERSION=2
+```
+
+### 27.63 Configuration and Feature Flags
+
+Feature flags may control:
+
+```text
+Experimental Features
+Gradual Rollouts
+Beta Functionality
+```
+
+Example:
+
+```text
+FEATURE_P2P_SYNC=true
+```
+
+### 27.64 Feature Flag Safety
+
+Feature flags must not bypass:
+
+```text
+Authentication
+Authorization
+Validation
+Data Integrity
+Security
+```
+
+### 27.65 Feature Flag Ownership
+
+Every feature flag should have:
+
+```text
+Owner
+Purpose
+Default
+Environment
+Removal Plan
+```
+
+Temporary flags should not remain indefinitely.
+
+### 27.66 Configuration and Database Migrations
+
+Database migration execution should be explicitly configured.
+
+Example:
+
+```text
+Migration Enabled
+Migration Validation
+Migration Location
+```
+
+Production migration policy must be controlled.
+
+### 27.67 Automatic Schema Modification
+
+Production should not rely on uncontrolled automatic schema modification such as:
+
+```text
+hibernate.ddl-auto=update
+```
+
+as the primary migration mechanism.
+
+Controlled migrations should be used.
+
+### 27.68 Configuration and Connection Pool
+
+Database connection pool settings may include:
+
+```text
+Maximum Pool Size
+Minimum Idle
+Connection Timeout
+Idle Timeout
+Max Lifetime
+```
+
+Values should be selected based on workload and infrastructure capacity.
+
+### 27.69 Configuration and Database Transactions
+
+Transaction configuration should remain centralized where possible.
+
+The application should not scatter transaction-related configuration throughout business code.
+
+### 27.70 Configuration and API Limits
+
+Backend limits may include:
+
+```text
+Maximum Request Size
+Maximum Sync Batch
+Maximum Page Size
+Maximum Payload Size
+```
+
+These limits protect the service from accidental or malicious overload.
+
+### 27.71 Configuration and Rate Limiting
+
+Rate-limit configuration may include:
+
+```text
+Requests Per Minute
+Burst Size
+Sync Requests
+Authentication Requests
+```
+
+The values should be environment-specific where required.
+
+### 27.72 Configuration and Timeouts
+
+Backend timeouts may include:
+
+```text
+HTTP Timeout
+Database Timeout
+External Service Timeout
+P2P Timeout
+```
+
+Timeouts must not be so large that resources remain occupied indefinitely.
+
+### 27.73 Configuration and Retry Policy
+
+Backend retry policies should be used only for operations where retry is safe.
+
+Retries must respect:
+
+```text
+Idempotency
+Transaction State
+Backoff
+Maximum Attempts
+```
+
+### 27.74 Configuration and External Services
+
+If external services are introduced:
+
+```text
+Service URL
+Credentials
+Timeout
+Retry
+Rate Limit
+```
+
+must be externalized.
+
+### 27.75 Configuration and Local P2P
+
+P2P configuration may require:
+
+```text
+Discovery Mechanism
+Transport
+Timeout
+Maximum Peer Connections
+Maximum Message Size
+```
+
+The exact implementation depends on the selected Android P2P technology.
+
+### 27.76 Configuration and Device Identity
+
+Device identity configuration must not be manually editable by the User through ordinary settings.
+
+Device IDs should be generated and managed by the application lifecycle.
+
+### 27.77 Configuration and Authentication
+
+Authentication configuration should include only non-secret configuration in ordinary application settings.
+
+Sensitive authentication material must use secure storage.
+
+### 27.78 Configuration and Token Lifetime
+
+Backend authentication token lifetime should be configurable through secure server configuration.
+
+Example:
+
+```text
+ACCESS_TOKEN_TTL
+REFRESH_TOKEN_TTL
+```
+
+The exact authentication architecture determines the final values.
+
+### 27.79 Configuration and Key Rotation
+
+Security configuration must support key rotation where required.
+
+Conceptually:
+
+```text
+Old Key
+   ↓
+Rotation
+   ↓
+New Key
+```
+
+The transition must not unexpectedly invalidate valid existing data unless required by security policy.
+
+### 27.80 Configuration and Encryption
+
+Encryption settings should be centralized.
+
+Examples:
+
+```text
+Encryption Algorithm
+Key Reference
+Protocol Version
+```
+
+Algorithms should not be dynamically selected from untrusted client input.
+
+### 27.81 Configuration and CORS
+
+If CORS is required for backend consumers:
+
+```text
+Allowed Origins
+Allowed Methods
+Allowed Headers
+```
+
+must be explicitly configured.
+
+Wildcard production CORS should be avoided where it weakens security.
+
+### 27.82 Configuration and API Documentation
+
+API documentation configuration may include:
+
+```text
+OpenAPI Enabled
+Swagger UI Enabled
+```
+
+Development/staging may expose interactive documentation.
+
+Production exposure must follow security requirements.
+
+### 27.83 Configuration and Health Checks
+
+Backend health endpoints should be configured separately from business APIs.
+
+Example:
+
+```text
+/actuator/health
+```
+
+where Spring Boot Actuator is used.
+
+Sensitive infrastructure details must not be exposed through public health responses.
+
+### 27.84 Configuration and Metrics
+
+Metrics configuration may include:
+
+```text
+Metrics Enabled
+Export Endpoint
+Sampling
+Retention
+```
+
+### 27.85 Configuration and Tracing
+
+Distributed tracing may use:
+
+```text
+Trace ID
+Request ID
+Span ID
+```
+
+Configuration should be environment-specific.
+
+### 27.86 Configuration and Correlation IDs
+
+Request correlation should be enabled for backend API calls where appropriate.
+
+Example:
+
+```text
+requestId
+```
+
+must be propagated through relevant service layers.
+
+### 27.87 Configuration and Sync Diagnostics
+
+Synchronization diagnostics may be configurable:
+
+```text
+Sync Logging Level
+Sync Metrics
+Operation Trace
+```
+
+Verbose synchronization logging should not expose sensitive payloads.
+
+### 27.88 Configuration and Error Handling
+
+Error behavior should use centralized configuration for:
+
+```text
+Retry Limits
+Timeouts
+Rate Limits
+Logging
+```
+
+but Domain-specific validation must remain in application logic.
+
+### 27.89 Configuration and Domain Rules
+
+Domain rules must not be made arbitrarily configurable unless the Domain explicitly defines them as configurable.
+
+For example:
+
+```text
+Expense Split Must Equal Total
+```
+
+is a Domain invariant, not a runtime configuration option.
+
+### 27.90 Configuration and Financial Rules
+
+Financial integrity rules must not be disabled through configuration.
+
+Examples:
+
+```text
+Negative Expense Amount
+Invalid Split
+Invalid Settlement
+```
+
+must remain governed by Domain validation.
+
+### 27.91 Configuration and Security Rules
+
+Security invariants must not be disabled through ordinary runtime configuration.
+
+Examples:
+
+```text
+Authentication Required
+Authorization Required
+Message Integrity
+Secure Transport
+```
+
+### 27.92 Configuration and Sync Integrity
+
+Synchronization integrity rules must not be configurable in a way that allows:
+
+```text
+Duplicate Operations
+Skipped Changes
+Invalid Cursor Advancement
+```
+
+### 27.93 Configuration and Environment Profiles
+
+Spring profiles or equivalent mechanisms may be used.
+
+Conceptually:
+
+```text
+dev
+test
+staging
+prod
+```
+
+### 27.94 Configuration Profile Isolation
+
+A production profile must not inherit unsafe development configuration.
+
+Example:
+
+```text
+prod
+```
+
+must not accidentally enable:
+
+```text
+debug logging
+test credentials
+local database
+mock services
+```
+
+### 27.95 Configuration File Structure
+
+Backend configuration may be structured as:
+
+```yaml
+server:
+  port: ...
+
+spring:
+  datasource:
+    url: ...
+    username: ...
+    password: ...
+
+splitsync:
+  sync:
+    batch-size: ...
+    retry-limit: ...
+```
+
+Actual values should come from environment-specific configuration or secret management.
+
+### 27.96 Configuration Namespaces
+
+Application-specific configuration should use a dedicated namespace.
+
+Example:
+
+```text
+splitsync:
+```
+
+Then:
+
+```text
+splitsync.sync
+splitsync.p2p
+splitsync.security
+splitsync.api
+```
+
+This avoids scattering unrelated top-level configuration keys.
+
+### 27.97 Android Configuration Namespace
+
+Android configuration should similarly be centralized through an application configuration abstraction rather than direct access to build constants throughout the codebase.
+
+### 27.98 Configuration Access
+
+Business code should access configuration through appropriate abstractions.
+
+Avoid:
+
+```text
+Reading Environment Variables
+```
+
+directly inside:
+
+```text
+Domain Service
+```
+
+### 27.99 Configuration and Dependency Injection
+
+Configuration objects may be provided through dependency injection.
+
+Example:
+
+```text
+Configuration
+      ↓
+Dependency Injection
+      ↓
+Network Client
+Sync Engine
+Repositories
+```
+
+### 27.100 Configuration Immutability
+
+Configuration that should not change during runtime should be treated as immutable.
+
+Examples:
+
+```text
+API Contract Version
+Database URL
+Application Environment
+Protocol Compatibility
+```
+
+### 27.101 Dynamic Configuration
+
+Configuration that can change at runtime should be explicitly identified.
+
+Examples:
+
+```text
+Feature Flags
+Remote Sync Limits
+Operational Thresholds
+```
+
+Dynamic configuration must have safe update semantics.
+
+### 27.102 Remote Configuration
+
+If remote configuration is introduced:
+
+```text
+Backend
+   ↓
+Configuration
+   ↓
+Android
+```
+
+the configuration must be:
+
+```text
+Authenticated
+Validated
+Versioned
+Safe
+```
+
+### 27.103 Remote Configuration Must Not Control Security Bypass
+
+Remote configuration must not be able to arbitrarily disable critical security controls.
+
+### 27.104 Remote Configuration Version
+
+Remote configuration should include a version or revision.
+
+Example:
+
+```text
+configVersion = 10
+```
+
+This allows the client to determine whether it has the latest configuration.
+
+### 27.105 Configuration Cache
+
+If configuration is cached locally:
+
+```text
+Cached Configuration
+```
+
+must have:
+
+```text
+Version
+Timestamp
+Expiration / Validity
+```
+
+where required.
+
+### 27.106 Configuration Failure
+
+If remote configuration cannot be downloaded:
+
+```text
+Use Last Known Safe Configuration
+```
+
+or:
+
+```text
+Use Safe Defaults
+```
+
+depending on the configuration category.
+
+### 27.107 Security Configuration Failure
+
+If required security configuration is unavailable:
+
+```text
+Fail Closed
+```
+
+The application must not silently downgrade security.
+
+### 27.108 API Configuration Failure
+
+If the backend URL is missing:
+
+```text
+Application / Service Startup
+      ↓
+Configuration Validation
+      ↓
+Failure
+```
+
+The component should fail clearly rather than making an invalid network request.
+
+### 27.109 Database Configuration Failure
+
+If required database configuration is missing:
+
+```text
+Backend Startup
+      ↓
+Fail Fast
+```
+
+### 27.110 P2P Configuration Failure
+
+If P2P configuration is invalid:
+
+```text
+Disable P2P Capability
+```
+
+where possible, while preserving:
+
+```text
+Local Application
+Backend Synchronization
+```
+
+### 27.111 Sync Configuration Failure
+
+If synchronization configuration is invalid:
+
+```text
+Do Not Start Unsafe Sync
+```
+
+Local Domain operations must remain available if possible.
+
+### 27.112 Configuration and Graceful Degradation
+
+Configuration failures should degrade only the affected capability.
+
+Example:
+
+```text
+P2P Configuration Invalid
+```
+
+should not necessarily disable:
+
+```text
+Expense Creation
+```
+
+### 27.113 Configuration and Offline Mode
+
+Offline operation must not depend on:
+
+```text
+Backend Configuration
+```
+
+being reachable at runtime.
+
+Required local configuration should already exist on the device.
+
+### 27.114 Configuration and Backend Availability
+
+The backend may be unavailable while local configuration remains valid.
+
+The Android application should continue:
+
+```text
+Local Operations
+```
+
+and queue:
+
+```text
+SyncOperations
+```
+
+### 27.115 Configuration and Application Startup
+
+Startup configuration validation should follow:
+
+```text
+Load
+ ↓
+Validate
+ ↓
+Initialize
+ ↓
+Start
+```
+
+rather than allowing invalid configuration to fail unpredictably later.
+
+### 27.116 Configuration and Testing
+
+Configuration must be testable.
+
+Tests should verify:
+
+```text
+Default Values
+Environment Overrides
+Required Configuration
+Invalid Configuration
+Secret Injection
+Feature Flags
+Protocol Versions
+```
+
+### 27.117 Configuration and Test Isolation
+
+Tests must not depend on developer-specific configuration.
+
+Example:
+
+```text
+Developer Laptop DB Password
+```
+
+must not be required for automated tests.
+
+### 27.118 Configuration and CI/CD
+
+CI/CD should inject environment-specific configuration securely.
+
+Conceptually:
+
+```text
+CI/CD
+   ↓
+Environment Variables / Secret Store
+   ↓
+Build / Deployment
+   ↓
+Application
+```
+
+### 27.119 Configuration and Build Artifacts
+
+Production build artifacts should not contain unnecessary development secrets or credentials.
+
+### 27.120 Configuration and Secret Scanning
+
+The repository should use secret scanning where possible.
+
+Examples:
+
+```text
+Git Secret Scanning
+CI Secret Detection
+Dependency Security Checks
+```
+
+### 27.121 Configuration and Dependency Versions
+
+Library dependency versions should be centrally managed where practical.
+
+This includes:
+
+```text
+Android Libraries
+Spring Boot
+Hibernate
+Room
+Retrofit
+Database Driver
+```
+
+The exact dependency management mechanism is implementation-specific.
+
+### 27.122 Dependency Version Pinning
+
+Production dependencies should use controlled versions.
+
+Unbounded versions such as:
+
+```text
+latest
+```
+
+should not be used.
+
+### 27.123 Configuration and Build Reproducibility
+
+The project should aim for reproducible builds.
+
+This requires controlled:
+
+```text
+Dependency Versions
+Build Configuration
+Toolchain Versions
+```
+
+### 27.124 Configuration and Java Version
+
+The Java version used by Android and Backend builds should be explicitly configured.
+
+Example:
+
+```text
+Java 17
+```
+
+if selected by the project implementation.
+
+The actual version must follow the chosen Android and Spring Boot compatibility requirements.
+
+### 27.125 Configuration and Gradle
+
+Android Gradle configuration should centralize common:
+
+```text
+SDK Versions
+Library Versions
+Build Types
+Product Flavors
+```
+
+where practical.
+
+### 27.126 Configuration and Spring Boot
+
+Backend dependency and plugin versions should be controlled through the project's build configuration.
+
+### 27.127 Configuration and Database Migration Version
+
+Migration versions should be deterministic and ordered.
+
+Example:
+
+```text
+V1
+V2
+V3
+```
+
+The application must not skip required migrations.
+
+### 27.128 Configuration and Release Metadata
+
+Builds should expose safe release metadata where useful:
+
+```text
+App Version
+Build Number
+Environment
+Protocol Version
+```
+
+This assists diagnostics.
+
+### 27.129 Configuration and Diagnostics
+
+A diagnostic endpoint or screen may expose non-sensitive configuration information.
+
+Example:
+
+```text
+App Version
+Sync Protocol Version
+API Version
+Environment
+```
+
+Sensitive values must not be displayed.
+
+### 27.130 Configuration and Support
+
+When diagnosing a User issue, support information should make it possible to determine:
+
+```text
+Application Version
+Backend Version
+Protocol Version
+Database Schema Version
+```
+
+where appropriate.
+
+### 27.131 Configuration and Compatibility
+
+Configuration must respect the Versioning Strategy.
+
+Example:
+
+```text
+SYNC_PROTOCOL_VERSION
+```
+
+must remain compatible with:
+
+```text
+Backend Supported Versions
+P2P Supported Versions
+```
+
+### 27.132 Configuration and Version Negotiation
+
+Configuration may define supported ranges:
+
+```text
+MIN_SYNC_PROTOCOL_VERSION
+MAX_SYNC_PROTOCOL_VERSION
+```
+
+but the actual negotiation rules belong to the synchronization protocol.
+
+### 27.133 Configuration and API Base URL Security
+
+Production API URLs must use:
+
+```text
+HTTPS
+```
+
+and should not be dynamically overridden by untrusted input.
+
+### 27.134 Configuration and Certificate Security
+
+If certificate pinning or equivalent transport security is adopted, its configuration must be handled carefully.
+
+An invalid certificate configuration must not silently disable transport security.
+
+### 27.135 Configuration and Encryption Keys
+
+Cryptographic keys must be managed through secure key-management mechanisms.
+
+Configuration may reference:
+
+```text
+Key Alias
+Key ID
+Secret Reference
+```
+
+rather than storing raw keys.
+
+### 27.136 Configuration and Key Rotation
+
+Key identifiers may change during rotation.
+
+The application must support the defined transition period without losing access to valid encrypted data.
+
+### 27.137 Configuration and Data Encryption
+
+If local database encryption is introduced:
+
+```text
+Encryption Configuration
++
+Secure Key Storage
+```
+
+must be managed separately from ordinary application preferences.
+
+### 27.138 Configuration and P2P Security
+
+P2P security configuration must include:
+
+```text
+Supported Protocol
+Authentication Requirements
+Integrity Verification
+Encryption Requirements
+```
+
+Unsafe fallback modes must not be enabled merely for compatibility.
+
+### 27.139 Configuration and Backend Security
+
+Backend security configuration may include:
+
+```text
+Authentication Provider
+Token Validation
+Key References
+Session Policy
+Rate Limits
+```
+
+Sensitive values must come from secure configuration.
+
+### 27.140 Configuration and Authorization
+
+Authorization rules should be implemented as application/security logic rather than arbitrary external configuration.
+
+Configuration may define:
+
+```text
+Operational Limits
+```
+
+but not bypass Domain authorization.
+
+### 27.141 Configuration and Group Limits
+
+Operational limits may include:
+
+```text
+Maximum Group Members
+Maximum Expense Splits
+Maximum Sync Batch
+```
+
+If these limits are Domain rules, they must be treated carefully and versioned when changed.
+
+### 27.142 Configuration and Data Limits
+
+Payload limits may include:
+
+```text
+Maximum Description Length
+Maximum Group Name Length
+Maximum Notes Length
+```
+
+These limits should align with:
+
+```text
+API Validation
+Database Schema
+Android UI
+```
+
+### 27.143 Configuration Consistency
+
+Configuration values that affect both Android and Backend behavior must be coordinated.
+
+Example:
+
+```text
+Maximum Sync Batch
+```
+
+must be compatible between:
+
+```text
+Android Client
+Backend
+```
+
+### 27.144 Configuration Ownership
+
+Every configuration value should have a clear owner.
+
+Example:
+
+```text
+Android:
+API timeout
+
+Backend:
+Database connection pool
+
+Sync:
+Batch size
+
+Security:
+Token lifetime
+```
+
+### 27.145 Configuration Documentation
+
+Important configuration keys should be documented.
+
+Example:
+
+```text
+SYNC_BATCH_SIZE
+Purpose:
+Maximum operations sent in one synchronization request.
+
+Default:
+50
+
+Environment:
+Android / Backend
+
+Change Impact:
+Performance / Network
+```
+
+### 27.146 Configuration Change Management
+
+Production configuration changes should be controlled and auditable.
+
+Changes should record:
+
+```text
+What Changed
+Why
+Who Changed It
+When
+Previous Value / Version
+```
+
+Sensitive values should not be logged directly.
+
+### 27.147 Configuration Rollback
+
+Configuration changes should have a rollback path where practical.
+
+Example:
+
+```text
+Configuration V10
+      ↓
+Problem
+      ↓
+Rollback
+      ↓
+Configuration V9
+```
+
+### 27.148 Configuration and Deployment
+
+Deployment should follow:
+
+```text
+Build
+ ↓
+Inject Configuration
+ ↓
+Validate Configuration
+ ↓
+Deploy
+ ↓
+Health Check
+ ↓
+Monitor
+```
+
+### 27.149 Configuration and Startup Health
+
+After deployment:
+
+```text
+Application Start
+      ↓
+Configuration Validation
+      ↓
+Database Connection
+      ↓
+Required Services
+      ↓
+Health Check
+```
+
+### 27.150 Configuration and Failover
+
+If infrastructure supports failover, configuration should support multiple endpoints or service discovery where appropriate.
+
+The exact infrastructure strategy is deployment-dependent.
+
+### 27.151 Configuration and Local Database
+
+Android local database configuration should include:
+
+```text
+Database Name
+Schema Version
+Migration Strategy
+```
+
+The database name should remain stable across normal application upgrades.
+
+### 27.152 Configuration and Database Destruction
+
+Configuration must not automatically trigger local database destruction for ordinary version changes.
+
+### 27.153 Configuration and Clear Data
+
+Android:
+
+```text
+Clear App Data
+```
+
+is an operating-system/user action and is different from:
+
+```text
+Configuration Migration
+```
+
+The application must not emulate clear-data behavior during normal upgrades.
+
+### 27.154 Configuration and Synchronization Recovery
+
+If synchronization configuration changes incompatibly:
+
+```text
+Pause Sync
+      ↓
+Validate New Configuration
+      ↓
+Resume
+```
+
+rather than sending potentially unsafe operations.
+
+### 27.155 Configuration and Pending Operations
+
+Changing operational settings must not delete:
+
+```text
+Pending SyncOperations
+```
+
+### 27.156 Configuration and Conflict State
+
+Changing configuration must not delete:
+
+```text
+Unresolved Conflicts
+```
+
+### 27.157 Configuration and Cursor State
+
+Changing sync settings must not reset:
+
+```text
+Sync Cursor
+```
+
+unless a deliberate resynchronization procedure requires it.
+
+### 27.158 Configuration and Resynchronization
+
+A configuration change requiring a new synchronization protocol may trigger:
+
+```text
+Protocol Migration
+```
+
+or:
+
+```text
+Full / Snapshot Resynchronization
+```
+
+according to the Versioning Strategy.
+
+### 27.159 Configuration and Backward Compatibility
+
+Configuration changes should be backward-compatible where possible.
+
+If not:
+
+```text
+Version
++
+Migration
++
+Compatibility Window
+```
+
+must be defined.
+
+### 27.160 Configuration Summary
+
+```text
+Configuration
+│
+├── Android
+│   ├── Build
+│   ├── Runtime
+│   ├── Network
+│   ├── Sync
+│   └── Security
+│
+├── Backend
+│   ├── Server
+│   ├── Database
+│   ├── API
+│   ├── Sync
+│   ├── Security
+│   └── Observability
+│
+├── Environment
+│   ├── Development
+│   ├── Test
+│   ├── Staging
+│   └── Production
+│
+├── Secrets
+│   ├── Externalized
+│   ├── Protected
+│   └── Never Committed
+│
+└── Lifecycle
+    ├── Validation
+    ├── Deployment
+    ├── Monitoring
+    ├── Versioning
+    └── Rollback
+```
+
+### 27.161 Complete Configuration Flow
+
+```text
+Configuration Source
+        ↓
+Load
+        ↓
+Merge / Resolve
+        ↓
+Validate
+        ↓
+Environment Check
+        ↓
+Security Check
+        ↓
+Application Initialization
+        ↓
+Runtime
+        ↓
+Monitoring
+```
+
+### 27.162 Android Configuration Flow
+
+```text
+Gradle / Build Configuration
+        ↓
+Environment Selection
+        ↓
+API Configuration
+        ↓
+Application Configuration
+        ↓
+Dependency Injection
+        ↓
+Network / Sync / Features
+```
+
+### 27.163 Backend Configuration Flow
+
+```text
+Environment
+        ↓
+Spring Boot Configuration
+        ↓
+Secret Resolution
+        ↓
+Configuration Validation
+        ↓
+Database / Security / API
+        ↓
+Application Startup
+```
+
+### 27.164 Configuration Failure Flow
+
+```text
+Load Configuration
+        ↓
+Validation
+        ↓
+Valid?
+   ┌────┴────┐
+  Yes        No
+   │          │
+Start      Classify
+             │
+       ┌─────┴─────┐
+       │           │
+   Optional      Critical
+       │           │
+ Safe Default   Fail Fast
+```
+
+### 27.165 Configuration Invariants
+
+The following rules are mandatory for V1:
+
+- Configuration must be separated from business logic.
+- Environment-specific values must not be hard-coded throughout the application.
+- Development, Test, Staging, and Production configuration must remain isolated.
+- Production configuration must never accidentally use development infrastructure.
+- Critical configuration must be validated during startup.
+- Missing critical configuration must fail fast.
+- Optional configuration may use documented safe defaults.
+- Security-sensitive configuration must use secure defaults.
+- Secrets must never be committed to source control.
+- Database passwords must be externalized.
+- Production authentication secrets must be externalized.
+- Private keys must not be stored in ordinary configuration files.
+- Encryption keys must use secure key-management mechanisms.
+- Android secure credentials must not be stored in ordinary preference storage.
+- Configuration templates may be committed only when they contain no real secrets.
+- Environment variables or secure secret-management systems may provide deployment secrets.
+- Configuration values must have clear names and documented purposes.
+- Configuration values must have clearly defined types and valid ranges.
+- Android API base URLs must be environment-specific.
+- Production API communication must use HTTPS.
+- API configuration must be centralized.
+- Network timeout configuration must be centralized.
+- Retry configuration must be centralized.
+- Synchronization batch and retry configuration must be centralized.
+- P2P timeout and message-size configuration must be bounded.
+- Backend database configuration must be externalized.
+- Backend migration configuration must use controlled migration mechanisms.
+- Production database schema must not depend on uncontrolled automatic schema updates.
+- Development logging must not accidentally become production logging.
+- Production logging must avoid sensitive information.
+- SQL logging must be controlled in production.
+- Synchronization logging must avoid sensitive payloads.
+- Feature flags must not bypass authentication, authorization, validation, or security.
+- Feature flags must have clear ownership and lifecycle.
+- Domain invariants must not be disabled through ordinary configuration.
+- Security invariants must not be disabled through ordinary configuration.
+- Synchronization integrity rules must not be disabled through ordinary configuration.
+- Runtime configuration must have explicit ownership and update semantics.
+- Remote configuration, if introduced, must be authenticated and validated.
+- Remote configuration must be versioned where required.
+- Remote configuration failure must use a safe fallback strategy.
+- Security configuration failure must fail closed.
+- P2P configuration failure must not unnecessarily disable local application functionality.
+- Sync configuration failure must not delete pending operations.
+- Configuration changes must not delete valid local financial data.
+- Configuration changes must not delete pending SyncOperations.
+- Configuration changes must not silently delete unresolved Conflicts.
+- Configuration changes must not silently reset synchronization cursors.
+- Configuration values affecting Android and Backend behavior must remain compatible.
+- Protocol version configuration must follow the Versioning Strategy.
+- API version configuration must remain consistent with the API contract.
+- Database schema versions must remain independent from application versions.
+- Synchronization protocol versions must remain independent from application versions.
+- P2P protocol versions must remain independent from API versions.
+- Dependency versions must be explicitly controlled.
+- Production builds must use controlled dependency versions.
+- Build configuration should support reproducible builds.
+- CI/CD must inject environment-specific secrets securely.
+- Automated tests must not depend on developer-specific configuration.
+- Configuration must be validated during deployment.
+- Configuration changes should be auditable.
+- Configuration changes should have a rollback strategy where practical.
+- Configuration must support safe application upgrades.
+- Pending synchronization state must survive compatible application upgrades.
+- Configuration strategy must preserve the local-first architecture.
+- Configuration strategy must preserve the offline-first behavior of SplitSync.
+
+## 28. Environment Strategy
+
+### 28.1 Purpose
+
+This section defines the environment strategy for SplitSync V1.
+
+The environment strategy ensures that:
+
+```text
+Development
++
+Testing
++
+Staging
++
+Production
+```
+
+remain isolated while using the same overall application architecture.
+
+The primary goals are:
+
+- Prevent accidental access to production data.
+- Allow safe development and testing.
+- Provide a production-like staging environment.
+- Keep environment-specific configuration externalized.
+- Support controlled deployments.
+- Make releases reproducible.
+- Prevent environment configuration from affecting Domain logic.
+
+### 28.2 Core Principle
+
+SplitSync follows:
+
+```text
+Same Application Architecture
++
+Environment-Specific Configuration
++
+Isolated Infrastructure
++
+Controlled Deployment
+```
+
+The codebase should remain as consistent as possible across environments.
+
+### 28.3 Environment Types
+
+SplitSync V1 defines the following environments:
+
+```text
+Development
+Test
+Staging
+Production
+```
+
+### 28.4 Development Environment
+
+The Development environment is used for:
+
+```text
+Local Development
+Feature Development
+Debugging
+Manual Testing
+Local Integration
+```
+
+Typical infrastructure:
+
+```text
+Developer Machine
+      ↓
+Android Debug Build
+      ↓
+Development Backend
+      ↓
+Development Database
+```
+
+### 28.5 Development Isolation
+
+Development must not use:
+
+```text
+Production Database
+Production Credentials
+Production Authentication Keys
+Production User Data
+```
+
+unless an explicitly controlled and approved process exists.
+
+### 28.6 Local Android Development
+
+Android developers should normally use:
+
+```text
+Debug Build
+```
+
+with:
+
+```text
+Development API
+```
+
+The application must not accidentally point to the Production API.
+
+### 28.7 Local Backend Development
+
+The Backend may run locally:
+
+```text
+Spring Boot
+      ↓
+Local MySQL
+```
+
+or another development database environment.
+
+### 28.8 Development Database
+
+The Development database should contain:
+
+```text
+Synthetic Data
+Developer Test Data
+Local Test Data
+```
+
+It must not contain uncontrolled copies of production financial data.
+
+### 28.9 Development Logging
+
+Development may enable:
+
+```text
+DEBUG
+```
+
+logging where useful.
+
+However, sensitive information should still not be logged unnecessarily.
+
+### 28.10 Development Tools
+
+Development may enable tools such as:
+
+```text
+Swagger UI
+Debug Endpoints
+SQL Logging
+Development Diagnostics
+```
+
+These must remain disabled or restricted in Production where appropriate.
+
+### 28.11 Test Environment
+
+The Test environment is used for:
+
+```text
+Automated Tests
+Integration Tests
+API Tests
+Database Tests
+Synchronization Tests
+Regression Tests
+```
+
+### 28.12 Test Isolation
+
+Test infrastructure must remain isolated from:
+
+```text
+Development
+Staging
+Production
+```
+
+### 28.13 Test Database
+
+Tests should use a dedicated database.
+
+Example:
+
+```text
+Test Backend
+      ↓
+Test Database
+```
+
+Test data should be deterministic and disposable.
+
+### 28.14 Test Data
+
+Test data should cover:
+
+```text
+Users
+Groups
+Memberships
+Expenses
+Expense Splits
+Settlements
+SyncOperations
+Conflicts
+```
+
+### 28.15 Test Data Safety
+
+Automated tests must never depend on real User financial data.
+
+### 28.16 Test Environment Reset
+
+The Test environment should support resetting data between test runs where required.
+
+Example:
+
+```text
+Test Run
+   ↓
+Create Data
+   ↓
+Execute Test
+   ↓
+Clean / Reset
+```
+
+### 28.17 Test Environment Configuration
+
+Test configuration may use:
+
+```text
+Test Credentials
+Test Database
+Mock Services
+Test Authentication
+```
+
+Production credentials must never be required.
+
+### 28.18 Staging Environment
+
+The Staging environment is a production-like environment used for:
+
+```text
+Release Validation
+End-to-End Testing
+Migration Testing
+Performance Testing
+Deployment Testing
+Release Candidate Validation
+```
+
+### 28.19 Staging Architecture
+
+Conceptually:
+
+```text
+Staging Android Build
+        ↓
+Staging Backend
+        ↓
+Staging Database
+```
+
+### 28.20 Staging Isolation
+
+Staging must be isolated from:
+
+```text
+Production Database
+Production Authentication
+Production User Data
+Production Secrets
+```
+
+### 28.21 Staging Configuration
+
+Staging should closely resemble Production configuration where practical.
+
+For example:
+
+```text
+Database Engine
+API Configuration
+Authentication Flow
+Synchronization
+Logging
+Monitoring
+```
+
+should behave similarly to Production.
+
+### 28.22 Staging Data
+
+Staging should use:
+
+```text
+Synthetic Data
+Anonymized Data
+Controlled Test Data
+```
+
+rather than unrestricted production data.
+
+### 28.23 Staging Purpose
+
+The purpose of Staging is to detect problems before Production.
+
+Example:
+
+```text
+Release Candidate
+      ↓
+Staging
+      ↓
+Migration Test
+      ↓
+Sync Test
+      ↓
+Security Test
+      ↓
+Production
+```
+
+### 28.24 Production Environment
+
+Production is the live environment used by real Users.
+
+Production contains:
+
+```text
+Production Android Release
+Production Backend
+Production Database
+Production Security Configuration
+Production Monitoring
+```
+
+### 28.25 Production Isolation
+
+Production must remain isolated from:
+
+```text
+Development
+Test
+Staging
+```
+
+especially at the:
+
+```text
+Database
+Credentials
+Secrets
+Authentication
+```
+
+levels.
+
+### 28.26 Production Data
+
+Production contains real application data, including potentially:
+
+```text
+Groups
+Expenses
+Expense Splits
+Settlements
+Memberships
+Synchronization State
+```
+
+Production access must therefore be strictly controlled.
+
+### 28.27 Environment Architecture
+
+Overall:
+
+```text
+                    ┌─────────────────┐
+                    │ Development     │
+                    │ Android Debug   │
+                    │ Local Backend   │
+                    │ Dev Database    │
+                    └─────────────────┘
+
+                    ┌─────────────────┐
+                    │ Test            │
+                    │ Automated Tests │
+                    │ Test Backend    │
+                    │ Test Database   │
+                    └─────────────────┘
+
+                    ┌─────────────────┐
+                    │ Staging         │
+                    │ Release Build   │
+                    │ Staging Backend │
+                    │ Staging DB      │
+                    └─────────────────┘
+
+                    ┌─────────────────┐
+                    │ Production      │
+                    │ Release Build   │
+                    │ Production API  │
+                    │ Production DB   │
+                    └─────────────────┘
+```
+
+### 28.28 Environment Boundaries
+
+Each environment must have independent:
+
+```text
+Database
+Credentials
+Secrets
+API Endpoints
+Authentication Configuration
+Logging Configuration
+Monitoring
+```
+
+where applicable.
+
+### 28.29 Environment Naming
+
+Environment identifiers should be explicit.
+
+Recommended:
+
+```text
+dev
+test
+staging
+prod
+```
+
+### 28.30 Environment Variables
+
+Environment-specific values should be provided through:
+
+```text
+Environment Variables
++
+Secure Secret Management
++
+Build Configuration
+```
+
+depending on the environment and value.
+
+### 28.31 Environment Configuration
+
+Conceptually:
+
+```text
+Environment
+      ↓
+Configuration
+      ↓
+Application
+```
+
+The application code should not contain environment-specific branches throughout business logic.
+
+### 28.32 Environment Selection
+
+The environment should be selected through controlled configuration.
+
+Example:
+
+```text
+Debug Build
+   ↓
+dev
+
+Test Build
+   ↓
+test
+
+Release Candidate
+   ↓
+staging
+
+Production Release
+   ↓
+prod
+```
+
+### 28.33 Android Environment Selection
+
+Android may use:
+
+```text
+Build Types
++
+Product Flavors
+```
+
+to distinguish environments.
+
+Example:
+
+```text
+devDebug
+stagingDebug
+stagingRelease
+prodRelease
+```
+
+The exact Gradle configuration may be finalized during implementation.
+
+### 28.34 Production Build Protection
+
+Production builds must not accidentally contain:
+
+```text
+Development API URL
+Test API URL
+Debug Credentials
+Development Secrets
+```
+
+### 28.35 Production API Endpoint
+
+Production Android builds must point to:
+
+```text
+Production API
+```
+
+and use:
+
+```text
+HTTPS
+```
+
+### 28.36 Development API Endpoint
+
+Development builds should point to:
+
+```text
+Development API
+```
+
+and should not require production infrastructure.
+
+### 28.37 Staging API Endpoint
+
+Staging builds should point to:
+
+```text
+Staging API
+```
+
+and must not point to Production.
+
+### 28.38 Environment-Specific Application IDs
+
+Where multiple Android variants are installed simultaneously, different application IDs may be used.
+
+Example:
+
+```text
+com.splitsync.android
+com.splitsync.android.dev
+com.splitsync.android.staging
+```
+
+This is optional and depends on the development workflow.
+
+### 28.39 Environment-Specific App Names
+
+Development and Staging builds may use explicit names to avoid confusion.
+
+Example:
+
+```text
+SplitSync
+SplitSync Dev
+SplitSync Staging
+```
+
+Production should retain the normal application name.
+
+### 28.40 Environment-Specific Icons
+
+Development or Staging builds may use visual identifiers if required to clearly distinguish them from Production.
+
+### 28.41 Environment-Specific Database Names
+
+Each Backend environment must use a separate database.
+
+Example:
+
+```text
+splitsync_dev
+splitsync_test
+splitsync_staging
+splitsync_prod
+```
+
+The actual database naming convention may vary by infrastructure.
+
+### 28.42 Database Credentials
+
+Each environment must have separate database credentials.
+
+Example:
+
+```text
+Development DB Credential
+        ≠
+Production DB Credential
+```
+
+### 28.43 Environment Secrets
+
+Each environment must have independent secrets where applicable.
+
+Example:
+
+```text
+Development JWT Secret
+        ≠
+Production JWT Secret
+```
+
+### 28.44 Secret Rotation
+
+Production secrets should support controlled rotation.
+
+Environment separation must prevent a Production secret rotation from unexpectedly affecting Development.
+
+### 28.45 Authentication Environment
+
+Authentication configuration must be environment-specific.
+
+Example:
+
+```text
+Development Authentication
+Staging Authentication
+Production Authentication
+```
+
+### 28.46 User Isolation
+
+Users created in:
+
+```text
+Development
+Test
+Staging
+```
+
+must not automatically exist in:
+
+```text
+Production
+```
+
+### 28.47 Device Isolation
+
+Device registrations should remain environment-specific.
+
+A Development device registration must not automatically become a Production device registration.
+
+### 28.48 Group Isolation
+
+Groups must remain environment-specific.
+
+Example:
+
+```text
+Development Group
+      ≠
+Production Group
+```
+
+### 28.49 Expense Isolation
+
+Expenses must never cross environments accidentally.
+
+Example:
+
+```text
+Staging Expense
+      ≠
+Production Expense
+```
+
+### 28.50 Synchronization Isolation
+
+Synchronization must remain within the environment.
+
+Example:
+
+```text
+Development Device
+      ↓
+Development Backend
+```
+
+must never synchronize against:
+
+```text
+Production Backend
+```
+
+### 28.51 P2P Environment Isolation
+
+P2P synchronization requires special care when multiple environments exist.
+
+A Development device must not accidentally synchronize with a Production device.
+
+### 28.52 P2P Environment Identity
+
+P2P capability negotiation should include sufficient environment identity where necessary.
+
+Conceptually:
+
+```text
+Environment
++
+Protocol Version
++
+Device Identity
+```
+
+### 28.53 P2P Environment Mismatch
+
+If:
+
+```text
+Device A = Development
+Device B = Production
+```
+
+the synchronization session must be rejected.
+
+### 28.54 Environment Identifier
+
+The application may include an environment identifier:
+
+```text
+environment = dev
+```
+
+or:
+
+```text
+environment = prod
+```
+
+where required for safe communication.
+
+### 28.55 Environment and Sync Protocol
+
+The synchronization protocol version is independent from environment.
+
+Example:
+
+```text
+Development:
+Sync Protocol v2
+
+Production:
+Sync Protocol v1
+```
+
+This is valid as long as each environment's supported clients are compatible.
+
+### 28.56 Environment and API Version
+
+API version remains part of the API contract.
+
+Example:
+
+```text
+Development:
+API v1
+
+Production:
+API v1
+```
+
+Development may temporarily support newer API versions during development.
+
+### 28.57 Environment and Database Version
+
+Database schema versions may differ temporarily.
+
+Example:
+
+```text
+Development DB = V10
+Staging DB     = V9
+Production DB  = V8
+```
+
+However, release promotion should ensure that required migrations have been validated before Production deployment.
+
+### 28.58 Environment Promotion
+
+A release should move through environments in a controlled sequence:
+
+```text
+Development
+      ↓
+Test
+      ↓
+Staging
+      ↓
+Production
+```
+
+### 28.59 Promotion Principle
+
+The same application version should preferably be promoted between environments rather than rebuilt with materially different source code.
+
+Conceptually:
+
+```text
+Build Artifact
+      ↓
+Test
+      ↓
+Staging
+      ↓
+Production
+```
+
+Environment-specific configuration is injected separately.
+
+### 28.60 Build Once, Deploy Many
+
+Where practical:
+
+```text
+Build Once
+      ↓
+Test Artifact
+      ↓
+Staging Artifact
+      ↓
+Production Artifact
+```
+
+The artifact should remain identical while configuration changes according to environment.
+
+### 28.61 Android Promotion
+
+Android builds may require separate environment variants due to:
+
+```text
+API Endpoint
+Application ID
+Signing
+Environment Configuration
+```
+
+The exact release strategy may differ from Backend deployment.
+
+### 28.62 Backend Promotion
+
+Backend deployment should preferably promote the same application artifact through:
+
+```text
+Test
+→
+Staging
+→
+Production
+```
+
+with environment-specific configuration.
+
+### 28.63 Database Migration Promotion
+
+Database migrations should be tested in:
+
+```text
+Test
+→
+Staging
+→
+Production
+```
+
+before being applied to Production.
+
+### 28.64 Migration Order
+
+Production migration should follow:
+
+```text
+Validated Migration
+      ↓
+Production Backup / Recovery Preparation
+      ↓
+Migration
+      ↓
+Validation
+      ↓
+Application Deployment
+```
+
+The exact order may vary depending on whether the migration follows an expand-and-contract strategy.
+
+### 28.65 Environment Health Checks
+
+Each environment should provide health monitoring appropriate to its purpose.
+
+Example:
+
+```text
+Application
+Database
+Synchronization
+Authentication
+```
+
+### 28.66 Development Health
+
+Development health checks may be lightweight.
+
+### 28.67 Test Health
+
+Automated tests should verify required dependencies before executing integration tests.
+
+### 28.68 Staging Health
+
+Staging should provide production-like health checks.
+
+### 28.69 Production Health
+
+Production health monitoring must cover:
+
+```text
+API Availability
+Database Availability
+Synchronization
+Error Rate
+Latency
+Resource Usage
+```
+
+### 28.70 Environment Monitoring
+
+Monitoring should be environment-aware.
+
+Example:
+
+```text
+environment=dev
+environment=test
+environment=staging
+environment=prod
+```
+
+Metrics from different environments must not be mixed.
+
+### 28.71 Environment Logging
+
+Logs must identify the environment.
+
+Example:
+
+```text
+environment=staging
+```
+
+This helps prevent accidental diagnosis of the wrong system.
+
+### 28.72 Environment Tracing
+
+Distributed traces should include environment information where tracing is used.
+
+### 28.73 Environment Alerts
+
+Production alerts should be separate from:
+
+```text
+Development Alerts
+Test Alerts
+Staging Alerts
+```
+
+Production alerting should have the highest operational priority.
+
+### 28.74 Environment Access Control
+
+Access must follow:
+
+```text
+Development
+   ↓
+Broad Developer Access
+
+Test
+   ↓
+Controlled Engineering Access
+
+Staging
+   ↓
+Restricted Team Access
+
+Production
+   ↓
+Strictly Controlled Access
+```
+
+### 28.75 Production Database Access
+
+Direct Production database access should be restricted.
+
+Normal application operations must go through:
+
+```text
+Backend Services
+```
+
+rather than manual database modifications.
+
+### 28.76 Production Manual Changes
+
+Manual Production database modifications should be avoided.
+
+If absolutely required:
+
+```text
+Approval
++
+Audit
++
+Backup / Recovery Plan
++
+Validation
+```
+
+must be considered.
+
+### 28.77 Development Data Reset
+
+Development databases may be reset freely where appropriate.
+
+Production databases must never use Development reset procedures.
+
+### 28.78 Test Data Reset
+
+Test data should be disposable.
+
+Automated tests may recreate test databases or schemas as required.
+
+### 28.79 Staging Data Reset
+
+Staging data may be reset under controlled release/testing procedures.
+
+### 28.80 Production Data Reset
+
+Production data must never be reset as part of normal deployment.
+
+### 28.81 Environment Backup
+
+Production requires regular backups.
+
+Staging may also use backups where migration testing or recovery validation requires them.
+
+Development and Test backup requirements are lower and depend on the workflow.
+
+### 28.82 Production Backup
+
+Production backup strategy should support:
+
+```text
+Data Recovery
+Migration Recovery
+Disaster Recovery
+Operational Recovery
+```
+
+### 28.83 Staging Backup
+
+Staging backups may be used to validate:
+
+```text
+Restore Procedures
+Migration Recovery
+Disaster Recovery Procedures
+```
+
+### 28.84 Environment Disaster Recovery
+
+Production disaster recovery must be defined separately from Development and Test recovery.
+
+### 28.85 Environment Configuration Repository
+
+Safe configuration templates may be stored in source control.
+
+Sensitive values must remain external.
+
+### 28.86 Environment Configuration Example
+
+Conceptually:
+
+```text
+config/
+├── dev/
+├── test/
+├── staging/
+└── prod/
+```
+
+Sensitive files should not be committed.
+
+### 28.87 Environment Configuration Management
+
+The final deployment system may use:
+
+```text
+Environment Variables
+Secret Manager
+Configuration Server
+Container Configuration
+Kubernetes Secrets / ConfigMaps
+```
+
+depending on infrastructure.
+
+### 28.88 Environment Configuration Validation
+
+CI/CD should validate that required environment configuration exists before deployment.
+
+### 28.89 Production Configuration Validation
+
+Production deployment must verify:
+
+```text
+Database URL
+Database Credentials
+Authentication Configuration
+API Configuration
+Security Configuration
+Required Secrets
+```
+
+before starting the application.
+
+### 28.90 Environment Drift
+
+Environment configuration drift should be minimized.
+
+Example:
+
+```text
+Staging Configuration
+        ≈
+Production Configuration
+```
+
+for infrastructure behavior where practical.
+
+### 28.91 Environment Drift Detection
+
+Infrastructure/configuration management may be used to detect unintended differences.
+
+### 28.92 Environment-Specific Differences
+
+Differences should be intentional and documented.
+
+Example:
+
+```text
+Development:
+DEBUG=true
+
+Production:
+DEBUG=false
+```
+
+### 28.93 Environment and Feature Flags
+
+A feature may be enabled in:
+
+```text
+Development
+```
+
+before:
+
+```text
+Staging
+```
+
+and later:
+
+```text
+Production
+```
+
+This supports gradual validation.
+
+### 28.94 Environment Feature Flag Safety
+
+Production feature flags must have controlled access.
+
+A Developer should not be able to accidentally enable an experimental financial feature for all Production Users.
+
+### 28.95 Environment and Experimental Features
+
+Experimental features should normally begin in:
+
+```text
+Development
+```
+
+then:
+
+```text
+Test
+```
+
+then:
+
+```text
+Staging
+```
+
+before Production.
+
+### 28.96 Environment and API Compatibility
+
+Development may temporarily expose:
+
+```text
+New API Version
+```
+
+while Production remains on:
+
+```text
+Current Supported Version
+```
+
+This difference must be intentional.
+
+### 28.97 Environment and Versioning
+
+Environment strategy must work together with the Versioning Strategy.
+
+Example:
+
+```text
+Development:
+App 1.5
+API v2
+Sync v3
+
+Staging:
+App 1.5
+API v2
+Sync v3
+
+Production:
+App 1.4
+API v1
+Sync v2
+```
+
+Such differences are acceptable only during controlled rollout.
+
+### 28.98 Environment and Release Compatibility
+
+Before Production rollout:
+
+```text
+Production Client
++
+Production API
++
+Production Database
++
+Production Sync Protocol
+```
+
+must be confirmed compatible.
+
+### 28.99 Environment and Rollback
+
+Rollback must consider:
+
+```text
+Application Version
+Backend Version
+Database Schema
+Sync Protocol
+Configuration
+```
+
+### 28.100 Environment Rollback
+
+A typical rollback flow:
+
+```text
+Production Deployment
+      ↓
+Problem Detected
+      ↓
+Stop / Rollback Application
+      ↓
+Restore Compatible Version
+      ↓
+Validate Database Compatibility
+      ↓
+Validate Sync Compatibility
+      ↓
+Resume
+```
+
+### 28.101 Database Rollback Warning
+
+Database migrations should preferably be designed so that application rollback does not require destructive database rollback.
+
+This is another reason to prefer:
+
+```text
+Expand
+→
+Migrate
+→
+Switch
+→
+Contract
+```
+
+### 28.102 Environment and Sync Operations
+
+Pending SyncOperations must survive deployment changes.
+
+A deployment must not delete:
+
+```text
+Pending Operations
+Conflicts
+Sync Cursor
+```
+
+### 28.103 Environment and P2P Operations
+
+P2P synchronization should remain compatible with the Production version supported by the application.
+
+Development builds must clearly identify themselves to avoid accidental cross-environment P2P communication.
+
+### 28.104 Environment and Local-First Architecture
+
+Environment unavailability must not prevent local financial operations.
+
+For example:
+
+```text
+Production Backend Down
+        ↓
+Expense Created Locally
+        ↓
+SyncOperation = PENDING
+        ↓
+Later Synchronization
+```
+
+### 28.105 Environment and Offline Mode
+
+Offline operation is not an environment.
+
+It is an application operating state.
+
+Therefore:
+
+```text
+Production + Offline
+```
+
+and:
+
+```text
+Development + Offline
+```
+
+are both valid states.
+
+### 28.106 Environment vs Online State
+
+These concepts must remain separate:
+
+```text
+Environment:
+dev / test / staging / prod
+
+Connectivity:
+online / offline
+```
+
+### 28.107 Environment vs P2P State
+
+Similarly:
+
+```text
+Environment:
+dev / test / staging / prod
+
+Synchronization Channel:
+backend / P2P
+```
+
+### 28.108 Environment and Security
+
+Security requirements must become stricter as the environment approaches Production.
+
+Conceptually:
+
+```text
+Development
+   ↓
+Test
+   ↓
+Staging
+   ↓
+Production
+```
+
+### 28.109 Development Security
+
+Development may use relaxed operational settings where safe, but must still enforce core security invariants.
+
+### 28.110 Test Security
+
+Test environments should use isolated credentials and test identities.
+
+### 28.111 Staging Security
+
+Staging should closely resemble Production security.
+
+### 28.112 Production Security
+
+Production must enforce:
+
+```text
+HTTPS
+Authentication
+Authorization
+Secure Secrets
+Restricted Access
+Auditability
+Monitoring
+```
+
+### 28.113 Environment and CORS
+
+CORS configuration, if required, must be environment-specific.
+
+Development may allow local development origins.
+
+Production should allow only approved origins.
+
+### 28.114 Environment and Debug Endpoints
+
+Debug-only endpoints must not be available in Production.
+
+### 28.115 Environment and Swagger
+
+Interactive API documentation may be enabled in Development and Staging.
+
+Production exposure must be explicitly controlled.
+
+### 28.116 Environment and Database Tools
+
+Database administration tools should be restricted according to environment.
+
+### 28.117 Environment and CI/CD
+
+CI/CD should maintain separate deployment targets:
+
+```text
+deploy-dev
+deploy-test
+deploy-staging
+deploy-prod
+```
+
+or equivalent pipeline stages.
+
+### 28.118 Environment Promotion Pipeline
+
+Recommended:
+
+```text
+Commit
+  ↓
+Build
+  ↓
+Unit Tests
+  ↓
+Integration Tests
+  ↓
+Test Environment
+  ↓
+Staging
+  ↓
+Release Validation
+  ↓
+Production Approval
+  ↓
+Production
+```
+
+### 28.119 Production Approval
+
+Production deployment should require explicit release approval where appropriate.
+
+### 28.120 Automated Production Deployment
+
+Automated Production deployment may be used, but must include:
+
+```text
+Validation
+Approval / Policy Gate
+Rollback Strategy
+Health Checks
+Monitoring
+```
+
+### 28.121 Environment Deployment Artifacts
+
+Artifacts should be traceable to:
+
+```text
+Source Commit
+Build Version
+Application Version
+Protocol Version
+```
+
+### 28.122 Environment and Release Metadata
+
+Each deployed Backend should expose safe internal metadata such as:
+
+```text
+Application Version
+Build Version
+Environment
+API Version
+Sync Protocol Version
+```
+
+### 28.123 Environment and Support
+
+Support diagnostics should make it possible to determine whether a problem occurred in:
+
+```text
+Development
+Test
+Staging
+Production
+```
+
+without exposing sensitive configuration.
+
+### 28.124 Environment and Testing Strategy
+
+Tests should be distributed appropriately:
+
+```text
+Unit Tests
+    ↓
+Development / CI
+
+Integration Tests
+    ↓
+Test
+
+End-to-End Tests
+    ↓
+Staging
+
+Production Smoke Tests
+    ↓
+Production
+```
+
+### 28.125 Environment and Performance Testing
+
+Performance testing should primarily use:
+
+```text
+Staging
+```
+
+or a dedicated performance environment.
+
+Production load testing must be controlled and explicitly approved.
+
+### 28.126 Environment and Security Testing
+
+Security testing should primarily use:
+
+```text
+Test
++
+Staging
+```
+
+with Production validation performed carefully.
+
+### 28.127 Environment and Migration Testing
+
+Every production database migration should first be tested against a production-like Staging database.
+
+### 28.128 Environment and Sync Testing
+
+Synchronization scenarios should be tested in Staging before Production.
+
+Examples:
+
+```text
+Offline → Online
+Online → Offline
+P2P → Backend
+Backend → P2P
+Conflict
+Retry
+Duplicate Operation
+```
+
+### 28.129 Environment and P2P Testing
+
+P2P testing should use dedicated Development/Test/Staging devices.
+
+Production devices should not be used for experimental P2P testing.
+
+### 28.130 Environment and Real User Data
+
+Real Production data must not be copied casually into Development or Test.
+
+If data must be used for debugging:
+
+```text
+Approval
++
+Anonymization
++
+Controlled Access
++
+Secure Transfer
+```
+
+must be applied.
+
+### 28.131 Environment and Data Anonymization
+
+If Production-derived data is required in Staging:
+
+```text
+Production Data
+      ↓
+Anonymization
+      ↓
+Staging Data
+```
+
+Sensitive fields must be handled appropriately.
+
+### 28.132 Environment and Personal Data
+
+Environment isolation must protect:
+
+```text
+User Identity
+Contact Information
+Financial Information
+Group Information
+```
+
+especially when moving data between environments.
+
+### 28.133 Environment and Monitoring Data
+
+Monitoring data must also respect environment isolation.
+
+Production logs/metrics should not automatically be copied into Development.
+
+### 28.134 Environment and Alerts
+
+Alert routing must be environment-specific.
+
+Example:
+
+```text
+Production Error
+      ↓
+Production Alert
+
+Development Error
+      ↓
+Development Notification
+```
+
+### 28.135 Environment and Resource Limits
+
+Resource limits should reflect environment purpose.
+
+Example:
+
+```text
+Development:
+Small
+
+Test:
+Controlled
+
+Staging:
+Production-Like
+
+Production:
+Capacity-Based
+```
+
+### 28.136 Environment and Scaling
+
+Staging should approximate Production architecture where practical but may use smaller resource capacity.
+
+### 28.137 Environment and Infrastructure
+
+Production infrastructure should be independently managed from Development infrastructure.
+
+### 28.138 Environment and Networking
+
+Network access should follow:
+
+```text
+Development → Development Services
+Test → Test Services
+Staging → Staging Services
+Production → Production Services
+```
+
+### 28.139 Environment and Firewall Rules
+
+Production infrastructure should have stricter network controls.
+
+### 28.140 Environment and Database Network
+
+Production databases should not be directly reachable from ordinary developer machines unless explicitly authorized.
+
+### 28.141 Environment and Backend Network
+
+Backend-to-database communication should occur through controlled internal networking where applicable.
+
+### 28.142 Environment and Local Development
+
+Local development may use:
+
+```text
+localhost
+```
+
+for services.
+
+These values must never be packaged into Production builds.
+
+### 28.143 Environment and Configuration Drift
+
+Any intentional difference between environments should be documented.
+
+### 28.144 Environment and Documentation
+
+Environment documentation should define:
+
+```text
+Purpose
+API Endpoint
+Database
+Credentials Source
+Secrets Source
+Deployment Method
+Monitoring
+Access Rules
+```
+
+without exposing secret values.
+
+### 28.145 Environment and Ownership
+
+Each environment should have an operational owner.
+
+Example:
+
+```text
+Development → Engineering
+Test → QA / Engineering
+Staging → Engineering / Release
+Production → Operations / Engineering
+```
+
+The exact ownership model may evolve.
+
+### 28.146 Environment and Lifecycle
+
+Development environments may be created and destroyed frequently.
+
+Test environments may be reset regularly.
+
+Staging should remain available for release validation.
+
+Production must remain continuously managed.
+
+### 28.147 Environment and Temporary Environments
+
+Future workflows may introduce temporary environments:
+
+```text
+Feature Environment
+Preview Environment
+Pull Request Environment
+```
+
+These are optional and must still follow the isolation rules.
+
+### 28.148 Environment and Temporary Database
+
+Temporary environments should use isolated databases.
+
+They must not share Production databases.
+
+### 28.149 Environment and Temporary Secrets
+
+Temporary environments should use temporary credentials/secrets where possible.
+
+Production secrets must never be reused.
+
+### 28.150 Environment and Environment Metadata
+
+Every service should be able to determine its current environment internally.
+
+Example:
+
+```text
+environment = staging
+```
+
+This value should be safe to expose in diagnostics but should not itself be treated as a security boundary.
+
+### 28.151 Environment Identity Is Not Authorization
+
+The environment identifier must not be treated as an authorization mechanism.
+
+Example:
+
+```text
+environment=prod
+```
+
+does not prove that a request is authorized.
+
+Authentication and authorization remain mandatory.
+
+### 28.152 Environment and API Request
+
+Where environment identity is transmitted:
+
+```text
+Environment
++
+Authentication
++
+Authorization
+```
+
+must be validated consistently.
+
+### 28.153 Environment Mismatch
+
+If a client is configured for:
+
+```text
+Production
+```
+
+but receives a response indicating:
+
+```text
+Development
+```
+
+the client should treat this as a configuration/security error rather than continuing normally.
+
+### 28.154 Environment and Certificate Validation
+
+Production clients should validate the Production server's TLS identity.
+
+A Development certificate must not be accepted as a Production server identity.
+
+### 28.155 Environment and Build Signing
+
+Production Android builds should use the Production signing configuration.
+
+Development builds should use separate signing configuration where appropriate.
+
+### 28.156 Environment Signing Separation
+
+Production signing keys must not be distributed as Development credentials.
+
+### 28.157 Environment and Application Updates
+
+Production applications should receive only Production-approved releases.
+
+Development builds must not silently update themselves from Production release infrastructure unless explicitly designed.
+
+### 28.158 Environment and Update Channel
+
+If update channels are used:
+
+```text
+Development
+Staging
+Production
+```
+
+must remain separate.
+
+### 28.159 Environment and Version Compatibility
+
+Before promoting a release:
+
+```text
+Application Version
++
+API Version
++
+Database Version
++
+Sync Protocol Version
++
+P2P Protocol Version
+```
+
+must be checked for compatibility.
+
+### 28.160 Environment and Rollout
+
+Production rollout may be gradual:
+
+```text
+Internal
+   ↓
+Small User Group
+   ↓
+Larger User Group
+   ↓
+General Availability
+```
+
+The exact rollout mechanism depends on the deployment platform.
+
+### 28.161 Environment and Rollout Monitoring
+
+During rollout monitor:
+
+```text
+Crash Rate
+API Errors
+Sync Errors
+Conflict Rate
+Latency
+Database Health
+```
+
+### 28.162 Environment and Rollback Trigger
+
+Rollback criteria should be defined before deployment.
+
+Examples:
+
+```text
+Critical Crash Increase
+Data Integrity Failure
+Synchronization Failure
+Security Issue
+Database Failure
+```
+
+### 28.163 Environment and Data Integrity
+
+Any suspected:
+
+```text
+Expense Duplication
+Settlement Duplication
+Lost Synchronization
+Data Corruption
+```
+
+should immediately trigger investigation and potentially halt rollout.
+
+### 28.164 Environment and Financial Integrity
+
+Production releases must preserve financial correctness.
+
+Changes affecting:
+
+```text
+Expense
+Expense Split
+Settlement
+Balance
+Synchronization
+```
+
+require additional validation before deployment.
+
+### 28.165 Environment and Offline-First Behavior
+
+Environment changes must not remove the core offline-first guarantee:
+
+```text
+User Action
+      ↓
+Local Persistence
+      ↓
+Immediate Availability
+      ↓
+Synchronization Later
+```
+
+### 28.166 Environment and Backend Outage
+
+During a Production Backend outage:
+
+```text
+Android
+   ↓
+Local Database
+   ↓
+SyncOperation PENDING
+```
+
+The User must still be able to perform supported local operations.
+
+### 28.167 Environment and Recovery
+
+After the Backend becomes available:
+
+```text
+Pending Operations
+      ↓
+Retry
+      ↓
+Backend
+      ↓
+Sync Result
+```
+
+### 28.168 Environment and P2P Recovery
+
+If Backend remains unavailable but P2P is available:
+
+```text
+Device A
+   ↕
+Device B
+```
+
+may synchronize according to the P2P protocol.
+
+The environment identity must still match.
+
+### 28.169 Environment and Observability
+
+Every significant metric should be tagged with:
+
+```text
+environment
+```
+
+where appropriate.
+
+### 28.170 Environment and Logs
+
+Every Backend log should be attributable to an environment.
+
+Example:
+
+```text
+environment=prod
+service=splitsync-backend
+```
+
+### 28.171 Environment and Audit
+
+Production administrative actions should be auditable.
+
+Examples:
+
+```text
+Configuration Change
+Deployment
+Migration
+Secret Rotation
+Feature Flag Change
+```
+
+### 28.172 Environment and Change Management
+
+Production changes should follow a controlled process.
+
+Conceptually:
+
+```text
+Change
+ ↓
+Review
+ ↓
+Test
+ ↓
+Staging
+ ↓
+Approval
+ ↓
+Production
+```
+
+### 28.173 Environment and Emergency Changes
+
+Emergency Production changes may use an expedited process but must still be:
+
+```text
+Audited
+Tested as far as practical
+Validated
+Documented
+```
+
+### 28.174 Environment and Compliance
+
+If future compliance requirements are introduced, Production environment controls should be extended without weakening the isolation model.
+
+### 28.175 Environment and Scalability
+
+Production scaling should be independent from Development and Test.
+
+Example:
+
+```text
+Production:
+Multiple Backend Instances
+
+Development:
+Single Backend Instance
+```
+
+### 28.176 Environment and Load Balancing
+
+Production may use:
+
+```text
+Load Balancer
+      ↓
+Backend Instances
+```
+
+while Development may run a single instance.
+
+### 28.177 Environment and Database Scaling
+
+Production database capacity should be sized independently from other environments.
+
+### 28.178 Environment and Synchronization Scaling
+
+Production synchronization infrastructure should support:
+
+```text
+Multiple Users
+Multiple Groups
+Multiple Devices
+Large Change Feeds
+```
+
+without depending on Development/Test assumptions.
+
+### 28.179 Environment and P2P Scaling
+
+P2P communication remains device-to-device and should not be coupled to Backend environment capacity.
+
+### 28.180 Environment Strategy Summary
+
+```text
+Environment Strategy
+│
+├── Development
+│   ├── Local Development
+│   ├── Debugging
+│   └── Synthetic Data
+│
+├── Test
+│   ├── Automated Testing
+│   ├── Integration Testing
+│   └── Disposable Data
+│
+├── Staging
+│   ├── Production-Like
+│   ├── Release Validation
+│   ├── Migration Testing
+│   └── E2E Testing
+│
+└── Production
+    ├── Real Users
+    ├── Real Data
+    ├── Strict Security
+    ├── Monitoring
+    └── Controlled Deployment
+```
+
+### 28.181 Environment Promotion Flow
+
+```text
+Developer Change
+        ↓
+Development
+        ↓
+Automated Tests
+        ↓
+Test Environment
+        ↓
+Integration / Regression
+        ↓
+Staging
+        ↓
+Release Validation
+        ↓
+Production Approval
+        ↓
+Production
+        ↓
+Monitoring
+```
+
+### 28.182 Environment Isolation Flow
+
+```text
+Development
+    X
+Test
+    X
+Staging
+    X
+Production
+```
+
+Each environment maintains separate:
+
+```text
+Data
+Credentials
+Secrets
+Infrastructure
+Endpoints
+Authentication
+```
+
+### 28.183 Environment Failure Flow
+
+```text
+Environment Failure
+        ↓
+Affected Environment Only
+        ↓
+Investigate
+        ↓
+Recover / Rollback
+```
+
+A Development or Staging failure must not directly affect Production.
+
+### 28.184 Environment Invariants
+
+The following rules are mandatory for V1:
+
+- Development, Test, Staging, and Production must remain logically isolated.
+- Production data must never be used casually in Development or Test.
+- Production databases must remain separate from all non-production databases.
+- Production credentials must never be reused in Development.
+- Production secrets must never be committed to source control.
+- Development builds must not accidentally point to Production APIs.
+- Staging builds must not accidentally point to Production APIs.
+- Production builds must point only to the Production API.
+- Production communication must use HTTPS.
+- Development, Test, Staging, and Production must have explicit environment identity.
+- Environment identity must not be treated as an authorization mechanism.
+- Authentication and authorization must remain mandatory regardless of environment.
+- P2P synchronization must reject environment-mismatched peers.
+- Synchronization must remain within the same environment.
+- Development devices must not accidentally synchronize with Production devices.
+- Development Groups, Expenses, and Settlements must remain isolated from Production.
+- Test data must remain isolated from Production.
+- Staging data must remain isolated from Production unless an explicitly controlled anonymization process is used.
+- Real Production data must not be copied into non-production environments without appropriate controls.
+- Production secrets must remain separate from Staging secrets.
+- Production authentication configuration must remain separate from non-production authentication configuration.
+- Production signing credentials must remain separate from Development signing credentials.
+- Production databases must not be directly modified during ordinary application operation.
+- Manual Production database changes must be controlled, audited, and minimized.
+- Production data must never be reset as part of normal deployment.
+- Test databases may be reset as required by automated testing.
+- Development databases may be reset where appropriate.
+- Staging databases may be reset under controlled procedures.
+- Production backups must support recovery.
+- Production migrations must be tested before deployment.
+- Staging should resemble Production infrastructure and configuration where practical.
+- Development may use debug tooling that is unavailable in Production.
+- Debug endpoints must not be exposed in Production.
+- Production logging must not expose sensitive information.
+- Production monitoring must be environment-specific.
+- Production alerts must be separated from non-production alerts.
+- Environment-specific configuration must be externalized.
+- Environment-specific secrets must be securely injected.
+- Environment configuration must be validated before deployment.
+- Production configuration must fail fast when required values are missing.
+- Environment differences must be intentional and documented.
+- Configuration drift between environments should be minimized.
+- Releases should be promoted through Development, Test, Staging, and Production in a controlled manner.
+- Backend artifacts should preferably be built once and promoted between environments.
+- Environment-specific configuration must not materially alter application business logic.
+- Database migrations must be validated in Staging before Production.
+- Synchronization behavior must be tested in Staging before Production.
+- P2P behavior must be tested using non-production devices.
+- Production load testing must be controlled and explicitly approved.
+- Production deployment must have a rollback strategy.
+- Rollback must consider application version, database schema, synchronization protocol, P2P protocol, and configuration.
+- Pending SyncOperations must survive compatible deployments.
+- SyncState must survive compatible deployments.
+- Conflict state must survive compatible deployments.
+- Deployment must not delete valid financial data.
+- Deployment must not silently duplicate Expenses or Settlements.
+- Deployment must not silently skip synchronization changes.
+- Production rollout should be monitored for crashes, API errors, synchronization errors, conflicts, latency, and database health.
+- Critical financial integrity or synchronization issues must be treated as release-blocking conditions.
+- Environment outages must not violate the local-first architecture.
+- Backend unavailability must not prevent supported offline local operations.
+- Offline operations must remain queued until synchronization is possible.
+- Environment strategy must remain compatible with the Versioning Strategy.
+- Environment strategy must remain compatible with the Configuration Strategy.
+- Environment strategy must preserve the offline-first architecture of SplitSync.
+
+## 29. Logging Strategy
+
+### 29.1 Purpose
+
+This section defines the logging strategy for SplitSync V1.
+
+Logging must provide enough information to:
+
+```text
+Understand System Behavior
++
+Diagnose Failures
++
+Trace Synchronization
++
+Investigate Security Events
++
+Monitor Performance
+```
+
+while avoiding unnecessary exposure of:
+
+```text
+Passwords
+Authentication Tokens
+Private Keys
+Sensitive Personal Data
+Sensitive Financial Data
+```
+
+### 29.2 Core Principle
+
+SplitSync follows:
+
+```text
+Useful
++
+Structured
++
+Environment-Aware
++
+Secure
++
+Searchable
++
+Traceable
+```
+
+Logging is an observability mechanism and must not become part of the business logic.
+
+### 29.3 Logging Categories
+
+Logging is divided into:
+
+```text
+Application Logs
+API Logs
+Database Logs
+Synchronization Logs
+P2P Logs
+Security Logs
+Performance Logs
+Error Logs
+Audit Logs
+```
+
+### 29.4 Logging Levels
+
+The system should use standard logging levels:
+
+```text
+TRACE
+DEBUG
+INFO
+WARN
+ERROR
+```
+
+The exact supported levels depend on the logging framework.
+
+### 29.5 TRACE
+
+`TRACE` is intended for extremely detailed diagnostic information.
+
+Example:
+
+```text
+Detailed synchronization processing
+Detailed protocol flow
+```
+
+TRACE logging should normally be disabled in Production.
+
+### 29.6 DEBUG
+
+`DEBUG` is intended for development and troubleshooting.
+
+Examples:
+
+```text
+Repository Execution
+Sync State Transitions
+API Request Metadata
+P2P Connection State
+```
+
+DEBUG logging should be controlled by environment.
+
+### 29.7 INFO
+
+`INFO` represents normal important application events.
+
+Examples:
+
+```text
+Application Started
+Backend Started
+Synchronization Completed
+Device Registered
+Migration Completed
+```
+
+INFO should be suitable for normal Production operation.
+
+### 29.8 WARN
+
+`WARN` indicates an abnormal condition that does not necessarily stop execution.
+
+Examples:
+
+```text
+Retry Scheduled
+Unsupported Optional Field
+Slow Request
+Temporary Backend Failure
+P2P Peer Rejected
+```
+
+### 29.9 ERROR
+
+`ERROR` represents a failure requiring investigation or explicit handling.
+
+Examples:
+
+```text
+Database Failure
+Synchronization Failure
+Unexpected Exception
+Configuration Failure
+Critical Security Failure
+```
+
+### 29.10 Logging Level Policy
+
+Recommended defaults:
+
+```text
+Development:
+DEBUG
+
+Test:
+INFO / DEBUG
+
+Staging:
+INFO
+
+Production:
+INFO
+```
+
+The exact Production level may be adjusted according to operational requirements.
+
+### 29.11 Structured Logging
+
+Backend logs should preferably be structured.
+
+Example:
+
+```json
+{
+  "timestamp": "2026-08-25T10:00:00Z",
+  "level": "INFO",
+  "service": "splitsync-backend",
+  "environment": "prod",
+  "requestId": "R100",
+  "message": "Synchronization completed"
+}
+```
+
+### 29.12 Required Log Metadata
+
+Where applicable, logs should include:
+
+```text
+Timestamp
+Level
+Environment
+Service
+Application Version
+Request ID
+Operation ID
+Device ID
+User ID
+Entity ID
+```
+
+Only identifiers that are safe and necessary should be included.
+
+### 29.13 Timestamp
+
+Every log entry should contain a timestamp.
+
+The Backend should preferably use a consistent server-side time representation.
+
+### 29.14 Environment
+
+Logs must identify the environment:
+
+```text
+dev
+test
+staging
+prod
+```
+
+This prevents confusion between environments.
+
+### 29.15 Service
+
+Backend logs should identify the service or application component.
+
+Example:
+
+```text
+service=splitsync-backend
+```
+
+### 29.16 Application Version
+
+Application version should be available in diagnostic logs where useful.
+
+Example:
+
+```text
+appVersion=1.2.0
+```
+
+### 29.17 Request ID
+
+Backend API requests should have a:
+
+```text
+requestId
+```
+
+where appropriate.
+
+This allows a complete request flow to be traced.
+
+### 29.18 Operation ID
+
+Synchronization-related logs should include:
+
+```text
+operationId
+```
+
+where applicable.
+
+Example:
+
+```text
+operationId=O100
+```
+
+### 29.19 Device ID
+
+Synchronization logs may include:
+
+```text
+deviceId
+```
+
+when necessary for troubleshooting.
+
+Sensitive device information should not be logged unnecessarily.
+
+### 29.20 User ID
+
+User ID may be logged where necessary for operational diagnosis.
+
+The actual personal profile information should not be logged.
+
+### 29.21 Entity ID
+
+Entity identifiers may be logged to identify the affected Domain object.
+
+Examples:
+
+```text
+groupId
+expenseId
+settlementId
+```
+
+### 29.22 Do Not Log Full Domain Objects
+
+The system should not routinely log complete:
+
+```text
+Expense
+ExpenseSplit
+Settlement
+User
+Group
+```
+
+objects.
+
+This may expose unnecessary sensitive information.
+
+### 29.23 Financial Data Logging
+
+Amounts should not be logged unless necessary for debugging.
+
+Avoid:
+
+```text
+Expense amount = ₹50,000
+```
+
+in ordinary Production logs.
+
+Prefer:
+
+```text
+expenseId=E100
+operationId=O100
+```
+
+### 29.24 Personal Data Logging
+
+Do not routinely log:
+
+```text
+Email
+Phone Number
+Address
+Full Name
+```
+
+unless there is a clear operational requirement.
+
+### 29.25 Authentication Data
+
+Never log:
+
+```text
+Passwords
+Access Tokens
+Refresh Tokens
+Authorization Headers
+Session Secrets
+```
+
+### 29.26 Cryptographic Data
+
+Never log:
+
+```text
+Private Keys
+Encryption Keys
+Secret Keys
+Raw Cryptographic Material
+```
+
+### 29.27 Authentication Logging
+
+Authentication events may be logged as security events.
+
+Example:
+
+```text
+Authentication Success
+Authentication Failure
+Token Rejection
+Device Authentication Failure
+```
+
+Do not log the credential itself.
+
+### 29.28 Authorization Logging
+
+Authorization failures should be logged where useful.
+
+Example:
+
+```text
+Authorization denied
+userId=U100
+groupId=G200
+operation=UPDATE_EXPENSE
+```
+
+Only required identifiers should be included.
+
+### 29.29 Security Event Logging
+
+Security-sensitive events may include:
+
+```text
+Authentication Failure
+Authorization Failure
+Invalid Token
+Revoked Device
+Invalid Signature
+Suspicious Request
+Rate Limit Trigger
+```
+
+### 29.30 Security Log Protection
+
+Security logs must be protected from unauthorized access.
+
+Production security logs should have stricter access controls than ordinary application logs.
+
+### 29.31 API Request Logging
+
+API request logs should include safe metadata:
+
+```text
+HTTP Method
+Endpoint
+Status Code
+Request ID
+Latency
+```
+
+### 29.32 API Response Logging
+
+The system should not log complete response bodies by default.
+
+Prefer:
+
+```text
+Status
+Latency
+Request ID
+Response Size
+```
+
+### 29.33 Sensitive API Headers
+
+The following must not be logged:
+
+```text
+Authorization
+Cookie
+Authentication Token
+Secret Headers
+```
+
+### 29.34 API Endpoint Logging
+
+Example:
+
+```text
+INFO
+requestId=R100
+method=POST
+path=/api/v1/sync/push
+status=200
+latencyMs=120
+```
+
+### 29.35 API Error Logging
+
+When an API request fails, the log should include:
+
+```text
+Request ID
+Endpoint
+HTTP Status
+Error Code
+Safe Error Context
+```
+
+### 29.36 API Validation Errors
+
+Validation failures may be logged at:
+
+```text
+WARN
+```
+
+or an appropriate lower severity.
+
+They are not necessarily server errors.
+
+### 29.37 API 4xx Errors
+
+Most client-side errors should not be logged as:
+
+```text
+ERROR
+```
+
+unless they indicate a security or operational concern.
+
+### 29.38 API 5xx Errors
+
+Unexpected server-side failures should generally be logged as:
+
+```text
+ERROR
+```
+
+with the associated exception and correlation information.
+
+### 29.39 Exception Logging
+
+Unexpected exceptions should include:
+
+```text
+Exception Type
+Message
+Stack Trace
+Request ID
+Operation ID
+```
+
+where safe.
+
+### 29.40 Stack Traces
+
+Stack traces may be logged internally.
+
+They must never be returned directly to the Android client.
+
+### 29.41 Database Logging
+
+Database failures should be logged with safe diagnostic context.
+
+Example:
+
+```text
+Database connection failure
+environment=prod
+requestId=R100
+```
+
+### 29.42 SQL Logging
+
+SQL statement logging should normally be:
+
+```text
+Development:
+Optional
+
+Test:
+Optional
+
+Staging:
+Controlled
+
+Production:
+Disabled / Restricted
+```
+
+### 29.43 SQL Parameter Logging
+
+Sensitive SQL parameter values should not be logged.
+
+### 29.44 Database Performance Logging
+
+Slow database operations may be logged.
+
+Example:
+
+```text
+WARN
+queryType=expense-history
+durationMs=1200
+```
+
+Do not log complete sensitive query data.
+
+### 29.45 Transaction Logging
+
+Transaction lifecycle may be logged at DEBUG/TRACE when required.
+
+Example:
+
+```text
+Transaction Started
+Transaction Committed
+Transaction Rolled Back
+```
+
+Production transaction logging should not become excessively verbose.
+
+### 29.46 Synchronization Logging
+
+Synchronization requires dedicated logging because it is a critical part of SplitSync.
+
+Important events include:
+
+```text
+Sync Started
+Sync Completed
+Sync Failed
+Operation Queued
+Operation Sent
+Operation Applied
+Operation Rejected
+Operation Conflict
+Cursor Advanced
+Resynchronization Started
+```
+
+### 29.47 Sync Operation Logging
+
+Example:
+
+```text
+INFO
+operationId=O100
+status=APPLIED
+entityId=E100
+```
+
+### 29.48 Sync Operation States
+
+The logs should help trace transitions such as:
+
+```text
+PENDING
+   ↓
+IN_FLIGHT
+   ↓
+APPLIED
+```
+
+or:
+
+```text
+PENDING
+   ↓
+IN_FLIGHT
+   ↓
+RETRYABLE_FAILURE
+   ↓
+PENDING
+```
+
+### 29.49 Sync Retry Logging
+
+When an operation is retried:
+
+```text
+WARN
+operationId=O100
+attempt=2
+reason=TIMEOUT
+```
+
+The log should not contain sensitive request payloads.
+
+### 29.50 Sync Conflict Logging
+
+Conflict events should include:
+
+```text
+operationId
+entityId
+entityType
+baseVersion
+serverVersion
+```
+
+where safe.
+
+### 29.51 Sync Conflict Example
+
+```text
+WARN
+operationId=O200
+entityType=EXPENSE
+entityId=E100
+baseVersion=5
+serverVersion=6
+status=CONFLICT
+```
+
+### 29.52 Sync Cursor Logging
+
+Cursor transitions may be logged:
+
+```text
+cursorBefore=C100
+cursorAfter=C150
+```
+
+where cursors are not themselves sensitive.
+
+### 29.53 Cursor Safety
+
+Do not log synchronization payloads merely to explain cursor movement.
+
+### 29.54 Sync Batch Logging
+
+Batch operations may log:
+
+```text
+Batch ID
+Operation Count
+Success Count
+Conflict Count
+Failure Count
+Duration
+```
+
+Example:
+
+```text
+INFO
+batchSize=50
+applied=48
+conflicts=1
+failed=1
+durationMs=900
+```
+
+### 29.55 Sync Completion Logging
+
+A successful synchronization should provide enough information to understand the result.
+
+Example:
+
+```text
+INFO
+syncStatus=COMPLETED
+pushed=10
+pulled=15
+conflicts=1
+```
+
+### 29.56 Sync Failure Logging
+
+A failed synchronization should identify:
+
+```text
+Failure Category
+Request ID
+Operation ID
+Retryability
+```
+
+### 29.57 Retryable Sync Failure
+
+Example:
+
+```text
+WARN
+syncStatus=RETRYABLE_FAILURE
+reason=BACKEND_UNAVAILABLE
+retryInSeconds=30
+```
+
+### 29.58 Permanent Sync Failure
+
+Example:
+
+```text
+ERROR
+operationId=O100
+status=REJECTED
+errorCode=VALIDATION_ERROR
+```
+
+### 29.59 P2P Logging
+
+P2P communication should have dedicated logs.
+
+Important events:
+
+```text
+Discovery Started
+Peer Found
+Peer Rejected
+Connection Established
+Handshake Started
+Handshake Completed
+Sync Started
+Sync Completed
+Connection Lost
+Protocol Mismatch
+```
+
+### 29.60 P2P Peer Logging
+
+A peer should be identified using a safe identifier.
+
+Do not log unnecessary device personal information.
+
+### 29.61 P2P Handshake Logging
+
+Example:
+
+```text
+INFO
+peerId=P200
+p2pProtocolVersion=2
+handshake=SUCCESS
+```
+
+### 29.62 P2P Version Mismatch
+
+Example:
+
+```text
+WARN
+peerId=P200
+localProtocol=2
+remoteProtocol=1
+result=INCOMPATIBLE
+```
+
+### 29.63 P2P Security Logging
+
+Security failures may include:
+
+```text
+Invalid Peer Authentication
+Invalid Message Signature
+Protocol Violation
+Unexpected Message
+```
+
+### 29.64 P2P Payload Logging
+
+Complete P2P payloads should not be logged in Production.
+
+### 29.65 P2P Message Size Logging
+
+Abnormally large messages may be logged:
+
+```text
+WARN
+peerId=P200
+messageSize=...
+result=REJECTED
+```
+
+### 29.66 Local Android Logging
+
+Android logging should use the platform's logging facilities or an application logging abstraction.
+
+Logging should not be scattered through business logic without structure.
+
+### 29.67 Android Debug Logging
+
+Debug builds may produce detailed logs.
+
+Example:
+
+```text
+SyncEngine
+Repository
+Network
+Database
+P2P
+```
+
+### 29.68 Android Production Logging
+
+Production Android builds should minimize verbose logs.
+
+Especially avoid logging:
+
+```text
+Authentication Tokens
+Private Data
+Financial Data
+Encryption Keys
+Full API Payloads
+```
+
+### 29.69 Android Crash Logging
+
+If crash reporting is introduced, crash reports should include safe diagnostic context.
+
+Example:
+
+```text
+App Version
+Device Model
+Android Version
+Sync State
+Operation ID
+```
+
+where appropriate.
+
+### 29.70 Crash Reporting Privacy
+
+Crash reporting must not capture:
+
+```text
+Passwords
+Tokens
+Private Keys
+Full Financial Records
+```
+
+### 29.71 Android Local Database Logging
+
+Database errors may be logged.
+
+However, SQL queries and complete stored records should not be logged routinely.
+
+### 29.72 Android Network Logging
+
+Network logging may include:
+
+```text
+Endpoint
+HTTP Status
+Latency
+Request ID
+```
+
+but not:
+
+```text
+Authorization Header
+Sensitive Payload
+Tokens
+```
+
+### 29.73 Android Sync Logging
+
+The Android Sync Engine should log state transitions.
+
+Example:
+
+```text
+Sync requested
+Sync started
+Push completed
+Pull completed
+Cursor updated
+Sync completed
+```
+
+### 29.74 Logging Abstraction
+
+Application code should preferably depend on a logging abstraction rather than a concrete logging implementation where practical.
+
+Example:
+
+```text
+Logger
+```
+
+This allows logging implementation to change without changing business logic.
+
+### 29.75 Domain Logging
+
+The Domain layer should contain minimal logging.
+
+Domain logic should primarily:
+
+```text
+Return Result
+Throw Domain Exception
+```
+
+rather than controlling logging infrastructure.
+
+### 29.76 Service Logging
+
+Application services may log important business-process boundaries.
+
+Example:
+
+```text
+Expense Creation Started
+Expense Creation Completed
+```
+
+Sensitive data should remain excluded.
+
+### 29.77 Controller Logging
+
+Controllers should generally log request-level metadata rather than implementing detailed business logging.
+
+### 29.78 Repository Logging
+
+Repositories may log infrastructure failures and performance issues.
+
+Normal successful database operations should not produce excessive Production logs.
+
+### 29.79 Logging and Transactions
+
+Transaction logs should distinguish:
+
+```text
+Started
+Committed
+Rolled Back
+```
+
+when transaction diagnostics are enabled.
+
+### 29.80 Logging and Idempotency
+
+Idempotency behavior should be traceable.
+
+Example:
+
+```text
+operationId=O100
+result=ALREADY_APPLIED
+```
+
+This is important for diagnosing retries.
+
+### 29.81 Logging Duplicate Operations
+
+Duplicate synchronization operations should not be treated as unexpected errors if they are valid retries.
+
+Example:
+
+```text
+INFO
+operationId=O100
+status=ALREADY_APPLIED
+```
+
+### 29.82 Logging Invalid Operations
+
+Invalid operations may be logged as:
+
+```text
+WARN
+```
+
+or:
+
+```text
+ERROR
+```
+
+depending on whether the issue represents normal client validation failure or a server-side problem.
+
+### 29.83 Logging Security Violations
+
+Security violations should have appropriate severity.
+
+Examples:
+
+```text
+WARN
+Repeated Authentication Failures
+
+ERROR
+Detected Security Integrity Failure
+```
+
+Exact severity depends on the event.
+
+### 29.84 Rate Limit Logging
+
+Rate limiting may log:
+
+```text
+WARN
+requestId=R100
+clientId=C100
+rateLimit=EXCEEDED
+```
+
+Do not log authentication secrets.
+
+### 29.85 Configuration Logging
+
+At startup, the application may log safe configuration metadata:
+
+```text
+Environment
+Application Version
+API Version
+Sync Protocol Version
+Log Level
+```
+
+### 29.86 Do Not Log Configuration Secrets
+
+Startup logs must never print:
+
+```text
+Database Password
+JWT Secret
+Private Key
+Encryption Key
+API Secret
+```
+
+### 29.87 Configuration Validation Logging
+
+Missing or invalid configuration should produce clear errors.
+
+Example:
+
+```text
+ERROR
+configuration=DB_URL
+status=MISSING
+```
+
+### 29.88 Startup Logging
+
+Backend startup may log:
+
+```text
+Application Starting
+Environment
+Version
+Database Connection
+Migration Status
+Server Started
+```
+
+### 29.89 Startup Failure Logging
+
+Startup failure should provide enough information to diagnose the cause.
+
+Example:
+
+```text
+ERROR
+Application startup failed
+reason=DATABASE_CONNECTION_FAILURE
+```
+
+### 29.90 Shutdown Logging
+
+Graceful shutdown may log:
+
+```text
+Shutdown Started
+Active Requests Drained
+Background Tasks Stopped
+Shutdown Completed
+```
+
+### 29.91 Sync Shutdown
+
+The Android application should not log an error merely because synchronization is interrupted by a normal lifecycle event.
+
+### 29.92 Background Worker Logging
+
+Background synchronization workers should log:
+
+```text
+Worker Started
+Work Completed
+Work Retried
+Work Cancelled
+Work Failed
+```
+
+### 29.93 Logging and Android Lifecycle
+
+Normal Android lifecycle events such as:
+
+```text
+Activity Created
+Activity Destroyed
+```
+
+should not be logged at INFO in Production unless required for diagnostics.
+
+### 29.94 Performance Logging
+
+Performance-sensitive operations may log duration.
+
+Examples:
+
+```text
+API Request
+Database Query
+Sync Batch
+P2P Transfer
+Local Migration
+```
+
+### 29.95 Slow Operation Threshold
+
+A configurable threshold may identify slow operations.
+
+Example:
+
+```text
+SLOW_OPERATION_THRESHOLD_MS
+```
+
+### 29.96 Slow API Logging
+
+Example:
+
+```text
+WARN
+endpoint=/api/v1/sync/push
+durationMs=2500
+thresholdMs=1000
+```
+
+### 29.97 Slow Database Logging
+
+Example:
+
+```text
+WARN
+operation=LOAD_GROUP_EXPENSES
+durationMs=1800
+```
+
+### 29.98 Slow Sync Logging
+
+Example:
+
+```text
+WARN
+syncBatch=50
+durationMs=5000
+```
+
+### 29.99 Performance Logs and Privacy
+
+Performance logs should use:
+
+```text
+Identifiers
+Counts
+Durations
+Sizes
+```
+
+rather than full business payloads.
+
+### 29.100 Log Correlation
+
+Logs from different layers should be correlatable.
+
+Example:
+
+```text
+Android Request
+      ↓
+requestId=R100
+      ↓
+Backend Controller
+      ↓
+Service
+      ↓
+Sync Processor
+      ↓
+operationId=O100
+```
+
+### 29.101 Request ID Propagation
+
+Where appropriate:
+
+```text
+Client
+ ↓
+HTTP Header
+ ↓
+Backend
+ ↓
+Logs
+```
+
+should preserve the Request ID.
+
+### 29.102 Operation ID Propagation
+
+Synchronization operations should preserve:
+
+```text
+operationId
+```
+
+across:
+
+```text
+Android
+Backend
+Retry
+Conflict
+Resolution
+```
+
+### 29.103 P2P Correlation
+
+P2P sessions may use a:
+
+```text
+sessionId
+```
+
+for tracing.
+
+Example:
+
+```text
+sessionId=S100
+peerId=P200
+operationId=O100
+```
+
+### 29.104 Log Correlation Hierarchy
+
+Conceptually:
+
+```text
+requestId
+   ↓
+sessionId
+   ↓
+operationId
+   ↓
+entityId
+```
+
+Not every event requires every identifier.
+
+### 29.105 Log Aggregation
+
+Backend Production logs should preferably be centralized.
+
+Possible infrastructure:
+
+```text
+ELK
+OpenSearch
+Cloud Logging
+Loki
+```
+
+The exact platform is deployment-dependent.
+
+### 29.106 Android Log Aggregation
+
+Android logs may use a crash/observability platform if required.
+
+The selected platform must comply with the application's privacy and security requirements.
+
+### 29.107 Log Retention
+
+Log retention should depend on:
+
+```text
+Log Type
+Environment
+Operational Need
+Security Requirement
+Storage Cost
+```
+
+### 29.108 Production Log Retention
+
+Production logs should have a defined retention period.
+
+The exact duration should be decided based on operational and compliance requirements.
+
+### 29.109 Debug Log Retention
+
+Debug logs should generally have shorter retention than important operational or security logs.
+
+### 29.110 Security Log Retention
+
+Security-related logs may require longer retention than ordinary debug logs.
+
+### 29.111 Log Rotation
+
+Logs must be rotated or managed so that they do not consume unlimited storage.
+
+### 29.112 Log Storage Limits
+
+The system should define:
+
+```text
+Maximum Log Size
+Rotation Policy
+Retention Policy
+Storage Alert
+```
+
+### 29.113 Log Access Control
+
+Access to Production logs must be restricted.
+
+Example:
+
+```text
+Developer
+    ↓
+Limited Diagnostic Access
+
+Operations
+    ↓
+Operational Access
+
+Security
+    ↓
+Security Log Access
+```
+
+The exact RBAC model may evolve.
+
+### 29.114 Log Encryption
+
+Production logs should be protected in transit and at rest where supported by the logging infrastructure.
+
+### 29.115 Log Integrity
+
+Security/audit logs should use infrastructure controls that reduce unauthorized modification or deletion.
+
+### 29.116 Audit Logging
+
+Audit logging is different from ordinary application logging.
+
+Audit logs record important security or administrative actions.
+
+Examples:
+
+```text
+Configuration Change
+Device Revocation
+Administrative Action
+Permission Change
+Migration
+Feature Flag Change
+```
+
+### 29.117 Audit Log Immutability
+
+Where required, audit records should be protected from unauthorized modification.
+
+### 29.118 Audit Log Content
+
+An audit event should include:
+
+```text
+Timestamp
+Actor
+Action
+Target
+Result
+Request ID
+```
+
+where appropriate.
+
+### 29.119 Financial Audit Logging
+
+Financial Domain events may require audit information depending on future requirements.
+
+However, audit logging must not unnecessarily duplicate entire financial records into logs.
+
+### 29.120 Expense Audit
+
+If audit logging is required for Expense mutations:
+
+```text
+Expense Created
+Expense Updated
+Expense Deleted / Tombstoned
+```
+
+may be represented as audit events.
+
+### 29.121 Settlement Audit
+
+If audit logging is required:
+
+```text
+Settlement Created
+Settlement Updated
+Settlement Reversed
+```
+
+may be represented as audit events.
+
+### 29.122 Membership Audit
+
+Membership changes may be audited:
+
+```text
+Member Added
+Member Removed
+Role Changed
+Invitation Accepted
+```
+
+### 29.123 Device Audit
+
+Device lifecycle events may be audited:
+
+```text
+Device Registered
+Device Revoked
+Device Reauthorized
+```
+
+### 29.124 Sync Audit
+
+Synchronization events may be audited at an appropriate level:
+
+```text
+Operation Applied
+Operation Rejected
+Conflict Created
+Conflict Resolved
+```
+
+Ordinary high-volume sync logs should not automatically become long-term audit records.
+
+### 29.125 Logging and Privacy
+
+Logging follows:
+
+```text
+Data Minimization
+```
+
+Only information necessary for:
+
+```text
+Operations
+Debugging
+Security
+Audit
+```
+
+should be logged.
+
+### 29.126 Logging and GDPR / Privacy
+
+If future privacy requirements apply, logging must support:
+
+```text
+Data Minimization
+Access Control
+Retention
+Deletion / Anonymization
+```
+
+according to the applicable policy.
+
+### 29.127 Logging and User Data Deletion
+
+If User data must be deleted, logging must distinguish between:
+
+```text
+Operational Logs
+Audit Logs
+Required Security Records
+```
+
+The exact retention/deletion rules should be defined by the applicable privacy requirements.
+
+### 29.128 Logging and Financial Privacy
+
+Expense descriptions, notes, amounts, and participant details should not be routinely written to logs.
+
+### 29.129 Logging and Error Messages
+
+Error logs may contain technical information.
+
+Client-facing error messages should remain safe and generic where necessary.
+
+### 29.130 Logging and Exception Mapping
+
+Conceptually:
+
+```text
+Internal Exception
+      ↓
+Log Detailed Technical Information
+      ↓
+Map to Safe API Error
+      ↓
+Return to Client
+```
+
+### 29.131 Logging and API Errors
+
+The client may receive:
+
+```text
+SERVER_ERROR
+```
+
+while the backend log contains:
+
+```text
+Exception Type
+Stack Trace
+Request ID
+Operation ID
+```
+
+### 29.132 Logging and Retry
+
+Retryable failures should be distinguishable in logs.
+
+Example:
+
+```text
+reason=TIMEOUT
+retryable=true
+```
+
+### 29.133 Logging and Non-Retryable Errors
+
+Example:
+
+```text
+errorCode=VALIDATION_ERROR
+retryable=false
+```
+
+### 29.134 Logging and Conflict
+
+A Domain conflict should not be logged as an infrastructure failure.
+
+Example:
+
+```text
+INFO / WARN
+status=CONFLICT
+```
+
+rather than:
+
+```text
+ERROR
+```
+
+unless the conflict itself indicates an abnormal system condition.
+
+### 29.135 Logging and Duplicate Requests
+
+A duplicate idempotent request should generally be logged as:
+
+```text
+INFO
+```
+
+or DEBUG, not as a critical error.
+
+### 29.136 Logging and Network Failure
+
+Temporary network failures may be:
+
+```text
+WARN
+```
+
+especially when retry is expected.
+
+### 29.137 Logging and Backend Failure
+
+Repeated Backend failures may escalate to:
+
+```text
+ERROR
+```
+
+when they indicate an operational incident.
+
+### 29.138 Logging and Monitoring
+
+Logs should complement:
+
+```text
+Metrics
++
+Tracing
++
+Health Checks
+```
+
+Logging alone should not be the only observability mechanism.
+
+### 29.139 Metrics vs Logs
+
+Use metrics for:
+
+```text
+Counts
+Rates
+Latency
+Resource Usage
+```
+
+Use logs for:
+
+```text
+Detailed Events
+Failures
+State Transitions
+Diagnostics
+```
+
+### 29.140 Tracing vs Logs
+
+Use tracing for:
+
+```text
+Request Flow
+Distributed Calls
+Latency Across Components
+```
+
+Logs provide the detailed event context.
+
+### 29.141 Logging and Alerting
+
+Important log events may generate alerts.
+
+Examples:
+
+```text
+Database Unavailable
+Repeated Authentication Failures
+High Sync Failure Rate
+Critical Security Event
+```
+
+Not every WARN should generate an alert.
+
+### 29.142 Alert Deduplication
+
+Repeated identical failures should be aggregated to avoid alert storms.
+
+### 29.143 Logging and Rate Limiting
+
+Logging must not itself create excessive load during an attack or outage.
+
+High-frequency errors should be sampled or aggregated where appropriate.
+
+### 29.144 Log Sampling
+
+High-volume diagnostic events may use sampling.
+
+Example:
+
+```text
+1% of successful requests
+100% of critical errors
+```
+
+The exact policy is environment-dependent.
+
+### 29.145 Critical Event Logging
+
+Critical events should not be sampled away.
+
+Examples:
+
+```text
+Security Failure
+Data Integrity Failure
+Database Failure
+Critical Migration Failure
+```
+
+### 29.146 Logging During Migration
+
+Database migrations should log:
+
+```text
+Migration Started
+Migration Version
+Migration Completed
+Migration Failed
+```
+
+### 29.147 Migration Failure Logging
+
+Migration failure must include enough information to identify:
+
+```text
+Migration Version
+Environment
+Failure Type
+```
+
+without exposing secrets.
+
+### 29.148 Logging During Startup
+
+Startup logs should allow operators to determine:
+
+```text
+What Version?
+Which Environment?
+Which Configuration?
+Which Database?
+Which Protocol?
+```
+
+without exposing sensitive values.
+
+### 29.149 Logging During Shutdown
+
+Graceful shutdown should produce enough information to determine whether:
+
+```text
+Requests Drained
+Workers Stopped
+Database Connections Closed
+```
+
+### 29.150 Logging During Deployment
+
+Deployment systems should record:
+
+```text
+Version
+Environment
+Deployment Time
+Deployment Result
+```
+
+### 29.151 Logging and Versioning
+
+Logs should make version compatibility problems diagnosable.
+
+Example:
+
+```text
+appVersion=1.5.0
+apiVersion=v1
+syncProtocolVersion=2
+```
+
+### 29.152 Logging and Environment Strategy
+
+Logs must include environment information so that:
+
+```text
+Development
+Test
+Staging
+Production
+```
+
+events remain distinguishable.
+
+### 29.153 Logging and Configuration Strategy
+
+Safe configuration metadata may be logged, but secret values must never be logged.
+
+### 29.154 Logging and Package Architecture
+
+Logging responsibilities should follow package boundaries.
+
+Example:
+
+```text
+controller
+service
+sync
+repository
+security
+```
+
+Each layer logs only events relevant to its responsibility.
+
+### 29.155 Controller Logging
+
+Controller:
+
+```text
+Request Metadata
+Response Status
+Latency
+```
+
+### 29.156 Service Logging
+
+Service:
+
+```text
+Business Process Boundary
+Important Domain Operation
+```
+
+### 29.157 Repository Logging
+
+Repository:
+
+```text
+Database Failure
+Slow Query
+Infrastructure Error
+```
+
+### 29.158 Sync Logging
+
+Sync:
+
+```text
+Operation
+State
+Cursor
+Retry
+Conflict
+```
+
+### 29.159 Security Logging
+
+Security:
+
+```text
+Authentication
+Authorization
+Device Security
+Protocol Security
+```
+
+### 29.160 Logging Anti-Patterns
+
+The following should be avoided:
+
+```text
+Logging Everything
+Logging Full Request Bodies
+Logging Full Response Bodies
+Logging Passwords
+Logging Tokens
+Logging Private Keys
+Logging Entire Entities
+Logging SQL With Sensitive Parameters
+Using ERROR For Normal Validation Failures
+Using DEBUG In Production Without Control
+Writing Business Logic Inside Logger Calls
+```
+
+### 29.161 Log Message Quality
+
+Log messages should be:
+
+```text
+Clear
+Specific
+Actionable
+Consistent
+```
+
+Avoid:
+
+```text
+Something went wrong
+```
+
+Prefer:
+
+```text
+Synchronization failed while applying operation
+```
+
+with safe identifiers.
+
+### 29.162 Log Event Naming
+
+Event names may use stable machine-readable values.
+
+Example:
+
+```text
+SYNC_STARTED
+SYNC_COMPLETED
+SYNC_CONFLICT
+SYNC_RETRY
+AUTH_FAILED
+DEVICE_REVOKED
+```
+
+### 29.163 Machine-Readable Fields
+
+Important diagnostic values should be fields rather than embedded only in free-form messages.
+
+Prefer:
+
+```text
+operationId=O100
+status=CONFLICT
+```
+
+over:
+
+```text
+"Operation O100 resulted in conflict"
+```
+
+### 29.164 Logging and Internationalization
+
+Logs should normally use a stable technical language rather than User-facing localized text.
+
+User-facing messages belong to the UI/API response layer.
+
+### 29.165 Logging and Localization
+
+The Android UI may display localized error messages.
+
+Logs should preserve stable:
+
+```text
+errorCode
+eventCode
+```
+
+for diagnostics.
+
+### 29.166 Logging and Correlation Example
+
+```text
+Android
+  │
+  │ requestId=R100
+  ↓
+Backend Controller
+  │
+  │ requestId=R100
+  ↓
+Sync Service
+  │
+  │ operationId=O100
+  ↓
+Operation Processor
+  │
+  │ entityId=E100
+  ↓
+Database
+```
+
+This allows one operation to be traced across layers.
+
+### 29.167 Logging and Incident Investigation
+
+During an incident:
+
+```text
+Request ID
++
+Operation ID
++
+Entity ID
++
+Application Version
++
+Environment
+```
+
+should provide enough information to locate relevant logs.
+
+### 29.168 Logging and Data Integrity Incident
+
+If financial integrity is suspected:
+
+```text
+Expense Duplication
+Settlement Duplication
+Lost Operation
+Incorrect Conflict
+```
+
+logging should allow investigators to trace:
+
+```text
+Operation
+→
+Request
+→
+Backend Processing
+→
+Persistence
+→
+Synchronization Result
+```
+
+### 29.169 Logging and Offline Operations
+
+Local offline operations may be logged as:
+
+```text
+operationId
+entityId
+localStatus
+```
+
+without logging the entire financial payload.
+
+### 29.170 Logging Offline Queue
+
+Example:
+
+```text
+INFO
+operationId=O100
+status=QUEUED
+reason=OFFLINE
+```
+
+### 29.171 Logging Online Transition
+
+Example:
+
+```text
+INFO
+connectivity=ONLINE
+pendingOperations=10
+sync=TRIGGERED
+```
+
+### 29.172 Logging Backend Recovery
+
+Example:
+
+```text
+INFO
+backend=AVAILABLE
+pendingOperations=10
+sync=RESUMED
+```
+
+### 29.173 Logging P2P to Backend Transition
+
+If an operation has previously moved through P2P and later reaches Backend:
+
+```text
+operationId=O100
+originDeviceId=D1
+transport=BACKEND
+```
+
+may be logged where necessary.
+
+The origin identity must remain distinguishable from the current transport path.
+
+### 29.174 Logging and Idempotency
+
+Example:
+
+```text
+operationId=O100
+firstRequest=APPLIED
+retryRequest=ALREADY_APPLIED
+```
+
+This should be visible in synchronization diagnostics.
+
+### 29.175 Logging and Conflict Resolution
+
+Conflict lifecycle may be traced:
+
+```text
+Conflict Created
+      ↓
+Conflict Reviewed
+      ↓
+Conflict Resolved
+      ↓
+Resolution Operation Created
+      ↓
+Resolution Synchronized
+```
+
+### 29.176 Logging and Data Retention
+
+High-volume synchronization logs may have shorter retention than:
+
+```text
+Security Logs
+Audit Logs
+Critical Incident Logs
+```
+
+### 29.177 Logging and Cost Control
+
+Logging volume should be controlled to avoid unnecessary infrastructure cost.
+
+Use:
+
+```text
+Levels
+Sampling
+Aggregation
+Retention
+```
+
+### 29.178 Logging and Availability
+
+Logging infrastructure failure should not normally prevent core application operation.
+
+The application should degrade logging safely rather than failing a financial transaction solely because an external log collector is unavailable.
+
+### 29.179 Logging Failure Handling
+
+If remote log delivery fails:
+
+```text
+Application Operation
+      ↓
+Continue Where Safe
+      ↓
+Local / Buffered Logging
+```
+
+where supported.
+
+Critical audit logging may have stricter requirements.
+
+### 29.180 Logging and Transaction Safety
+
+Logging must not cause a Domain transaction to commit or roll back unexpectedly.
+
+### 29.181 Logging and Sensitive Error Context
+
+If a technical error contains sensitive information, the logger should sanitize it before persistence.
+
+### 29.182 Log Sanitization
+
+Potentially sensitive fields should be filtered:
+
+```text
+Authorization
+Token
+Password
+Secret
+PrivateKey
+CardData
+FinancialPayload
+```
+
+### 29.183 Logging Middleware
+
+Backend request logging may be implemented through middleware/filter/interceptor mechanisms.
+
+This avoids duplicating request logging in every controller.
+
+### 29.184 Global Exception Logging
+
+A centralized exception handler should ensure consistent error logging.
+
+Conceptually:
+
+```text
+Exception
+   ↓
+Global Exception Handler
+   ↓
+Safe Log
+   ↓
+Safe API Error
+```
+
+### 29.185 Logging and API Request ID
+
+If a client provides a request ID, the backend must validate and safely use it according to the request-correlation policy.
+
+The backend may generate its own ID when none is provided.
+
+### 29.186 Logging and Operation ID Validation
+
+The backend should log synchronization Operation IDs only after validating that they are structurally safe.
+
+### 29.187 Logging and Log Injection
+
+User-controlled strings must not be able to forge structured log fields or misleading log entries.
+
+Logging frameworks should safely encode dynamic values.
+
+### 29.188 Logging and Newline Injection
+
+User-provided values containing:
+
+```text
+Newline
+Control Characters
+```
+
+must be safely encoded or sanitized before being included in logs.
+
+### 29.189 Logging and Untrusted Input
+
+Do not place arbitrary untrusted request values directly into log messages without appropriate structured logging/sanitization.
+
+### 29.190 Logging and PII Redaction
+
+If a value must occasionally be logged, sensitive fields should be:
+
+```text
+Masked
+Redacted
+Hashed
+```
+
+only where that still provides operational value.
+
+### 29.191 Logging and Hashing
+
+Hashing should not be used as a default substitute for proper data minimization.
+
+If an identifier is sensitive, preferably do not log it unless necessary.
+
+### 29.192 Logging and Device Identifiers
+
+Device identifiers should be logged only where required for synchronization diagnostics.
+
+### 29.193 Logging and User Identifiers
+
+User IDs may be used for correlation, but personally identifying profile information should not be logged alongside them unnecessarily.
+
+### 29.194 Logging and Group Identifiers
+
+Group IDs may be logged for troubleshooting Group-specific issues.
+
+### 29.195 Logging and Expense Identifiers
+
+Expense IDs may be logged to trace synchronization or financial integrity issues.
+
+### 29.196 Logging and Settlement Identifiers
+
+Settlement IDs may be logged to trace settlement synchronization.
+
+### 29.197 Logging and Sync State
+
+Safe SyncState information may be logged:
+
+```text
+PENDING
+SYNCING
+SYNCED
+FAILED
+CONFLICT
+```
+
+### 29.198 Logging and State Transitions
+
+Important state transitions should be traceable.
+
+Example:
+
+```text
+PENDING → IN_FLIGHT
+IN_FLIGHT → APPLIED
+IN_FLIGHT → RETRYABLE_FAILURE
+```
+
+### 29.199 Logging and State Integrity
+
+Impossible state transitions should be logged as errors.
+
+Example:
+
+```text
+APPLIED → PENDING
+```
+
+if not explicitly supported by the synchronization model.
+
+### 29.200 Logging and Testing
+
+Logging behavior should be tested for:
+
+```text
+Correct Level
+Required Context
+Sensitive Data Redaction
+Correlation
+Exception Handling
+```
+
+### 29.201 Logging Security Tests
+
+Security tests should verify that logs do not contain:
+
+```text
+Passwords
+Tokens
+Private Keys
+Authentication Headers
+Secrets
+```
+
+### 29.202 Logging Privacy Tests
+
+Privacy tests should verify that ordinary operations do not log unnecessary:
+
+```text
+Personal Information
+Financial Information
+```
+
+### 29.203 Logging Synchronization Tests
+
+Synchronization tests should verify that logs can trace:
+
+```text
+Operation
+Retry
+Conflict
+Cursor
+Result
+```
+
+### 29.204 Logging Environment Tests
+
+Tests should verify that:
+
+```text
+Development
+Test
+Staging
+Production
+```
+
+use their intended logging configurations.
+
+### 29.205 Logging Performance Tests
+
+Logging should not introduce unacceptable overhead to:
+
+```text
+Expense Creation
+Database Operations
+Synchronization
+P2P Transfer
+```
+
+### 29.206 Logging and Production Safety
+
+Production logging must prioritize:
+
+```text
+Security
+Privacy
+Performance
+Operational Usefulness
+```
+
+over maximum verbosity.
+
+### 29.207 Logging Strategy Summary
+
+```text
+Logging Strategy
+│
+├── Levels
+│   ├── TRACE
+│   ├── DEBUG
+│   ├── INFO
+│   ├── WARN
+│   └── ERROR
+│
+├── Application
+│   ├── Startup
+│   ├── Shutdown
+│   └── Runtime
+│
+├── API
+│   ├── Request
+│   ├── Response
+│   ├── Error
+│   └── Latency
+│
+├── Synchronization
+│   ├── Operation
+│   ├── Retry
+│   ├── Conflict
+│   ├── Cursor
+│   └── Result
+│
+├── P2P
+│   ├── Discovery
+│   ├── Handshake
+│   ├── Protocol
+│   └── Session
+│
+├── Security
+│   ├── Authentication
+│   ├── Authorization
+│   ├── Device
+│   └── Integrity
+│
+└── Operations
+    ├── Metrics
+    ├── Tracing
+    ├── Alerting
+    ├── Retention
+    └── Audit
+```
+
+### 29.208 Complete Logging Flow
+
+```text
+Application Event
+        ↓
+Logging Abstraction
+        ↓
+Log Level Check
+        ↓
+Sensitive Data Filtering
+        ↓
+Structured Log
+        ↓
+Environment Tagging
+        ↓
+Correlation Metadata
+        ↓
+Log Destination
+        ↓
+Retention / Monitoring
+```
+
+### 29.209 Synchronization Logging Flow
+
+```text
+Local Operation
+        ↓
+operationId
+        ↓
+Sync Started
+        ↓
+Push / Pull
+        ↓
+Backend / P2P
+        ↓
+Result
+   ┌────┼─────────┐
+   ↓    ↓         ↓
+Applied Conflict Retry
+   │      │         │
+   ↓      ↓         ↓
+Logged  Logged    Logged
+```
+
+### 29.210 Error Logging Flow
+
+```text
+Exception
+    ↓
+Classify
+    ↓
+Expected?
+ ┌──┴──┐
+Yes    No
+ │      │
+Safe   ERROR
+Result + Stack Trace
+```
+
+### 29.211 Production Logging Flow
+
+```text
+Production Event
+      ↓
+Structured Logger
+      ↓
+Redaction
+      ↓
+Correlation
+      ↓
+Severity
+      ↓
+Central Log System
+      ↓
+Metrics / Alerting / Investigation
+```
+
+### 29.212 Logging Invariants
+
+The following rules are mandatory for V1:
+
+- Logging must be structured where practical.
+- Every log entry must have a timestamp.
+- Backend logs must identify the environment.
+- Backend logs should identify the service.
+- Important API requests must be correlatable through a Request ID.
+- Synchronization operations must be correlatable through Operation IDs.
+- P2P sessions may use Session IDs for correlation.
+- Logs must never contain passwords.
+- Logs must never contain authentication tokens.
+- Logs must never contain private keys.
+- Logs must never contain raw encryption keys.
+- Logs must never contain production secrets.
+- Authorization headers must never be logged.
+- Complete authentication credentials must never be logged.
+- Complete financial Domain objects must not be routinely logged.
+- Expense amounts must not be routinely logged.
+- Expense descriptions and notes must not be routinely logged.
+- Personal information must not be routinely logged.
+- Complete API request bodies must not be logged by default.
+- Complete API response bodies must not be logged by default.
+- Complete P2P payloads must not be logged in Production.
+- SQL logging must be controlled and normally disabled in Production.
+- Sensitive SQL parameters must not be logged.
+- Stack traces may be stored internally but must never be returned to clients.
+- Client-facing error responses must remain safe.
+- Error codes should be machine-readable.
+- Normal validation failures must not be treated as critical server errors.
+- Duplicate idempotent synchronization requests must not be treated as unexpected failures.
+- Retryable synchronization failures must be identifiable.
+- Permanent synchronization failures must be identifiable.
+- Synchronization conflicts must be distinguishable from infrastructure failures.
+- Synchronization cursor transitions should be traceable.
+- Synchronization state transitions should be traceable.
+- Impossible synchronization state transitions must be logged as errors.
+- P2P protocol mismatches must be traceable.
+- P2P authentication/integrity failures must be logged appropriately.
+- Authentication failures should be logged as security events.
+- Authorization failures should be logged as security events where appropriate.
+- Device revocation should be traceable.
+- Security logs must have restricted access.
+- Audit logs must remain distinct from ordinary application logs.
+- Important administrative actions should be auditable.
+- Production logs must have defined retention.
+- Logs must have rotation or storage limits.
+- Production log access must be restricted.
+- Production logs should be protected in transit and at rest where supported.
+- Logging infrastructure failure must not normally prevent safe application operation.
+- Critical audit requirements may use stricter failure behavior.
+- Log volume must be controlled through levels, sampling, aggregation, and retention.
+- Critical security and integrity events must not be silently sampled away.
+- User-controlled values must be safely encoded before being logged.
+- Log injection must be prevented.
+- Sensitive fields must be redacted where logging is unavoidable.
+- Logs must remain environment-aware.
+- Logs must remain version-aware where useful.
+- Application, API, Database, Sync, P2P, and Security logging must follow their respective architectural boundaries.
+- Domain logic must not depend on logging infrastructure.
+- Logging must not change transaction semantics.
+- Logging must not cause financial operations to fail merely because a remote log destination is unavailable.
+- Logging must support investigation of Expense duplication.
+- Logging must support investigation of Settlement duplication.
+- Logging must support investigation of synchronization conflicts.
+- Logging must support investigation of retry and idempotency behavior.
+- Logging must support investigation of offline-to-online synchronization.
+- Logging must support investigation of P2P synchronization.
+- Logging must support investigation of configuration and deployment failures.
+- Logging must support investigation of database migration failures.
+- Logging must preserve the privacy and security requirements of SplitSync.
+- Logging must remain compatible with the Configuration Strategy.
+- Logging must remain compatible with the Environment Strategy.
+- Logging must remain compatible with the Security Architecture.
+- Logging must preserve the local-first and offline-first architecture.
+
+## 30. Testing Structure
+
+### 30.1 Purpose
+
+This section defines the testing structure for SplitSync V1.
+
+The testing strategy must validate:
+
+```text
+Domain Correctness
++
+Local Persistence
++
+Offline-First Behavior
++
+Synchronization
++
+Conflict Resolution
++
+P2P Communication
++
+Backend APIs
++
+Security
++
+Data Integrity
++
+Performance
+```
+
+Testing must cover both:
+
+```text
+Android
+Backend
+```
+
+and their interaction.
+
+### 30.2 Core Principle
+
+SplitSync follows:
+
+```text
+Test Early
++
+Test at the Correct Layer
++
+Test Critical Paths End-to-End
++
+Test Failure Scenarios
++
+Test Data Integrity
+```
+
+### 30.3 Testing Pyramid
+
+The overall testing structure follows:
+
+```text
+                 ┌───────────────┐
+                 │   E2E Tests   │
+                 └───────┬───────┘
+                         │
+                ┌────────┴────────┐
+                │ Integration     │
+                │ Tests           │
+                └────────┬────────┘
+                         │
+             ┌───────────┴───────────┐
+             │      Unit Tests       │
+             └───────────────────────┘
+```
+
+The majority of tests should be fast Unit Tests.
+
+Integration Tests should validate boundaries.
+
+End-to-End Tests should validate complete user and synchronization flows.
+
+### 30.4 Testing Layers
+
+Testing is divided into:
+
+```text
+Unit Testing
+Integration Testing
+Component Testing
+API Testing
+Database Testing
+Synchronization Testing
+P2P Testing
+End-to-End Testing
+Security Testing
+Performance Testing
+Regression Testing
+```
+
+### 30.5 Android Testing Structure
+
+Android tests should be organized around:
+
+```text
+Domain
+Application
+Repository
+Database
+Network
+Synchronization
+P2P
+UI
+```
+
+### 30.6 Backend Testing Structure
+
+Backend tests should cover:
+
+```text
+Domain
+Application Services
+Controllers
+Repositories
+Database
+Synchronization
+Security
+```
+
+### 30.7 Test Source Structure
+
+A conceptual Android structure:
+
+```text
+app/
+├── src/
+│   ├── test/
+│   │   └── ...
+│   │
+│   └── androidTest/
+│       └── ...
+```
+
+The exact package structure follows the Android module architecture.
+
+### 30.8 Backend Test Structure
+
+A conceptual Backend structure:
+
+```text
+backend/
+└── src/
+    └── test/
+        └── ...
+```
+
+Tests should follow the same package organization as the production code where practical.
+
+### 30.9 Unit Tests
+
+Unit Tests validate isolated components.
+
+Examples:
+
+```text
+Expense Validation
+Expense Split Calculation
+Settlement Validation
+Balance Calculation
+Conflict Resolution
+Sync State Transition
+Domain Rules
+```
+
+### 30.10 Unit Test Characteristics
+
+Unit Tests should be:
+
+```text
+Fast
+Deterministic
+Isolated
+Repeatable
+```
+
+They should not normally require:
+
+```text
+Real Database
+Real Network
+Real Backend
+Physical P2P Devices
+```
+
+### 30.11 Domain Unit Tests
+
+The Domain layer requires strong Unit Test coverage.
+
+Examples:
+
+```text
+Expense
+ExpenseSplit
+Settlement
+Group
+Membership
+Balance
+```
+
+### 30.12 Expense Tests
+
+Expense tests should validate:
+
+```text
+Valid Expense
+Invalid Amount
+Invalid Currency
+Invalid Group
+Invalid Description
+Timestamp Rules
+Version Rules
+```
+
+### 30.13 Expense Split Tests
+
+Expense Split tests should validate:
+
+```text
+Split Amounts
+Participant Membership
+Total Matching
+Duplicate Participant
+Invalid Amount
+Rounding
+```
+
+### 30.14 Split Total Invariant
+
+A critical test:
+
+```text
+Sum(ExpenseSplits)
+        =
+ExpenseTotal
+```
+
+must always hold.
+
+### 30.15 Settlement Tests
+
+Settlement tests should validate:
+
+```text
+Valid Settlement
+Invalid Payer
+Invalid Receiver
+Invalid Amount
+Same Payer and Receiver
+Currency Rules
+Group Membership
+```
+
+### 30.16 Group Tests
+
+Group tests should validate:
+
+```text
+Group Creation
+Group Update
+Group Membership
+Member Removal
+Group Ownership
+```
+
+### 30.17 Membership Tests
+
+Membership tests should validate:
+
+```text
+Add Member
+Remove Member
+Duplicate Member
+Unauthorized Membership Change
+Invalid Group
+```
+
+### 30.18 Balance Tests
+
+Balance calculations should be tested independently.
+
+Example:
+
+```text
+Expenses
++
+Settlements
+        ↓
+Balance Calculation
+        ↓
+Expected Balances
+```
+
+### 30.19 Currency Tests
+
+Currency handling should be tested for:
+
+```text
+Valid Currency
+Unsupported Currency
+Currency Consistency
+Decimal Precision
+Rounding
+```
+
+### 30.20 Money Precision Tests
+
+Financial calculations must not rely on unsafe floating-point behavior.
+
+Tests should verify:
+
+```text
+Exact Decimal Calculation
+Rounding Rules
+Split Distribution
+Settlement Calculation
+```
+
+### 30.21 Date and Time Tests
+
+Tests should cover:
+
+```text
+Creation Timestamp
+Update Timestamp
+Ordering
+Timezone Handling
+Serialization
+```
+
+### 30.22 Version Tests
+
+Version-related tests should validate:
+
+```text
+Version Increment
+Version Comparison
+Stale Version Detection
+Concurrent Update Detection
+```
+
+### 30.23 Domain Invariant Tests
+
+Every important Domain invariant should have dedicated tests.
+
+Examples:
+
+```text
+Expense Total = Split Total
+Settlement Amount > 0
+User Must Belong To Group
+```
+
+### 30.24 Application Service Tests
+
+Application services should be tested for:
+
+```text
+Use Case Execution
+Validation
+Repository Interaction
+Transaction Boundaries
+Sync Operation Creation
+Error Handling
+```
+
+### 30.25 Repository Tests
+
+Repositories should verify:
+
+```text
+Insert
+Read
+Update
+Delete / Tombstone
+Query
+Pagination
+Version Handling
+```
+
+### 30.26 Android Repository Tests
+
+Android repositories should verify:
+
+```text
+Local Database
+Network Source
+Sync State
+Offline Behavior
+```
+
+### 30.27 Offline Repository Test
+
+Example:
+
+```text
+Network Unavailable
+      ↓
+Create Expense
+      ↓
+Local Database
+      ↓
+Expense Available
+      ↓
+SyncOperation Created
+```
+
+This is a critical V1 test.
+
+### 30.28 Local Database Tests
+
+Local database tests should verify:
+
+```text
+Schema
+Tables
+Indexes
+Constraints
+Relations
+Queries
+Migrations
+```
+
+### 30.29 Database Migration Tests
+
+Every database migration should be tested.
+
+Example:
+
+```text
+Schema V1
+   ↓
+Migration
+   ↓
+Schema V2
+```
+
+Existing data must remain valid after migration.
+
+### 30.30 Migration Data Preservation
+
+Migration tests must verify that migrations do not unintentionally:
+
+```text
+Delete Expenses
+Delete Settlements
+Delete Groups
+Delete Members
+Delete SyncOperations
+Delete Conflicts
+```
+
+### 30.31 Backend Database Tests
+
+Backend database tests should verify:
+
+```text
+Schema
+Constraints
+Indexes
+Relationships
+Migrations
+Transactions
+```
+
+### 30.32 API Unit Tests
+
+Controller/service behavior should be tested without requiring the complete Production infrastructure.
+
+### 30.33 API Integration Tests
+
+API Integration Tests should validate:
+
+```text
+HTTP Request
+      ↓
+Controller
+      ↓
+Service
+      ↓
+Repository
+      ↓
+Database
+```
+
+### 30.34 API Request Tests
+
+Tests should cover:
+
+```text
+Valid Request
+Invalid Request
+Missing Field
+Invalid Field
+Unauthorized Request
+Forbidden Request
+Not Found
+Conflict
+Server Error
+```
+
+### 30.35 API Response Tests
+
+Responses should validate:
+
+```text
+HTTP Status
+Response Schema
+Error Code
+Required Fields
+Pagination
+Version Information
+```
+
+### 30.36 API Contract Tests
+
+API contracts should be tested against the documented API design.
+
+Tests should detect:
+
+```text
+Missing Fields
+Unexpected Fields
+Incorrect Types
+Incorrect Status Codes
+Breaking Changes
+```
+
+### 30.37 API Version Tests
+
+Tests should verify:
+
+```text
+/api/v1
+```
+
+continues to satisfy the V1 contract.
+
+Breaking changes must require a versioning decision.
+
+### 30.38 Authentication Tests
+
+Authentication tests should cover:
+
+```text
+Valid Credentials
+Invalid Credentials
+Expired Token
+Invalid Token
+Missing Token
+Revoked Device
+```
+
+### 30.39 Authorization Tests
+
+Authorization tests should cover:
+
+```text
+Authorized User
+Unauthorized User
+Wrong Group
+Wrong Resource Owner
+Insufficient Permission
+```
+
+### 30.40 Security Boundary Tests
+
+Every protected API must have tests verifying that unauthorized access is rejected.
+
+### 30.41 Device Authentication Tests
+
+Device-level authentication should test:
+
+```text
+Valid Device
+Unknown Device
+Revoked Device
+Invalid Device Credential
+```
+
+### 30.42 Token Tests
+
+Token validation should test:
+
+```text
+Valid Token
+Expired Token
+Invalid Signature
+Wrong Issuer
+Wrong Audience
+Malformed Token
+```
+
+### 30.43 Security Negative Tests
+
+Security tests should focus heavily on rejection behavior.
+
+Example:
+
+```text
+Invalid Input
+      ↓
+Rejected
+```
+
+### 30.44 Input Validation Tests
+
+Tests should cover:
+
+```text
+Null Values
+Empty Values
+Maximum Length
+Minimum Length
+Invalid Format
+Invalid Range
+Unexpected Values
+```
+
+### 30.45 Synchronization Testing
+
+Synchronization requires dedicated testing because it is central to SplitSync.
+
+Tests must cover:
+
+```text
+Push
+Pull
+Retry
+Idempotency
+Conflict
+Cursor
+Ordering
+Offline Queue
+Recovery
+```
+
+### 30.46 Sync Operation Tests
+
+Every SyncOperation state transition should be tested.
+
+Example:
+
+```text
+PENDING
+   ↓
+IN_FLIGHT
+   ↓
+APPLIED
+```
+
+### 30.47 Retry State Tests
+
+Example:
+
+```text
+PENDING
+   ↓
+IN_FLIGHT
+   ↓
+RETRYABLE_FAILURE
+   ↓
+PENDING
+```
+
+### 30.48 Permanent Failure Tests
+
+Example:
+
+```text
+PENDING
+   ↓
+IN_FLIGHT
+   ↓
+PERMANENT_FAILURE
+```
+
+The operation must not retry indefinitely.
+
+### 30.49 Idempotency Tests
+
+The same operation must be safely processed more than once.
+
+Example:
+
+```text
+Operation O100
+      ↓
+First Request
+      ↓
+Applied
+
+Operation O100
+      ↓
+Retry
+      ↓
+Already Applied
+```
+
+The result must not create duplicate Domain data.
+
+### 30.50 Duplicate Expense Tests
+
+A duplicated SyncOperation must not create:
+
+```text
+Two Expenses
+```
+
+from:
+
+```text
+One Logical Operation
+```
+
+### 30.51 Duplicate Settlement Tests
+
+A duplicated SyncOperation must not create:
+
+```text
+Two Settlements
+```
+
+from:
+
+```text
+One Logical Operation
+```
+
+### 30.52 Cursor Tests
+
+Tests should validate:
+
+```text
+Initial Cursor
+Cursor Advancement
+Repeated Cursor
+Invalid Cursor
+Gap Detection
+```
+
+### 30.53 Cursor Advancement Safety
+
+The cursor must advance only after the corresponding changes have been safely processed.
+
+### 30.54 Sync Ordering Tests
+
+Where ordering is required, tests should verify:
+
+```text
+Operation A
+      ↓
+Operation B
+```
+
+is processed according to the defined ordering rules.
+
+### 30.55 Sync Batch Tests
+
+Tests should cover:
+
+```text
+Empty Batch
+Single Operation
+Small Batch
+Maximum Batch
+Oversized Batch
+Mixed Success
+Mixed Failure
+```
+
+### 30.56 Sync Pagination Tests
+
+Pull synchronization should test:
+
+```text
+First Page
+Next Page
+Last Page
+Empty Page
+Repeated Page
+Large Change Set
+```
+
+### 30.57 Sync Conflict Tests
+
+Conflict tests should cover:
+
+```text
+No Conflict
+Version Conflict
+Concurrent Update
+Stale Operation
+Conflict Resolution
+```
+
+### 30.58 Conflict Detection Test
+
+Example:
+
+```text
+Server Version = 5
+Client Base Version = 4
+Client Operation = UPDATE
+        ↓
+Conflict
+```
+
+### 30.59 Conflict Resolution Tests
+
+Tests should validate:
+
+```text
+Conflict Created
+Conflict Stored
+Conflict Resolved
+Resolution Operation Created
+Resolution Synchronized
+```
+
+### 30.60 Conflict Data Integrity
+
+Conflict handling must never silently:
+
+```text
+Delete Data
+Overwrite Valid Data
+Duplicate Data
+Skip Operations
+```
+
+### 30.61 Offline-First Tests
+
+Offline behavior must have high test coverage.
+
+### 30.62 Offline Expense Test
+
+```text
+Device Offline
+      ↓
+Create Expense
+      ↓
+Persist Locally
+      ↓
+UI Shows Expense
+      ↓
+SyncOperation = PENDING
+```
+
+### 30.63 Offline Group Test
+
+```text
+Device Offline
+      ↓
+Create Group
+      ↓
+Persist Locally
+      ↓
+Group Available
+```
+
+### 30.64 Offline Settlement Test
+
+```text
+Device Offline
+      ↓
+Create Settlement
+      ↓
+Persist Locally
+      ↓
+SyncOperation Created
+```
+
+### 30.65 Offline Update Test
+
+```text
+Offline
+   ↓
+Update Existing Expense
+   ↓
+Local Update
+   ↓
+SyncOperation Created
+```
+
+### 30.66 Offline Delete Test
+
+If deletion/tombstoning is supported:
+
+```text
+Offline
+   ↓
+Delete / Tombstone
+   ↓
+Local State Updated
+   ↓
+SyncOperation Created
+```
+
+### 30.67 Offline Recovery Test
+
+```text
+Offline
+   ↓
+Create Multiple Operations
+   ↓
+Reconnect
+   ↓
+Synchronization
+   ↓
+All Operations Applied
+```
+
+### 30.68 Connectivity Transition Tests
+
+Test:
+
+```text
+Online → Offline
+Offline → Online
+Online → Offline → Online
+```
+
+### 30.69 Backend Outage Test
+
+```text
+Backend Available
+      ↓
+Create Operation
+      ↓
+Backend Goes Down
+      ↓
+Operation Retryable
+      ↓
+Backend Returns
+      ↓
+Operation Applied
+```
+
+### 30.70 Partial Network Failure Test
+
+Test failures such as:
+
+```text
+Timeout
+Connection Reset
+DNS Failure
+HTTP 500
+HTTP 503
+```
+
+### 30.71 Network Retry Tests
+
+Retry behavior should verify:
+
+```text
+Maximum Attempts
+Backoff
+Retryable Errors
+Non-Retryable Errors
+```
+
+### 30.72 Infinite Retry Prevention
+
+Tests must verify that an operation cannot retry forever.
+
+### 30.73 Backoff Tests
+
+Tests should verify that retries follow the configured backoff strategy.
+
+### 30.74 P2P Testing
+
+P2P communication requires dedicated tests.
+
+Tests should cover:
+
+```text
+Discovery
+Connection
+Handshake
+Authentication
+Protocol Negotiation
+Data Transfer
+Disconnect
+Retry
+```
+
+### 30.75 P2P Discovery Test
+
+```text
+Device A
+   ↓
+Discovery
+   ↓
+Device B Found
+```
+
+### 30.76 P2P Connection Test
+
+```text
+Peer Discovered
+      ↓
+Connection Established
+      ↓
+Session Created
+```
+
+### 30.77 P2P Handshake Test
+
+Test:
+
+```text
+Supported Version
+Unsupported Version
+Invalid Identity
+Invalid Authentication
+```
+
+### 30.78 P2P Version Compatibility Test
+
+Example:
+
+```text
+Device A = Protocol V2
+Device B = Protocol V2
+        ↓
+Compatible
+```
+
+### 30.79 P2P Version Mismatch Test
+
+Example:
+
+```text
+Device A = Protocol V2
+Device B = Protocol V1
+        ↓
+Compatibility Check
+        ↓
+Rejected / Negotiated
+```
+
+according to the defined protocol rules.
+
+### 30.80 P2P Environment Isolation Test
+
+Critical test:
+
+```text
+Development Device
+      ↓
+Production Device
+      ↓
+Connection Rejected
+```
+
+### 30.81 P2P Authentication Test
+
+Invalid peer authentication must result in:
+
+```text
+Connection Rejected
+```
+
+### 30.82 P2P Integrity Test
+
+Tampered messages must be detected.
+
+Example:
+
+```text
+Message
+   ↓
+Modified
+   ↓
+Integrity Verification
+   ↓
+Rejected
+```
+
+### 30.83 P2P Message Size Test
+
+Oversized messages must be rejected.
+
+### 30.84 P2P Disconnect Test
+
+Test:
+
+```text
+Connected
+   ↓
+Connection Lost
+   ↓
+Session Closed
+   ↓
+Operations Preserved
+```
+
+### 30.85 P2P Recovery Test
+
+After reconnecting:
+
+```text
+Pending Operations
+      ↓
+P2P Sync
+      ↓
+Applied / Conflict / Retry
+```
+
+### 30.86 P2P Duplicate Operation Test
+
+The same operation received through P2P more than once must remain idempotent.
+
+### 30.87 P2P and Backend Interoperability Test
+
+Test:
+
+```text
+Device A
+   ↓
+P2P
+   ↓
+Device B
+   ↓
+Backend
+```
+
+The operation must remain consistent across transports.
+
+### 30.88 Transport Independence Test
+
+The same logical SyncOperation must produce equivalent Domain results whether delivered through:
+
+```text
+Backend
+```
+
+or:
+
+```text
+P2P
+```
+
+### 30.89 End-to-End Testing
+
+E2E tests validate complete flows.
+
+Examples:
+
+```text
+Create Group
+Add Members
+Create Expense
+Split Expense
+Synchronize
+Settle
+```
+
+### 30.90 E2E Expense Flow
+
+```text
+Create Group
+      ↓
+Add Members
+      ↓
+Create Expense
+      ↓
+Create Splits
+      ↓
+Persist Locally
+      ↓
+Synchronize
+      ↓
+Verify Backend
+      ↓
+Verify Other Device
+```
+
+### 30.91 E2E Settlement Flow
+
+```text
+Expense
+   ↓
+Balance
+   ↓
+Settlement
+   ↓
+Local Persistence
+   ↓
+Synchronization
+   ↓
+Other Device
+```
+
+### 30.92 E2E Offline Flow
+
+```text
+Create Group
+      ↓
+Offline
+      ↓
+Create Expense
+      ↓
+Create Settlement
+      ↓
+Reconnect
+      ↓
+Synchronize
+      ↓
+Verify Final State
+```
+
+### 30.93 E2E Conflict Flow
+
+```text
+Device A
+   ↓
+Update Expense
+
+Device B
+   ↓
+Update Same Expense
+
+       ↓
+
+Synchronization
+       ↓
+Conflict
+       ↓
+Resolution
+       ↓
+Final Consistent State
+```
+
+### 30.94 E2E P2P Flow
+
+```text
+Device A
+      ↓
+Offline
+      ↓
+Create Operation
+      ↓
+P2P Discovery
+      ↓
+Device B
+      ↓
+Operation Transfer
+      ↓
+Local Application
+```
+
+### 30.95 E2E Backend Sync Flow
+
+```text
+Device
+   ↓
+Local Operation
+   ↓
+SyncOperation
+   ↓
+Backend Push
+   ↓
+Backend Apply
+   ↓
+Backend Pull
+   ↓
+Another Device
+```
+
+### 30.96 UI Testing
+
+Android UI tests should verify:
+
+```text
+Screen Rendering
+User Interaction
+Navigation
+Validation
+Loading State
+Error State
+Offline State
+Sync State
+```
+
+### 30.97 UI Tests and Domain Logic
+
+UI tests should not be the only tests for Domain behavior.
+
+Domain calculations must be tested independently.
+
+### 30.98 UI Offline State
+
+The UI should correctly represent:
+
+```text
+Online
+Offline
+Syncing
+Sync Failed
+Conflict
+```
+
+### 30.99 UI Error State
+
+Tests should verify that technical failures are presented as safe User-facing messages.
+
+### 30.100 UI Synchronization State
+
+The UI should correctly represent the synchronization state without exposing internal implementation details unnecessarily.
+
+### 30.101 Instrumentation Tests
+
+Android Instrumentation Tests should cover components requiring:
+
+```text
+Android Framework
+Room
+DataStore
+WorkManager
+Network Stack
+```
+
+### 30.102 Room Database Tests
+
+Room tests should validate:
+
+```text
+Queries
+Transactions
+Relations
+Migrations
+Converters
+Indexes
+```
+
+### 30.103 DataStore Tests
+
+If DataStore is used, tests should verify:
+
+```text
+Read
+Write
+Default Values
+Corrupted State Handling
+Migration
+```
+
+### 30.104 WorkManager Tests
+
+Background synchronization workers should test:
+
+```text
+Successful Work
+Retry
+Failure
+Cancellation
+Constraints
+```
+
+### 30.105 Network Client Tests
+
+Network tests should validate:
+
+```text
+Serialization
+Deserialization
+Headers
+Authentication
+Error Mapping
+Timeout
+Retry
+```
+
+### 30.106 Serialization Tests
+
+Every synchronization/API model should have serialization tests.
+
+Examples:
+
+```text
+Request → JSON
+JSON → Response
+```
+
+### 30.107 Backward Compatibility Serialization Tests
+
+If older protocol versions are supported, tests should verify compatibility.
+
+### 30.108 Database Transaction Tests
+
+Critical multi-step operations should verify atomicity.
+
+Example:
+
+```text
+Create Expense
++
+Create Splits
++
+Create SyncOperation
+```
+
+If one required step fails:
+
+```text
+Transaction Rollback
+```
+
+must occur.
+
+### 30.109 Transaction Rollback Test
+
+Example:
+
+```text
+Begin Transaction
+      ↓
+Create Expense
+      ↓
+Create Splits
+      ↓
+SyncOperation Creation Fails
+      ↓
+Rollback
+      ↓
+No Partial Expense
+```
+
+### 30.110 Transaction Commit Test
+
+Successful operations must commit all required changes atomically.
+
+### 30.111 Concurrency Testing
+
+Concurrency tests should cover:
+
+```text
+Two Updates
+Two Devices
+Concurrent Expense Updates
+Concurrent Settlements
+Concurrent Sync
+```
+
+### 30.112 Concurrent Expense Update Test
+
+```text
+Device A → Version 5 → Update
+Device B → Version 5 → Update
+              ↓
+          Conflict
+```
+
+### 30.113 Concurrent Membership Test
+
+Concurrent membership changes should produce deterministic results according to the Domain and synchronization rules.
+
+### 30.114 Concurrent Settlement Test
+
+Concurrent settlement operations must not create unintended duplicate settlements.
+
+### 30.115 Race Condition Testing
+
+Tests should attempt to expose:
+
+```text
+Lost Update
+Duplicate Operation
+Double Application
+Incorrect Cursor
+Incorrect Balance
+```
+
+### 30.116 Data Integrity Testing
+
+Data integrity tests should verify:
+
+```text
+Foreign Keys
+Unique Constraints
+Version Constraints
+Required Fields
+Domain Invariants
+```
+
+### 30.117 Financial Integrity Testing
+
+Critical financial tests include:
+
+```text
+Expense Total
+Split Total
+Settlement Amount
+Balance
+Rounding
+Duplicate Prevention
+```
+
+### 30.118 Balance Integrity Test
+
+After synchronization:
+
+```text
+Balance(Device A)
+=
+Balance(Device B)
+=
+Expected Balance
+```
+
+where both devices have converged.
+
+### 30.119 Convergence Testing
+
+A major synchronization test is:
+
+```text
+Same Logical Operations
+        +
+Different Delivery Order
+        ↓
+Final Consistent State
+```
+
+where the conflict-resolution model permits convergence.
+
+### 30.120 Eventual Consistency Test
+
+Test:
+
+```text
+Device A
+   ↓
+Offline Changes
+
+Device B
+   ↓
+Offline Changes
+
+      ↓
+
+Synchronization
+      ↓
+Conflict Resolution
+      ↓
+Converged State
+```
+
+### 30.121 Order Independence Testing
+
+Where operations are designed to be order-independent, tests should verify that different valid delivery orders produce the same final state.
+
+### 30.122 Conflict Determinism Test
+
+The same conflicting input should produce the same resolution result.
+
+### 30.123 Property-Based Testing
+
+Property-based testing may be used for complex financial/synchronization logic.
+
+Examples:
+
+```text
+Split Totals
+Balance Calculations
+Operation Ordering
+Idempotency
+```
+
+### 30.124 Split Property Test
+
+For valid input:
+
+```text
+Sum(Splits) = Expense Total
+```
+
+must always hold.
+
+### 30.125 Idempotency Property Test
+
+Applying the same SyncOperation repeatedly should produce:
+
+```text
+Same Final State
+```
+
+as applying it once.
+
+### 30.126 Fuzz Testing
+
+Fuzz testing may be applied to:
+
+```text
+API Input
+Sync Payload
+P2P Messages
+Serialization
+```
+
+### 30.127 Malformed Payload Tests
+
+Test:
+
+```text
+Missing Fields
+Unknown Fields
+Invalid Types
+Invalid Encoding
+Oversized Payload
+Malformed JSON
+```
+
+### 30.128 Security Fuzz Testing
+
+Security-sensitive parsers should be tested against malformed and unexpected input.
+
+### 30.129 Performance Testing
+
+Performance tests should measure:
+
+```text
+API Latency
+Database Queries
+Sync Throughput
+P2P Throughput
+Local Database Operations
+```
+
+### 30.130 Load Testing
+
+Backend load tests should simulate:
+
+```text
+Multiple Users
+Multiple Groups
+Multiple Expenses
+Multiple Sync Requests
+```
+
+### 30.131 Sync Load Testing
+
+Synchronization load tests should simulate:
+
+```text
+Large Pending Queue
+Large Change Feed
+Multiple Devices
+Concurrent Sync
+```
+
+### 30.132 P2P Performance Testing
+
+P2P tests should measure:
+
+```text
+Connection Time
+Transfer Time
+Throughput
+Large Batch Handling
+```
+
+### 30.133 Database Performance Testing
+
+Database performance tests should measure:
+
+```text
+Expense Queries
+Group Queries
+Sync Change Queries
+Conflict Queries
+```
+
+### 30.134 Pagination Performance
+
+Large datasets should be tested using pagination.
+
+### 30.135 Memory Testing
+
+Android tests should identify excessive memory use during:
+
+```text
+Large Sync
+Large Expense Lists
+P2P Transfer
+Database Migration
+```
+
+### 30.136 Battery Testing
+
+Background synchronization should be tested for excessive:
+
+```text
+CPU
+Network
+Wakeups
+Battery
+```
+
+### 30.137 Network Efficiency Testing
+
+Tests should measure:
+
+```text
+Payload Size
+Compression
+Batching
+Redundant Requests
+Retry Traffic
+```
+
+### 30.138 Regression Testing
+
+Every important bug fix should result in a regression test where practical.
+
+Example:
+
+```text
+Bug
+ ↓
+Fix
+ ↓
+Regression Test
+```
+
+### 30.139 Critical Regression Areas
+
+The regression suite should strongly cover:
+
+```text
+Expense Creation
+Expense Splitting
+Settlement
+Offline Operation
+Synchronization
+Conflict Resolution
+P2P
+Authentication
+Authorization
+Database Migration
+```
+
+### 30.140 Smoke Testing
+
+After deployment, a minimal smoke test should verify:
+
+```text
+Application Starts
+API Available
+Database Available
+Authentication Works
+Basic Expense Flow Works
+Synchronization Works
+```
+
+### 30.141 Staging Smoke Tests
+
+Staging smoke tests should run before Production deployment.
+
+### 30.142 Production Smoke Tests
+
+Production smoke tests should be safe and non-destructive.
+
+Example:
+
+```text
+Health Check
+Authentication Check
+Read-Only API Check
+```
+
+Write operations should only be used when explicitly designed for safe validation.
+
+### 30.143 Test Environment Strategy
+
+Testing should use:
+
+```text
+Development
+Test
+Staging
+Production
+```
+
+appropriately.
+
+### 30.144 Test Environment Isolation
+
+Tests must not accidentally access:
+
+```text
+Production Database
+Production API
+Production P2P Devices
+```
+
+### 30.145 Test Configuration
+
+Test configuration must be explicit.
+
+Example:
+
+```text
+environment=test
+```
+
+### 30.146 Test Secrets
+
+Test environments should use:
+
+```text
+Test Credentials
+Test Keys
+Test Certificates
+```
+
+rather than Production secrets.
+
+### 30.147 Test Data Builders
+
+Test data builders/factories should be used where they improve consistency.
+
+Examples:
+
+```text
+UserFactory
+GroupFactory
+ExpenseFactory
+ExpenseSplitFactory
+SettlementFactory
+SyncOperationFactory
+```
+
+### 30.148 Test Fixtures
+
+Reusable fixtures may represent:
+
+```text
+Valid Group
+Valid Expense
+Valid Split
+Valid Settlement
+Conflict Scenario
+Offline Queue
+```
+
+### 30.149 Test Data Determinism
+
+Tests should use deterministic inputs where possible.
+
+Avoid relying on:
+
+```text
+Current Time
+Random IDs
+External Network
+External Services
+```
+
+unless the test specifically targets them.
+
+### 30.150 Clock Testing
+
+Time-dependent code should support controlled clocks where necessary.
+
+This allows tests such as:
+
+```text
+Timestamp T1
+Timestamp T2
+```
+
+without relying on real system time.
+
+### 30.151 ID Testing
+
+Tests should avoid depending on random identifiers unless identifier generation itself is being tested.
+
+### 30.152 Mocking Strategy
+
+Mocks may be used for:
+
+```text
+External Services
+Repositories
+Network
+Clock
+Randomness
+```
+
+when testing isolated components.
+
+### 30.153 Mocking Anti-Pattern
+
+Do not mock every internal component in integration tests.
+
+Integration Tests should validate real component interaction.
+
+### 30.154 Test Doubles
+
+Possible test doubles include:
+
+```text
+Mock
+Stub
+Fake
+Spy
+```
+
+The simplest appropriate mechanism should be used.
+
+### 30.155 Repository Fake
+
+A repository fake may be useful for testing Application Services without requiring a database.
+
+### 30.156 Network Fake
+
+A network fake may simulate:
+
+```text
+Success
+Timeout
+500
+503
+Malformed Response
+```
+
+### 30.157 Sync Test Harness
+
+A dedicated synchronization test harness should simulate:
+
+```text
+Device State
+Backend State
+Pending Operations
+Change Feed
+Conflicts
+```
+
+### 30.158 Multi-Device Test Harness
+
+Synchronization tests should support scenarios such as:
+
+```text
+Device A
+Device B
+Device C
+Backend
+```
+
+### 30.159 Multi-Device Convergence Test
+
+```text
+Device A
+   ↓
+Operation A
+
+Device B
+   ↓
+Operation B
+
+Device C
+   ↓
+Operation C
+
+        ↓
+
+Synchronization
+        ↓
+Convergence
+```
+
+### 30.160 P2P Test Harness
+
+A P2P test harness should simulate:
+
+```text
+Peer Discovery
+Connection
+Handshake
+Message Transfer
+Disconnect
+Reconnection
+```
+
+### 30.161 Backend Test Containers
+
+Where appropriate, integration tests may use isolated infrastructure such as:
+
+```text
+Test Database Container
+```
+
+to test real database behavior.
+
+The exact tooling is implementation-specific.
+
+### 30.162 Test Database Strategy
+
+Tests requiring database behavior should preferably use the same database technology as Production.
+
+This helps detect:
+
+```text
+SQL Differences
+Constraint Differences
+Transaction Differences
+Index Behavior
+```
+
+### 30.163 Test Migration Strategy
+
+Migration tests should start from known schema versions.
+
+Example:
+
+```text
+V1
+ ↓
+V2
+ ↓
+V3
+```
+
+### 30.164 Migration Upgrade Test
+
+Test upgrades from:
+
+```text
+Previous Supported Version
+```
+
+to:
+
+```text
+Current Version
+```
+
+### 30.165 Migration Failure Test
+
+If a migration fails:
+
+```text
+Migration Failure
+      ↓
+Application Does Not Start Normally
+```
+
+or follows the defined recovery procedure.
+
+### 30.166 API Compatibility Testing
+
+When maintaining backward compatibility:
+
+```text
+Old Client
+   ↓
+Current Backend
+```
+
+must be tested where supported.
+
+### 30.167 Sync Compatibility Testing
+
+Supported protocol combinations should be tested.
+
+Example:
+
+```text
+Client V1
+Backend V1
+```
+
+### 30.168 P2P Compatibility Testing
+
+Supported P2P protocol combinations should be tested.
+
+### 30.169 Version Upgrade Testing
+
+Test:
+
+```text
+Old App
+   ↓
+Upgrade
+   ↓
+New App
+   ↓
+Existing Local Data
+   ↓
+Synchronization
+```
+
+### 30.170 Upgrade Data Preservation
+
+Upgrade tests must verify:
+
+```text
+Groups Preserved
+Expenses Preserved
+Splits Preserved
+Settlements Preserved
+SyncOperations Preserved
+Conflicts Preserved
+```
+
+### 30.171 Upgrade Offline Test
+
+```text
+Old App
+   ↓
+Offline Changes
+   ↓
+Upgrade
+   ↓
+Pending SyncOperations Preserved
+   ↓
+Synchronization
+```
+
+### 30.172 Upgrade Migration Test
+
+Database migrations must preserve pending synchronization state.
+
+### 30.173 Failure Injection Testing
+
+Failure injection may be used to simulate:
+
+```text
+Database Failure
+Network Failure
+Backend Failure
+P2P Disconnect
+Storage Failure
+Timeout
+```
+
+### 30.174 Failure Recovery Testing
+
+Every critical failure should have a recovery test.
+
+### 30.175 Crash Recovery Testing
+
+Android should recover safely after:
+
+```text
+Application Crash
+Process Kill
+Device Restart
+```
+
+### 30.176 Crash During Expense Creation
+
+Test:
+
+```text
+Expense Creation
+      ↓
+Application Crash
+      ↓
+Restart
+      ↓
+Verify Local State
+```
+
+### 30.177 Crash During Synchronization
+
+Test:
+
+```text
+Sync In Progress
+      ↓
+Application Crash
+      ↓
+Restart
+      ↓
+Pending Operation Recovered
+      ↓
+Retry Safely
+```
+
+### 30.178 Crash During Transaction
+
+Database transaction tests should verify that partial state is not persisted.
+
+### 30.179 Process Death Testing
+
+Android background synchronization should be tested against process termination.
+
+### 30.180 Device Restart Testing
+
+After device restart:
+
+```text
+Local Data
+SyncState
+Pending Operations
+Conflicts
+```
+
+must remain consistent.
+
+### 30.181 Storage Failure Testing
+
+Where practical, test behavior when local storage operations fail.
+
+### 30.182 Permission Failure Testing
+
+Android tests should cover required permission failures, especially for P2P functionality.
+
+### 30.183 Connectivity Permission Testing
+
+If P2P functionality requires Android permissions, test:
+
+```text
+Permission Granted
+Permission Denied
+Permission Revoked
+```
+
+### 30.184 Background Restriction Testing
+
+Synchronization should be tested under Android background execution constraints.
+
+### 30.185 Test Coverage
+
+Coverage should be used as a quality indicator, not as the only quality measure.
+
+Critical Domain and synchronization logic should have high coverage.
+
+### 30.186 Coverage Priority
+
+Highest coverage priority:
+
+```text
+Domain Rules
+Financial Calculations
+Synchronization
+Conflict Resolution
+Security
+Persistence
+```
+
+### 30.187 Coverage Does Not Guarantee Correctness
+
+A test suite with high code coverage can still miss:
+
+```text
+Concurrency Bugs
+Data Corruption
+Incorrect Business Rules
+Protocol Compatibility
+```
+
+Therefore scenario-based testing remains mandatory.
+
+### 30.188 Mutation Testing
+
+Mutation testing may be introduced for critical Domain logic.
+
+This can help verify that tests actually detect incorrect behavior.
+
+### 30.189 Test Naming
+
+Tests should clearly describe:
+
+```text
+Given
+When
+Then
+```
+
+Example:
+
+```text
+givenExpenseWithValidSplits_whenCreatingExpense_thenSplitTotalMatchesExpenseTotal
+```
+
+### 30.190 Test Organization
+
+Tests should follow production package boundaries where practical.
+
+Example:
+
+```text
+domain/
+application/
+repository/
+sync/
+security/
+api/
+```
+
+### 30.191 Test Categories
+
+Tests may be categorized as:
+
+```text
+unit
+integration
+e2e
+security
+performance
+regression
+```
+
+### 30.192 Test Tags
+
+Tests may use tags such as:
+
+```text
+@Unit
+@Integration
+@E2E
+@Security
+@Performance
+```
+
+The exact framework-specific mechanism is implementation-dependent.
+
+### 30.193 Fast Test Suite
+
+The fast suite should contain:
+
+```text
+Unit Tests
+Pure Domain Tests
+Small Application Tests
+```
+
+and should run frequently.
+
+### 30.194 Full Test Suite
+
+The full suite should include:
+
+```text
+Unit
+Integration
+Database
+API
+Sync
+P2P
+Security
+E2E
+```
+
+### 30.195 CI Test Pipeline
+
+Recommended:
+
+```text
+Commit
+ ↓
+Compile
+ ↓
+Static Checks
+ ↓
+Unit Tests
+ ↓
+Integration Tests
+ ↓
+Security Tests
+ ↓
+Build
+ ↓
+E2E / Staging
+```
+
+### 30.196 Pull Request Testing
+
+Pull Requests should run at least:
+
+```text
+Compilation
+Unit Tests
+Relevant Integration Tests
+Static Analysis
+```
+
+### 30.197 Merge Protection
+
+Critical branches should require passing tests before merge.
+
+### 30.198 Release Testing
+
+Before Production release:
+
+```text
+Full Unit Suite
+Integration Suite
+Regression Suite
+Security Checks
+Migration Tests
+Sync Tests
+Staging E2E
+Smoke Tests
+```
+
+should pass according to release policy.
+
+### 30.199 Release Blocking Tests
+
+The following should be release-blocking:
+
+```text
+Financial Integrity Failure
+Critical Security Failure
+Synchronization Data Loss
+Duplicate Expense Creation
+Duplicate Settlement Creation
+Broken Database Migration
+Critical API Contract Break
+```
+
+### 30.200 Test Failure Handling
+
+A failing test should not be ignored merely to allow deployment.
+
+Exceptions require explicit review.
+
+### 30.201 Flaky Tests
+
+Flaky tests must be tracked and fixed.
+
+A flaky test must not simply be disabled permanently.
+
+### 30.202 Test Reliability
+
+Tests should be:
+
+```text
+Deterministic
+Repeatable
+Isolated
+Fast Where Possible
+```
+
+### 30.203 External Dependency Tests
+
+Tests depending on external services should be isolated and clearly marked.
+
+Production external services should not be required for normal CI execution.
+
+### 30.204 Test Environment Cleanup
+
+Integration tests must clean up resources after execution.
+
+Examples:
+
+```text
+Database
+Temporary Files
+Network Resources
+P2P Sessions
+```
+
+### 30.205 Test Parallelization
+
+Independent tests may run in parallel.
+
+Tests sharing mutable state must be isolated.
+
+### 30.206 Parallel Database Tests
+
+Parallel tests should not accidentally modify the same data.
+
+### 30.207 Parallel Sync Tests
+
+Synchronization tests should use independent:
+
+```text
+Devices
+Groups
+Operations
+Databases
+```
+
+where necessary.
+
+### 30.208 Test Isolation
+
+One test must not depend on another test having run first.
+
+### 30.209 Test Order Independence
+
+Tests should pass regardless of execution order unless an explicit ordered integration workflow is being tested.
+
+### 30.210 Test Timeouts
+
+Tests involving:
+
+```text
+Network
+P2P
+Database
+Synchronization
+```
+
+must have bounded timeouts.
+
+### 30.211 Test Retry
+
+Test retries should be used carefully.
+
+Retries can hide flaky or nondeterministic behavior.
+
+### 30.212 Test Reports
+
+CI should produce test reports containing:
+
+```text
+Passed
+Failed
+Skipped
+Duration
+Coverage
+```
+
+### 30.213 Test Failure Diagnostics
+
+Failed tests should provide enough information to identify:
+
+```text
+Test Name
+Environment
+Version
+Failure
+Stack Trace
+Relevant IDs
+```
+
+### 30.214 Test Artifacts
+
+CI may retain:
+
+```text
+Test Reports
+Logs
+Screenshots
+Crash Reports
+Performance Results
+```
+
+according to retention policy.
+
+### 30.215 Android UI Failure Artifacts
+
+UI test failures may capture:
+
+```text
+Screenshot
+UI Hierarchy
+Logcat
+```
+
+Sensitive information must be handled appropriately.
+
+### 30.216 Backend Test Failure Artifacts
+
+Backend integration failures may retain:
+
+```text
+Application Logs
+Database Logs
+Request ID
+Test Report
+```
+
+### 30.217 Security Test Reports
+
+Security test results should be handled with appropriate access control.
+
+### 30.218 Performance Baselines
+
+Performance tests should establish baselines for:
+
+```text
+API Latency
+Sync Duration
+Database Queries
+P2P Transfer
+```
+
+### 30.219 Performance Regression
+
+A significant degradation against an established baseline should trigger investigation.
+
+### 30.220 Synchronization Performance Baseline
+
+Measure:
+
+```text
+Operations / Second
+Batch Duration
+Change Feed Processing
+Conflict Processing
+```
+
+### 30.221 P2P Performance Baseline
+
+Measure:
+
+```text
+Discovery Time
+Connection Time
+Transfer Rate
+Session Duration
+```
+
+### 30.222 Local Database Performance Baseline
+
+Measure:
+
+```text
+Expense Insert
+Expense Query
+Group Query
+Sync Queue Query
+```
+
+### 30.223 Test Documentation
+
+Complex test scenarios should be documented.
+
+Especially:
+
+```text
+Conflict Resolution
+P2P Synchronization
+Migration
+Recovery
+```
+
+### 30.224 Test Case Traceability
+
+Critical requirements should map to tests.
+
+Conceptually:
+
+```text
+Requirement
+    ↓
+Test Case
+    ↓
+Implementation
+    ↓
+Result
+```
+
+### 30.225 Critical Requirement Traceability
+
+Examples:
+
+```text
+Expense Split Invariant
+        ↓
+Expense Split Unit Tests
+
+Idempotent Sync
+        ↓
+Sync Integration Tests
+
+P2P Authentication
+        ↓
+P2P Security Tests
+```
+
+### 30.226 Test Strategy Summary
+
+```text
+Testing
+│
+├── Unit
+│   ├── Domain
+│   ├── Services
+│   └── Utilities
+│
+├── Integration
+│   ├── Database
+│   ├── API
+│   ├── Repository
+│   └── Sync
+│
+├── P2P
+│   ├── Discovery
+│   ├── Handshake
+│   ├── Transfer
+│   └── Recovery
+│
+├── E2E
+│   ├── Expense
+│   ├── Settlement
+│   ├── Offline
+│   └── Conflict
+│
+├── Security
+│   ├── Authentication
+│   ├── Authorization
+│   ├── Integrity
+│   └── Input Validation
+│
+└── Performance
+    ├── API
+    ├── Database
+    ├── Sync
+    └── P2P
+```
+
+### 30.227 Complete Test Flow
+
+```text
+Code Change
+    ↓
+Compile
+    ↓
+Unit Tests
+    ↓
+Integration Tests
+    ↓
+Database Tests
+    ↓
+API Tests
+    ↓
+Synchronization Tests
+    ↓
+P2P Tests
+    ↓
+Security Tests
+    ↓
+E2E Tests
+    ↓
+Performance / Regression
+    ↓
+Release Validation
+```
+
+### 30.228 Synchronization Test Flow
+
+```text
+Local Operation
+      ↓
+SyncOperation
+      ↓
+Queue
+      ↓
+Push / P2P
+      ↓
+Backend / Peer
+      ↓
+Idempotency
+      ↓
+Conflict Detection
+      ↓
+Apply
+      ↓
+Cursor
+      ↓
+Pull
+      ↓
+Final State
+      ↓
+Convergence Verification
+```
+
+### 30.229 Offline Test Flow
+
+```text
+Device Online
+      ↓
+Device Offline
+      ↓
+Create / Update
+      ↓
+Local Persistence
+      ↓
+SyncOperation = PENDING
+      ↓
+Application Restart
+      ↓
+Pending State Preserved
+      ↓
+Network Restored
+      ↓
+Synchronization
+      ↓
+Final State Verified
+```
+
+### 30.230 Conflict Test Flow
+
+```text
+Initial Version
+      ↓
+Device A Update
+      ↓
+Device B Update
+      ↓
+Synchronization
+      ↓
+Version Mismatch
+      ↓
+Conflict Created
+      ↓
+Conflict Resolution
+      ↓
+Resolution Operation
+      ↓
+Synchronization
+      ↓
+Converged State
+```
+
+### 30.231 P2P Test Flow
+
+```text
+Device A
+   ↓
+Discovery
+   ↓
+Device B
+   ↓
+Environment Check
+   ↓
+Authentication
+   ↓
+Protocol Negotiation
+   ↓
+Session
+   ↓
+Sync Operations
+   ↓
+Integrity Verification
+   ↓
+Apply
+   ↓
+Session Close
+```
+
+### 30.232 Crash Recovery Test Flow
+
+```text
+Operation Started
+      ↓
+Application / Process Crash
+      ↓
+Restart
+      ↓
+Load Local State
+      ↓
+Recover Sync State
+      ↓
+Detect Pending Operation
+      ↓
+Retry Safely
+      ↓
+Idempotency Check
+      ↓
+Final State
+```
+
+### 30.233 Release Validation Flow
+
+```text
+Build
+ ↓
+Unit Tests
+ ↓
+Integration Tests
+ ↓
+Security Tests
+ ↓
+Migration Tests
+ ↓
+Synchronization Tests
+ ↓
+P2P Tests
+ ↓
+Staging E2E
+ ↓
+Smoke Tests
+ ↓
+Release Approval
+ ↓
+Production
+```
+
+### 30.234 Testing Invariants
+
+The following rules are mandatory for V1:
+
+- Domain logic must have Unit Tests.
+- Financial calculations must have dedicated tests.
+- Expense validation must be tested.
+- Expense Split validation must be tested.
+- Settlement validation must be tested.
+- Group and Membership rules must be tested.
+- Balance calculations must be tested.
+- Currency and rounding behavior must be tested.
+- Domain invariants must be explicitly tested.
+- The sum of ExpenseSplits must equal the Expense total for valid Expenses.
+- Invalid financial data must be rejected.
+- Local database operations must be tested.
+- Database migrations must be tested.
+- Database migrations must preserve valid existing data.
+- Database migrations must preserve pending SyncOperations.
+- Database migrations must preserve Conflict state where applicable.
+- Repository behavior must be tested.
+- API request validation must be tested.
+- API response contracts must be tested.
+- API version compatibility must be tested where supported.
+- Authentication must be tested.
+- Authorization must be tested.
+- Invalid authentication must be rejected.
+- Unauthorized resource access must be rejected.
+- Synchronization must have dedicated tests.
+- SyncOperation state transitions must be tested.
+- Sync retry behavior must be tested.
+- Retryable and non-retryable errors must be distinguished.
+- Infinite synchronization retries must be prevented.
+- Synchronization must be idempotent.
+- Duplicate SyncOperations must not create duplicate Domain entities.
+- Duplicate Expense operations must not create duplicate Expenses.
+- Duplicate Settlement operations must not create duplicate Settlements.
+- Sync cursor advancement must be tested.
+- Sync ordering must be tested where ordering is required.
+- Sync batching must be tested.
+- Sync pagination must be tested.
+- Conflict detection must be tested.
+- Conflict resolution must be tested.
+- Conflict resolution must be deterministic.
+- Synchronization must preserve data integrity.
+- Offline operations must be tested.
+- Offline Expense creation must be tested.
+- Offline Settlement creation must be tested.
+- Offline updates must be tested.
+- Offline synchronization queueing must be tested.
+- Offline state must survive application restart.
+- Backend outage recovery must be tested.
+- Connectivity transitions must be tested.
+- Network timeout behavior must be tested.
+- Network retry behavior must be tested.
+- P2P discovery must be tested.
+- P2P connection must be tested.
+- P2P authentication must be tested.
+- P2P protocol negotiation must be tested.
+- P2P version mismatch must be tested.
+- P2P environment isolation must be tested.
+- P2P message integrity must be tested.
+- P2P message size limits must be tested.
+- P2P disconnect recovery must be tested.
+- P2P duplicate operation handling must be tested.
+- P2P and Backend synchronization must be tested for interoperability.
+- The same logical operation must remain consistent regardless of transport.
+- End-to-End Expense flows must be tested.
+- End-to-End Settlement flows must be tested.
+- End-to-End Offline flows must be tested.
+- End-to-End Conflict flows must be tested.
+- Android UI states must be tested.
+- Android offline UI behavior must be tested.
+- Android synchronization UI behavior must be tested.
+- Android background synchronization must be tested.
+- Android process death must be tested where applicable.
+- Android application restart must preserve required local state.
+- Crash recovery must be tested.
+- Transaction atomicity must be tested.
+- Transaction rollback must be tested.
+- Transaction commit must be tested.
+- Concurrent updates must be tested.
+- Race conditions must be tested where relevant.
+- Eventual consistency must be tested.
+- Convergence must be tested.
+- Property-based testing should be considered for critical financial and synchronization logic.
+- Malformed API payloads must be tested.
+- Malformed synchronization payloads must be tested.
+- Malformed P2P messages must be tested.
+- Security negative cases must be tested.
+- Sensitive information must not appear in test logs.
+- Production credentials must never be required by automated tests.
+- Test environments must remain isolated from Production.
+- Production databases must never be modified by normal automated tests.
+- Tests must be deterministic where practical.
+- Tests must be independent.
+- Tests must not depend on execution order.
+- Integration tests must use isolated infrastructure.
+- Test databases must be isolated.
+- Test P2P devices must be isolated from Production devices.
+- Performance baselines should be established for critical operations.
+- API performance should be tested.
+- Database performance should be tested.
+- Synchronization performance should be tested.
+- P2P performance should be tested.
+- Android memory usage should be tested for large synchronization workloads.
+- Android battery impact should be evaluated for background synchronization.
+- Regression tests must be added for important defects.
+- Critical financial integrity failures must block release.
+- Critical security failures must block release.
+- Synchronization data loss must block release.
+- Duplicate financial entity creation must block release.
+- Broken database migrations must block release.
+- Breaking API contract changes must block release unless intentionally versioned.
+- Staging must validate critical release flows before Production.
+- Production smoke tests must be safe and non-destructive.
+- Test results must be available through CI/CD.
+- Flaky tests must be investigated rather than permanently ignored.
+- Critical requirements should be traceable to tests.
+- Testing must preserve the local-first architecture.
+- Testing must preserve the offline-first behavior of SplitSync.
