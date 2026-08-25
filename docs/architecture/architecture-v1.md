@@ -10617,6 +10617,2916 @@ The following invariants must always hold:
 
 ## 22. Future Extensions
 
+### 22.1 Purpose
+
+The V1 architecture is intentionally designed to provide a stable foundation for future SplitSync features without requiring a redesign of the core expense domain.
+
+Future features should extend the existing:
+
+- User model.
+- Device model.
+- Group model.
+- Expense model.
+- Expense Split model.
+- Settlement model.
+- Offline-first architecture.
+- Synchronization architecture.
+- Security architecture.
+
+Future extensions must preserve the core principle:
+
+> New features must not unnecessarily break offline-first functionality.
+
+### 22.2 Multiple Users Per Device
+
+V1 supports one active local user per application installation.
+
+A future version may support multiple users on the same device.
+
+Potential capabilities include:
+
+- Multiple local profiles.
+- User switching.
+- Local profile locking.
+- Separate local data access.
+- Multiple device associations per user.
+
+The existing User and Device models should remain extensible enough to support this evolution.
+
+### 22.3 Account-Based User Management
+
+Future versions may provide more complete account management.
+
+Potential features include:
+
+- Online account registration.
+- Login.
+- Logout.
+- Password or passwordless authentication.
+- Account recovery.
+- Account verification.
+- Account deletion.
+
+Offline local profiles should remain compatible with the account model where technically feasible.
+
+### 22.4 Phone Number and Email Verification
+
+Future versions may support verified identity/contact information.
+
+Potential features include:
+
+- Phone number verification.
+- Email verification.
+- OTP-based verification.
+- Account recovery through verified contact information.
+
+Phone number and email must remain contact/verification attributes rather than replacing the stable `userId`.
+
+### 22.5 Profile Enhancements
+
+Future profile capabilities may include:
+
+- Profile photo.
+- Custom avatar.
+- Preferred display name.
+- Optional bio.
+- User preferences.
+- Currency preference.
+- Timezone preference.
+
+Profile synchronization should continue to expose only information appropriate for the user's privacy settings.
+
+### 22.6 Advanced Group Types
+
+The Group model may be extended with additional group contexts.
+
+Examples include:
+
+- Trip.
+- Family.
+- Household.
+- Friends.
+- Office.
+- Event.
+- Project.
+- Sports team.
+- Shared subscription group.
+
+These should continue to use the general-purpose Group model rather than introducing unrelated expense-management models.
+
+### 22.7 Group Templates
+
+Future versions may provide predefined group templates.
+
+Examples:
+
+    Trip
+        ↓
+    Travel expenses
+    Accommodation
+    Food
+    Transport
+
+    Household
+        ↓
+    Rent
+    Utilities
+    Groceries
+
+Templates should configure group behavior without changing the underlying expense model.
+
+### 22.8 Recurring Expenses
+
+Future versions may support recurring expenses.
+
+Examples include:
+
+- Monthly rent.
+- Subscription.
+- Internet bill.
+- Utility bill.
+- Regular household expense.
+
+A recurring expense should generate normal Expense records rather than becoming a fundamentally different financial entity unless required by future business rules.
+
+### 22.9 Expense Categories
+
+The Expense model may be extended with richer categorization.
+
+Potential categories include:
+
+- Food.
+- Travel.
+- Accommodation.
+- Transport.
+- Shopping.
+- Entertainment.
+- Utilities.
+- Medical.
+- Other.
+
+Future versions may also support:
+
+- Custom categories.
+- Category icons.
+- Category colors.
+- Category-based reports.
+
+### 22.10 Attachments
+
+Future versions may allow users to attach supporting information to expenses.
+
+Examples include:
+
+- Receipt photos.
+- Bills.
+- Invoices.
+- Documents.
+
+Attachments would require additional considerations for:
+
+- Local storage.
+- Backend storage.
+- Peer-to-peer transfer.
+- Synchronization.
+- Encryption.
+- Storage limits.
+
+Attachment synchronization should remain independent from the core financial entity synchronization where practical.
+
+### 22.11 Receipt Scanning
+
+A future version may support receipt scanning using the device camera.
+
+Potential capabilities include:
+
+- Receipt image capture.
+- OCR.
+- Merchant extraction.
+- Amount extraction.
+- Date extraction.
+- Category suggestions.
+
+The extracted information must remain user-editable and must not automatically be considered financially authoritative without validation.
+
+### 22.12 Advanced Split Methods
+
+Future versions may support additional splitting strategies.
+
+Potential examples include:
+
+- Item-level splitting.
+- Percentage with adjustments.
+- Weighted shares.
+- Custom formulas.
+- Tax-aware splitting.
+- Discount-aware splitting.
+- Tip splitting.
+- Mixed split methods.
+
+New split methods must preserve the core invariant:
+
+    Sum(Expense Splits)
+        =
+    Expense Amount
+
+according to the defined financial rules.
+
+### 22.13 Item-Level Expense Splitting
+
+A future version may allow:
+
+    Receipt
+        ↓
+    Item A → User 1
+    Item B → User 2
+    Item C → User 1 + User 3
+
+This would provide more detailed expense allocation.
+
+The existing Expense and Expense Split architecture should remain the foundation for this feature.
+
+### 22.14 Multi-Currency Support
+
+V1 is designed around a Group using a primary currency.
+
+Future versions may support multiple currencies within the same Group.
+
+Potential requirements include:
+
+- Original expense currency.
+- Group base currency.
+- Exchange rates.
+- Conversion date.
+- Manual exchange rates.
+- Automatic exchange rates.
+- Currency-aware settlements.
+
+Multi-currency support must preserve historical exchange-rate information so that old financial records do not unexpectedly change when exchange rates change.
+
+### 22.15 Advanced Settlement Optimization
+
+Future versions may optimize settlement recommendations.
+
+For example:
+
+    Before Optimization
+
+    A → B ₹500
+    A → C ₹300
+    D → A ₹600
+
+may be simplified into a smaller number of transactions.
+
+The optimization must preserve the final net balances.
+
+Settlement optimization should remain a derived calculation and must not modify the authoritative Expense or Settlement history without explicit user action.
+
+### 22.16 Settlement Suggestions
+
+The application may automatically suggest:
+
+    "Rahul should pay Amit ₹750"
+
+based on current group balances.
+
+Suggestions should be derived from:
+
+- Expenses.
+- Expense Splits.
+- Existing settlements.
+
+Users should explicitly confirm any actual settlement transaction.
+
+### 22.17 Group Activity History
+
+Future versions may provide a detailed activity timeline.
+
+Examples:
+
+    Rahul added an expense
+    Amit joined the group
+    Priya recorded a settlement
+    Rahul edited an expense
+
+Activity history may be stored as an audit-oriented model rather than modifying the primary financial entities.
+
+### 22.18 Audit Trail
+
+Future versions may provide stronger financial auditability.
+
+Potential information includes:
+
+- Who created a record.
+- Who modified it.
+- When it was modified.
+- Previous value.
+- New value.
+- Synchronization source.
+- Device that performed the operation.
+
+Audit data may be particularly useful for:
+
+- Office groups.
+- Shared households.
+- Large groups.
+- Dispute resolution.
+
+### 22.19 Notifications
+
+Future versions may support notifications for:
+
+- New group invitations.
+- New expenses.
+- Expense modifications.
+- Settlement requests.
+- Settlement confirmations.
+- Synchronization completion.
+- Conflict notifications.
+
+Notifications must not become a dependency for core expense functionality.
+
+### 22.20 Offline Notifications
+
+Where supported by Android, local notifications may be generated without internet connectivity.
+
+For example:
+
+    Settlement Due
+        ↓
+    Local Reminder
+        ↓
+    Android Notification
+
+The application should not require backend availability for locally generated reminders.
+
+### 22.21 Real-Time Online Synchronization
+
+Future versions may provide faster online synchronization.
+
+Potential technologies include:
+
+- WebSockets.
+- Server-Sent Events.
+- Push notifications.
+- Other real-time communication mechanisms.
+
+The local database should remain the primary application state.
+
+Real-time communication should update synchronization state rather than bypassing the local persistence architecture.
+
+### 22.22 Advanced Peer-to-Peer Networking
+
+Future versions may extend local synchronization beyond direct peer-to-peer connections.
+
+Potential capabilities include:
+
+- Multi-hop synchronization.
+- Temporary synchronization relays.
+- Group synchronization hubs.
+- Improved discovery.
+- Automatic peer synchronization.
+- More advanced local-network protocols.
+
+These features must preserve the same authorization and synchronization semantics defined in V1.
+
+### 22.23 Temporary Local Group Hub
+
+A future version may allow one authorized device to act as a temporary local synchronization hub.
+
+For example:
+
+    Device A
+       ↑
+    Device B ←→ Device C
+       ↑
+    Device D
+
+This could help groups synchronize without every device directly connecting to every other device.
+
+Such a feature must not automatically grant the hub device access to data it is not authorized to access.
+
+### 22.24 QR Code Group Joining
+
+Future versions may support QR-code-based group joining.
+
+For example:
+
+    Group Owner
+        ↓
+    Generate QR Code
+        ↓
+    Friend Scans QR
+        ↓
+    Verify Invitation
+        ↓
+    Join Group
+
+The QR code should contain only the information required to initiate the joining process.
+
+Sensitive group financial data must not be embedded directly in the QR code.
+
+### 22.25 Nearby User Discovery Enhancements
+
+Future versions may improve local discovery with:
+
+- Profile avatars.
+- Friendly device names.
+- Temporary pairing codes.
+- QR-based verification.
+- Contact matching where explicitly authorized.
+
+Discovery must continue to minimize unnecessary exposure of personal information.
+
+### 22.26 Group Access Links
+
+A future version may support secure invitation links.
+
+Potential flow:
+
+    Generate Invitation
+        ↓
+    Share Link
+        ↓
+    User Opens Link
+        ↓
+    Authenticate / Verify
+        ↓
+    Accept Group Invitation
+
+Invitation links must be:
+
+- Time-limited where appropriate.
+- Revocable.
+- Scoped to the intended Group.
+- Protected against unauthorized reuse.
+
+### 22.27 Advanced Permissions
+
+Future versions may introduce more granular group permissions.
+
+Examples:
+
+- Owner.
+- Admin.
+- Member.
+- Viewer.
+- Expense Manager.
+- Settlement Manager.
+
+Permissions should be represented independently from UI visibility.
+
+The backend must remain authoritative for online authorization.
+
+### 22.28 Group-Level Privacy
+
+Future versions may allow users to control what profile information is visible to other members.
+
+Possible controls include:
+
+- Display name visibility.
+- Phone visibility.
+- Email visibility.
+- Profile photo visibility.
+
+Privacy settings must not prevent the system from maintaining the stable technical identity required for synchronization.
+
+### 22.29 Data Export
+
+Future versions may allow users to export group financial data.
+
+Possible formats include:
+
+- CSV.
+- JSON.
+- PDF.
+- Excel.
+
+Exports should be generated from authoritative financial records.
+
+### 22.30 Data Import
+
+Future versions may support importing expenses from:
+
+- CSV.
+- Excel.
+- JSON.
+- Other expense applications.
+
+Imported data must pass the same financial validation rules as manually created expenses.
+
+### 22.31 Backup and Restore
+
+Future versions may provide explicit backup and restore capabilities.
+
+Potential options include:
+
+- Backend cloud backup.
+- Encrypted backup files.
+- Device-to-device backup.
+- User-controlled export/import.
+
+Backup and restore must preserve stable business identifiers to prevent duplicate records after restoration.
+
+### 22.32 Encrypted Backup
+
+Sensitive financial data may be stored in encrypted backup files.
+
+Potential flow:
+
+    Local Data
+        ↓
+    Encrypt
+        ↓
+    Backup
+        ↓
+    Restore
+        ↓
+    Decrypt
+        ↓
+    Validate
+        ↓
+    Local Database
+
+The encryption key must be protected separately from the backup data where appropriate.
+
+### 22.33 Analytics and Reports
+
+Future versions may provide:
+
+- Total group spending.
+- Spending by member.
+- Spending by category.
+- Spending over time.
+- Monthly reports.
+- Trip summaries.
+- Settlement summaries.
+
+Analytics must be derived from authoritative financial data.
+
+### 22.34 Charts and Visualization
+
+Future UI versions may include:
+
+- Expense charts.
+- Category charts.
+- Member contribution charts.
+- Spending timelines.
+- Balance visualizations.
+
+These features should remain presentation-layer functionality and must not alter the underlying financial model.
+
+### 22.35 Search
+
+Future versions may provide global and group-level search.
+
+Users may search by:
+
+- Expense description.
+- Member.
+- Category.
+- Date.
+- Amount.
+- Notes.
+
+Search should use appropriate local database indexes and should not require internet connectivity for locally stored data.
+
+### 22.36 Advanced Filtering
+
+Future versions may support filters such as:
+
+    Date Range
+    Member
+    Category
+    Amount
+    Payer
+    Participant
+    Settlement Status
+
+Filtering should work against local data first.
+
+### 22.37 Group Archiving
+
+Future versions may support archiving completed groups.
+
+For example:
+
+    Goa Trip 2026
+        ↓
+    Trip Completed
+        ↓
+    Archive Group
+
+Archived groups should remain available for historical viewing without appearing in active group lists.
+
+### 22.38 Group Duplication
+
+Future versions may allow users to duplicate a Group configuration.
+
+For example:
+
+    Goa Trip 2026
+        ↓
+    Duplicate
+        ↓
+    Goa Trip 2027
+
+Only appropriate configuration data should be copied.
+
+Historical expenses and settlements should not be copied unless explicitly requested.
+
+### 22.39 Recurring Group Events
+
+Future versions may support recurring group contexts such as:
+
+- Monthly household expenses.
+- Annual trips.
+- Recurring events.
+
+These should extend the existing Group model rather than creating unrelated business concepts.
+
+### 22.40 Multi-Platform Clients
+
+The backend architecture may eventually support additional clients such as:
+
+- Web application.
+- iOS application.
+- Desktop application.
+
+All clients should use the same backend business identities and synchronization model.
+
+The Android offline-first architecture should remain compatible with this expansion.
+
+### 22.41 Web Application
+
+A future web client could provide:
+
+- Group management.
+- Expense management.
+- Reports.
+- Administrative functionality.
+- Data export.
+
+The backend REST API should remain the shared application interface.
+
+### 22.42 iOS Application
+
+A future iOS client could implement the same domain model and synchronization architecture.
+
+The iOS implementation may use platform-specific:
+
+- Local database.
+- Background synchronization.
+- Nearby communication.
+- Secure storage.
+
+The business identifiers and synchronization protocol should remain platform-independent.
+
+### 22.43 Backend Service Decomposition
+
+If the system grows significantly, the modular monolith may eventually be decomposed into services.
+
+Potential future services include:
+
+- User Service.
+- Group Service.
+- Expense Service.
+- Settlement Service.
+- Synchronization Service.
+- Notification Service.
+- Identity Service.
+
+Service decomposition should only occur when operational or scalability requirements justify it.
+
+### 22.44 Event-Driven Architecture
+
+Future versions may introduce event-driven processing.
+
+Potential events include:
+
+    ExpenseCreated
+    ExpenseUpdated
+    ExpenseDeleted
+    SettlementCreated
+    GroupMemberAdded
+    GroupMemberRemoved
+
+Events may be used for:
+
+- Notifications.
+- Analytics.
+- Audit processing.
+- Search indexing.
+- Background tasks.
+
+The authoritative financial state should remain clearly defined.
+
+### 22.45 Advanced Synchronization Protocol
+
+Future versions may improve the synchronization protocol with:
+
+- More efficient change sets.
+- Compression.
+- Streaming.
+- Better conflict metadata.
+- Partial synchronization.
+- Prioritized synchronization.
+- Resumable large transfers.
+
+Any protocol enhancement must preserve backward compatibility where possible.
+
+### 22.46 End-to-End Encryption
+
+Future versions may introduce stronger end-to-end encryption for selected group data.
+
+Potentially:
+
+    Device A
+        ↓
+    Encrypt
+        ↓
+    Backend / Peer
+        ↓
+    Encrypted Data
+        ↓
+    Device B
+        ↓
+    Decrypt
+
+This would require careful key-management architecture, especially for:
+
+- New group members.
+- Removed members.
+- Device loss.
+- Key rotation.
+- Conflict resolution.
+- Backup and restore.
+
+### 22.47 Device Trust Management
+
+Future versions may provide a user-facing trusted-device management screen.
+
+For example:
+
+    My Devices
+
+    Pixel Phone
+    Windows Device
+    iPhone
+
+Users may be able to:
+
+- View devices.
+- Rename devices.
+- Revoke devices.
+- Review last synchronization.
+- Review device activity.
+
+### 22.48 Data Retention Controls
+
+Future versions may allow users to configure retention policies for:
+
+- Archived groups.
+- Synchronization history.
+- Audit history.
+- Deleted records.
+
+Retention policies must never compromise synchronization correctness or historical financial integrity.
+
+### 22.49 Advanced Conflict Resolution
+
+Future versions may provide user-assisted conflict resolution.
+
+For example:
+
+    Conflict Detected
+
+    Local:
+        ₹1,000
+
+    Remote:
+        ₹1,200
+
+    [Keep Local]
+    [Keep Remote]
+    [Review]
+
+The system should preserve the conflicting states until the user or defined automatic resolution strategy resolves them.
+
+### 22.50 AI-Assisted Features
+
+Future versions may optionally introduce AI-assisted features such as:
+
+- Expense categorization.
+- Receipt understanding.
+- Expense description suggestions.
+- Spending summaries.
+- Natural-language expense search.
+- Group spending insights.
+
+AI features must remain optional and must not become required for core expense management.
+
+Sensitive financial data should be processed according to explicit privacy and security requirements.
+
+### 22.51 Smart Settlement Suggestions
+
+A future version may optimize settlement recommendations based on:
+
+- Current balances.
+- Number of transactions.
+- Existing settlement history.
+- User preferences.
+
+The recommendation must remain a derived suggestion.
+
+Actual financial settlement must require explicit user action.
+
+### 22.52 Internationalization
+
+Future versions may support:
+
+- Multiple languages.
+- Regional number formats.
+- Regional date formats.
+- Currency formatting.
+- Timezone-aware presentation.
+
+The underlying financial model should remain locale-independent.
+
+### 22.53 Accessibility
+
+Future versions should improve accessibility through:
+
+- Screen-reader support.
+- Larger text.
+- High-contrast UI.
+- Accessible controls.
+- Keyboard navigation where applicable.
+- Clear error messages.
+
+Accessibility improvements must not change core business behavior.
+
+### 22.54 Feature Flags
+
+Future versions may use feature flags to introduce new functionality gradually.
+
+Feature flags may control:
+
+- Experimental synchronization features.
+- New split methods.
+- New UI functionality.
+- Beta features.
+
+Feature flags must not compromise security or financial integrity.
+
+### 22.55 Future Extension Principles
+
+All future extensions must follow these principles:
+
+- Preserve stable business identifiers.
+- Preserve offline-first functionality.
+- Preserve financial integrity.
+- Preserve synchronization correctness.
+- Preserve backward compatibility where practical.
+- Avoid unnecessary coupling.
+- Keep derived data separate from authoritative data.
+- Maintain clear security boundaries.
+- Keep the core domain model reusable.
+- Avoid introducing infrastructure complexity without a justified requirement.
+
+### 22.56 Future Extensions Model Invariants
+
+The following invariants must always hold:
+
+- Future features must not make internet connectivity mandatory for core expense management.
+- Existing Groups, Expenses, Expense Splits, and Settlements must remain compatible with future features.
+- Stable `userId`, `deviceId`, `groupId`, `expenseId`, and `settlementId` identities must be preserved.
+- Future synchronization mechanisms must use the existing synchronization principles.
+- Future peer-to-peer mechanisms must preserve existing authorization requirements.
+- Future financial features must preserve exact monetary calculations.
+- Derived analytics must not replace authoritative financial records.
+- Future account systems must remain compatible with locally created users where supported.
+- Future multi-user device support must not invalidate the V1 one-user-per-installation model.
+- Future multi-currency support must preserve historical financial correctness.
+- Future encryption mechanisms must provide a safe migration path for existing data.
+- Future backend decomposition must preserve API and domain contracts.
+- Future clients must use compatible business identities and synchronization semantics.
+- Future AI-assisted features must remain optional.
+- Future scalability improvements must not compromise financial consistency.
+- Future privacy features must not expose sensitive user information unnecessarily.
+- Future features must remain independently testable.
+
 ## 23. Architecture Decisions
 
+### 23.1 Purpose
+
+This section records the major architectural decisions made for SplitSync V1.
+
+The purpose of documenting these decisions is to:
+
+- Preserve the reasoning behind the architecture.
+- Prevent important design decisions from being unintentionally changed during implementation.
+- Provide a reference for future development.
+- Make future architecture changes explicit.
+- Keep the Android, backend, database, and synchronization designs aligned.
+
+Each decision should be revisited only when a concrete requirement, technical limitation, security concern, or scalability requirement justifies changing it.
+
+### 23.2 Decision: General-Purpose Group Model
+
+**Decision:**
+
+SplitSync will use a general-purpose `Group` as the core shared-expense concept.
+
+A Trip will not be implemented as a separate expense-management model in V1.
+
+A Group may represent:
+
+- Trip.
+- Family.
+- Household.
+- Friends.
+- Office.
+- Event.
+- Other shared-expense contexts.
+
+**Reason:**
+
+A general-purpose Group model provides better reuse and prevents unnecessary duplication in the expense domain.
+
+Conceptually:
+
+    Group
+      ├── Trip
+      ├── Household
+      ├── Family
+      ├── Friends
+      └── Event
+
+These are contexts of the same underlying Group concept rather than separate financial models.
+
+### 23.3 Decision: Offline-First Architecture
+
+**Decision:**
+
+SplitSync will be designed as an offline-first application.
+
+Core application functionality must work without internet connectivity.
+
+The local Android database is the primary source for normal application reads.
+
+**Reason:**
+
+The application is specifically intended for situations such as:
+
+- Trips with poor connectivity.
+- Groups without internet.
+- Remote locations.
+- Airplane mode.
+- Temporary network failures.
+- Local-only group interaction.
+
+Internet connectivity should improve synchronization rather than determine whether the application can be used.
+
+### 23.4 Decision: Local Database as Primary Application State
+
+**Decision:**
+
+Room/SQLite on Android will act as the primary local source of truth for normal application operation.
+
+The UI will read application state from the local database through repositories.
+
+**Reason:**
+
+This ensures that:
+
+- The application remains usable offline.
+- Application restarts do not lose data.
+- UI behavior does not depend on network responses.
+- Synchronization can operate independently.
+- Local changes are immediately available.
+
+The backend is a synchronization and shared persistence system rather than the direct source for every Android screen.
+
+### 23.5 Decision: Java for Android
+
+**Decision:**
+
+The Android application will be implemented using Java.
+
+**Reason:**
+
+Java is the selected implementation language for the project and provides compatibility with the intended Android architecture and development workflow.
+
+The architecture should remain compatible with standard Android development practices.
+
+### 23.6 Decision: Room + SQLite for Android Persistence
+
+**Decision:**
+
+Android local persistence will use:
+
+- Room.
+- SQLite.
+
+**Reason:**
+
+Room provides:
+
+- Structured local persistence.
+- DAO abstraction.
+- Transactions.
+- Query support.
+- Database migrations.
+- Reactive observation.
+- Compile-time query validation.
+
+SQLite provides the underlying local database.
+
+### 23.7 Decision: Spring Boot for Backend
+
+**Decision:**
+
+The backend will use Java with Spring Boot.
+
+**Reason:**
+
+Spring Boot provides a mature ecosystem for:
+
+- REST APIs.
+- Dependency injection.
+- Security.
+- Transactions.
+- Persistence.
+- Validation.
+- Testing.
+- Production deployment.
+
+The backend will initially remain a modular monolith.
+
+### 23.8 Decision: Hibernate/JPA for Persistence
+
+**Decision:**
+
+The backend will use Hibernate as the JPA implementation.
+
+**Reason:**
+
+Hibernate/JPA provides:
+
+- Object-relational mapping.
+- Transaction management integration.
+- Repository integration.
+- Relationship mapping.
+- Database abstraction.
+
+Persistence concerns will remain separated from the Domain and API layers.
+
+### 23.9 Decision: MySQL for Backend Database
+
+**Decision:**
+
+MySQL will be used as the primary backend relational database for V1.
+
+**Reason:**
+
+The application requires strong relational consistency for:
+
+- Users.
+- Devices.
+- Groups.
+- Group Memberships.
+- Expenses.
+- Expense Splits.
+- Settlements.
+
+MySQL provides the relational constraints and transaction capabilities required for these financial relationships.
+
+### 23.10 Decision: REST API
+
+**Decision:**
+
+Android-to-backend communication will use versioned REST APIs.
+
+V1 APIs will use:
+
+    /api/v1/
+
+**Reason:**
+
+REST provides:
+
+- Clear resource boundaries.
+- Platform independence.
+- Easy debugging.
+- Straightforward Android integration.
+- Compatibility with future clients.
+
+The API will not be required for normal offline expense operations.
+
+### 23.11 Decision: Stable UUID-Based Business Identifiers
+
+**Decision:**
+
+Synchronizable business entities will use stable UUID-based identifiers generated independently of the backend.
+
+Primary identifiers include:
+
+- `userId`
+- `deviceId`
+- `groupId`
+- `expenseId`
+- `expenseSplitId`
+- `settlementId`
+
+**Reason:**
+
+Entities must be creatable while offline.
+
+If identifiers depended on backend-generated database IDs:
+
+    Offline Device
+        ↓
+    Create Expense
+        ↓
+    Backend ID Required
+        ↓
+    Internet Required
+
+This would violate the offline-first architecture.
+
+Locally generated stable identifiers allow:
+
+    Offline Device
+        ↓
+    Generate UUID
+        ↓
+    Save Entity
+        ↓
+    Synchronize Later
+
+### 23.12 Decision: One Active Local User Per Installation in V1
+
+**Decision:**
+
+V1 will support one active local user per application installation.
+
+**Reason:**
+
+This simplifies:
+
+- Local identity.
+- Device association.
+- Authentication state.
+- Synchronization.
+- Security.
+- Peer-to-peer identity.
+
+The architecture will remain extensible for multiple local users in a future version.
+
+### 23.13 Decision: Application-Level Device Identity
+
+**Decision:**
+
+SplitSync will use its own application-level `deviceId`.
+
+The application will not use Android hardware identifiers such as IMEI as the primary identity.
+
+**Reason:**
+
+Application-level identity provides:
+
+- Better privacy.
+- Platform independence.
+- Stable synchronization identity.
+- Independence from hardware-specific identifiers.
+- Easier device lifecycle management.
+
+### 23.14 Decision: Repository Pattern
+
+**Decision:**
+
+The Android application will use repositories between the Domain Layer and data sources.
+
+Conceptually:
+
+    Use Case
+        ↓
+    Repository
+        ↓
+    Local / Remote / Synchronization
+
+**Reason:**
+
+Repositories isolate the business layer from:
+
+- Room.
+- Retrofit.
+- REST APIs.
+- Peer-to-peer communication.
+
+This allows the data implementation to evolve without changing business logic.
+
+### 23.15 Decision: Domain Layer Independent of Infrastructure
+
+**Decision:**
+
+Core business logic must remain independent of:
+
+- Android UI.
+- Room.
+- SQLite.
+- REST.
+- Retrofit.
+- Spring Boot.
+- MySQL.
+
+**Reason:**
+
+Expense calculations, balance calculations, and settlement logic must work:
+
+- Offline.
+- In unit tests.
+- Without a network.
+- Without a backend.
+- Without a database implementation.
+
+### 23.16 Decision: Expense Calculations Performed Locally
+
+**Decision:**
+
+Expense Split and balance calculations will be performed locally on Android.
+
+The backend may validate or reproduce these calculations, but the Android application must not depend on the backend to calculate balances.
+
+**Reason:**
+
+A user must be able to determine:
+
+- Who paid.
+- Who owes.
+- Who is owed.
+- Current group balances.
+
+even when completely offline.
+
+### 23.17 Decision: Exact Monetary Representation
+
+**Decision:**
+
+Financial amounts must not use binary floating-point types such as `float` or `double`.
+
+The system will use exact monetary representations.
+
+Android may use integer minor units where appropriate.
+
+Backend MySQL may use `DECIMAL`.
+
+**Reason:**
+
+Financial calculations must be deterministic and must not suffer from floating-point precision errors.
+
+### 23.18 Decision: Balance as Derived Data
+
+**Decision:**
+
+Balances will be derived from authoritative financial records.
+
+The authoritative data consists primarily of:
+
+    Expenses
+        +
+    Expense Splits
+        +
+    Settlements
+
+**Reason:**
+
+Storing balances as the only authoritative state creates synchronization and consistency problems.
+
+A derived balance can be recalculated whenever required.
+
+Future performance optimizations may cache derived balances, but cached balances must not replace authoritative financial records.
+
+### 23.19 Decision: Transactional Financial Operations
+
+**Decision:**
+
+Related financial records must be persisted transactionally.
+
+For example:
+
+    Expense
+        +
+    Expense Splits
+        +
+    Synchronization Metadata
+
+must be persisted consistently.
+
+**Reason:**
+
+A partially persisted financial operation could produce invalid balances or synchronization corruption.
+
+### 23.20 Decision: Synchronization as a Separate Layer
+
+**Decision:**
+
+Synchronization will be implemented as a separate architectural layer rather than being embedded directly inside UI or business logic.
+
+**Reason:**
+
+Synchronization has its own responsibilities:
+
+- Change tracking.
+- Retry.
+- Incremental synchronization.
+- Idempotency.
+- Conflict detection.
+- Conflict resolution.
+- Peer synchronization.
+- Backend synchronization.
+
+Keeping it separate prevents synchronization complexity from spreading throughout the application.
+
+### 23.21 Decision: Multiple Synchronization Channels
+
+**Decision:**
+
+SplitSync will support two synchronization channels:
+
+- Backend synchronization through the internet.
+- Local peer-to-peer synchronization.
+
+**Reason:**
+
+The two channels solve different connectivity problems.
+
+Online:
+
+    Device
+        ↓
+    Internet
+        ↓
+    Backend
+
+Offline but nearby:
+
+    Device
+        ↕
+    Nearby Authorized Device
+
+Both channels must use the same business entities and synchronization semantics.
+
+### 23.22 Decision: Peer-to-Peer Is Not the Primary Source of Truth
+
+**Decision:**
+
+Peer-to-peer communication is a synchronization mechanism, not the primary source of application state.
+
+**Reason:**
+
+The application must continue working even when:
+
+- No internet exists.
+- No nearby device exists.
+- Peer discovery fails.
+- Peer synchronization fails.
+
+The local Room database remains the primary local application state.
+
+### 23.23 Decision: Same Synchronization Model for Backend and Peer-to-Peer
+
+**Decision:**
+
+Backend synchronization and peer-to-peer synchronization must use compatible:
+
+- Entity identities.
+- Operation identities.
+- Versioning.
+- Conflict rules.
+- Deletion rules.
+- Validation rules.
+
+**Reason:**
+
+A change must remain the same logical change regardless of how it travels.
+
+For example:
+
+    Expense E123
+
+must remain:
+
+    Expense E123
+
+whether it reaches a device through:
+
+    Device → Backend → Device
+
+or:
+
+    Device → Peer → Device
+
+### 23.24 Decision: Incremental Synchronization
+
+**Decision:**
+
+Synchronization will use incremental changes rather than repeatedly transferring complete group datasets.
+
+**Reason:**
+
+Incremental synchronization reduces:
+
+- Network usage.
+- Battery consumption.
+- Database load.
+- Processing time.
+- Synchronization latency.
+
+This becomes increasingly important as group histories grow.
+
+### 23.25 Decision: Idempotent Synchronization
+
+**Decision:**
+
+Synchronization operations must be idempotent.
+
+**Reason:**
+
+Network failures may cause clients to retry operations.
+
+For example:
+
+    OP123
+        ↓
+    Timeout
+        ↓
+    Retry OP123
+
+The backend or receiving device must not create duplicate business records.
+
+### 23.26 Decision: Conflict Resolution Is Explicit
+
+**Decision:**
+
+Concurrent modifications must be detected and handled through explicit conflict-resolution rules.
+
+The system must not silently overwrite one device's changes merely because another change arrived later.
+
+**Reason:**
+
+Multiple devices may operate independently while offline.
+
+Example:
+
+    Device A
+        ↓
+    Expense E123 = ₹1,000
+
+    Device B
+        ↓
+    Expense E123 = ₹1,500
+
+These changes must be recognized as concurrent changes and handled according to Section 13.
+
+### 23.27 Decision: Deletion Through Synchronizable Metadata
+
+**Decision:**
+
+Synchronizable entities may use logical deletion/tombstone metadata rather than immediately removing all information required for synchronization.
+
+**Reason:**
+
+Without deletion metadata:
+
+    Device A
+        ↓
+    Delete Expense E123
+
+    Device B
+        ↓
+    Still Has Expense E123
+
+The deleted expense could reappear during synchronization.
+
+Deletion information must therefore survive long enough to propagate safely.
+
+### 23.28 Decision: Backend as Central Synchronization Point When Online
+
+**Decision:**
+
+When internet connectivity is available, the backend acts as the centralized synchronization point for authorized devices.
+
+**Reason:**
+
+The backend provides:
+
+- Central persistence.
+- Cross-device synchronization.
+- Authentication.
+- Authorization.
+- Recovery support.
+- Shared remote state.
+
+However, backend availability must not determine whether the Android application can perform core local operations.
+
+### 23.29 Decision: Modular Monolith for Backend V1
+
+**Decision:**
+
+The backend will be implemented as a modular monolith rather than microservices.
+
+**Reason:**
+
+V1 benefits more from:
+
+- Simpler deployment.
+- Easier debugging.
+- Lower infrastructure complexity.
+- Easier transactions.
+- Faster development.
+- Clear module boundaries.
+
+The architecture will preserve module boundaries so that future service decomposition remains possible.
+
+### 23.30 Decision: DTO Separation
+
+**Decision:**
+
+API DTOs, Domain Models, and Database Entities should remain separate where appropriate.
+
+Conceptually:
+
+    Request DTO
+        ↓
+    Domain Model
+        ↓
+    JPA Entity
+
+and:
+
+    JPA Entity
+        ↓
+    Domain Model
+        ↓
+    Response DTO
+
+**Reason:**
+
+This prevents:
+
+- Database changes from unnecessarily breaking APIs.
+- API changes from unnecessarily affecting domain logic.
+- Persistence-specific concerns from leaking into the Domain Layer.
+
+### 23.31 Decision: Backend Validation Is Authoritative
+
+**Decision:**
+
+The backend must independently validate data received from clients.
+
+**Reason:**
+
+Android clients cannot be considered fully trusted.
+
+A client may be:
+
+- Outdated.
+- Buggy.
+- Modified.
+- Compromised.
+
+Therefore:
+
+    Client Validation
+        +
+    Backend Validation
+
+are both required.
+
+### 23.32 Decision: Local Network Is Not Automatically Trusted
+
+**Decision:**
+
+Being connected to the same Wi-Fi or hotspot does not automatically authorize synchronization.
+
+**Reason:**
+
+A local network may contain unknown or malicious devices.
+
+The security model must therefore distinguish:
+
+    Same Network
+
+from:
+
+    Authorized SplitSync Device
+
+Peer-to-peer synchronization requires application-level authentication and authorization.
+
+### 23.33 Decision: One Group Uses One Primary Currency in V1
+
+**Decision:**
+
+V1 will use a single primary currency per Group.
+
+**Reason:**
+
+This keeps:
+
+- Expense calculations.
+- Split calculations.
+- Balance calculations.
+- Settlement calculations.
+
+simple and deterministic for V1.
+
+Multi-currency support is reserved for a future extension.
+
+### 23.34 Decision: Group as Financial Boundary
+
+**Decision:**
+
+Expenses, Expense Splits, and Settlements are associated with a Group.
+
+**Reason:**
+
+The Group provides the primary authorization and financial context.
+
+Conceptually:
+
+    Group
+        ├── Members
+        ├── Expenses
+        ├── Expense Splits
+        └── Settlements
+
+This also simplifies synchronization and access control.
+
+### 23.35 Decision: Historical Financial Records Are Preserved
+
+**Decision:**
+
+Leaving a Group must not automatically delete historical Expenses or Settlements involving the user.
+
+**Reason:**
+
+Financial history must remain consistent.
+
+A user's current membership state and historical participation are separate concepts.
+
+### 23.36 Decision: Local Changes Are Persisted Before Synchronization
+
+**Decision:**
+
+A local write must be successfully persisted before it is considered available for synchronization.
+
+The conceptual flow is:
+
+    User Action
+        ↓
+    Local Transaction
+        ↓
+    Local Data Persisted
+        ↓
+    Sync Operation Created
+        ↓
+    Synchronization Later
+
+**Reason:**
+
+Network failure must never cause loss of a successfully created local expense.
+
+### 23.37 Decision: Synchronization Must Not Block the UI
+
+**Decision:**
+
+Synchronization must run independently of the main UI flow.
+
+**Reason:**
+
+A user should be able to continue using the application while:
+
+- Backend synchronization is running.
+- Peer synchronization is running.
+- Network retries are occurring.
+
+The UI should observe local database state rather than waiting for synchronization to complete.
+
+### 23.38 Decision: Background Synchronization
+
+**Decision:**
+
+Android background synchronization should use appropriate Android background execution mechanisms, with WorkManager as the primary candidate.
+
+**Reason:**
+
+Synchronization may need to continue when the application is not actively visible.
+
+The implementation must respect:
+
+- Android lifecycle.
+- Battery restrictions.
+- Connectivity constraints.
+- Retry behavior.
+
+### 23.39 Decision: Security Before Conflict Resolution
+
+**Decision:**
+
+Authentication and authorization must occur before a received change can participate in conflict resolution.
+
+The conceptual flow is:
+
+    Incoming Change
+        ↓
+    Authentication
+        ↓
+    Authorization
+        ↓
+    Validation
+        ↓
+    Conflict Detection
+        ↓
+    Conflict Resolution
+        ↓
+    Persistence
+
+**Reason:**
+
+An unauthorized change must never become a valid candidate for conflict resolution.
+
+### 23.40 Decision: No Microservices in V1
+
+**Decision:**
+
+Microservices are explicitly outside the initial backend architecture.
+
+**Reason:**
+
+They would introduce unnecessary complexity in:
+
+- Deployment.
+- Networking.
+- Service discovery.
+- Distributed transactions.
+- Monitoring.
+- Debugging.
+
+The modular monolith provides sufficient architectural separation for V1.
+
+### 23.41 Decision: Scalability Through Modular Design
+
+**Decision:**
+
+V1 will prepare for future horizontal scaling through:
+
+- Stateless backend application design.
+- Persistent synchronization state.
+- Proper database indexing.
+- Incremental synchronization.
+- Pagination.
+- Clear module boundaries.
+
+**Reason:**
+
+This provides a practical scaling path without prematurely introducing distributed infrastructure.
+
+### 23.42 Decision: Testing Offline as a First-Class Requirement
+
+**Decision:**
+
+Offline operation is a primary testing requirement rather than an edge case.
+
+**Reason:**
+
+Offline functionality is one of SplitSync's core product requirements.
+
+Testing must therefore explicitly cover:
+
+- No internet.
+- Network loss.
+- Peer-only connectivity.
+- Backend-only connectivity.
+- Mixed synchronization.
+- Complete offline operation.
+
+### 23.43 Decision: Financial Integrity Is More Important Than Convenience
+
+**Decision:**
+
+When a conflict or invalid financial state cannot be safely resolved automatically, the system must prefer preserving data integrity over silently choosing a potentially incorrect value.
+
+**Reason:**
+
+Incorrect financial data can affect:
+
+- Balances.
+- Settlements.
+- Group trust.
+- Historical records.
+
+The system should never silently corrupt financial state for the sake of synchronization convenience.
+
+### 23.44 Decision: Architecture Documentation Is Versioned
+
+**Decision:**
+
+The architecture document will serve as the primary architectural reference for V1.
+
+Significant architectural changes should be documented rather than made silently during implementation.
+
+For each major change, the project should record:
+
+- Previous decision.
+- New decision.
+- Reason for change.
+- Impact.
+- Migration requirements.
+
+### 23.45 Architecture Decision Status
+
+The current decisions should be considered:
+
+    Status: Accepted for V1
+
+The architecture remains subject to refinement during detailed implementation when concrete technical constraints are discovered.
+
+Such refinements must not violate the established core invariants without an explicit architecture decision.
+
+### 23.46 Architecture Decision Summary
+
+The major V1 architectural decisions are summarized below:
+
+| Area | V1 Decision |
+|---|---|
+| Product Model | General-purpose Group |
+| Trip Model | Specialized Group context |
+| Android Language | Java |
+| Local Database | Room + SQLite |
+| Backend Language | Java |
+| Backend Framework | Spring Boot |
+| ORM | Hibernate/JPA |
+| Backend Database | MySQL |
+| API Style | Versioned REST |
+| API Version | `/api/v1/` |
+| Local Architecture | Offline-first |
+| Local Source of Truth | Room database |
+| Backend Architecture | Modular Monolith |
+| Business IDs | Locally generated stable UUIDs |
+| Local Users | One active user per installation |
+| Device Identity | Application-level `deviceId` |
+| Expense Calculation | Local/domain-based |
+| Monetary Representation | Exact, non-floating-point |
+| Synchronization | Incremental |
+| Sync Channels | Backend + Peer-to-Peer |
+| Sync Idempotency | Required |
+| Conflict Handling | Explicit |
+| Deletion Sync | Tombstone/deletion metadata |
+| Peer Trust | Explicit authentication + authorization |
+| Group Security Boundary | Group membership |
+| V1 Currency Model | One primary currency per Group |
+| Balance Storage | Derived from authoritative records |
+| Backend Scaling | Horizontally scalable in future |
+| V1 Deployment Model | Modular monolith |
+| Testing | Offline + Online + Sync + P2P |
+| Microservices | Future, not V1 |
+
+### 23.47 Architecture Decision Invariants
+
+The following decisions are considered foundational for SplitSync V1:
+
+- SplitSync is offline-first.
+- Core expense functionality must work without internet connectivity.
+- Room/SQLite is the primary local application state.
+- The backend is a synchronization and shared persistence system.
+- A Group is the core shared-expense concept.
+- Trip is a Group context rather than a separate financial model.
+- Stable identifiers must be generated independently of backend availability.
+- Financial calculations must be deterministic and exact.
+- Backend and peer-to-peer synchronization must use compatible business identities.
+- Synchronization must be idempotent.
+- Conflicts must be explicitly detected and resolved.
+- Unauthorized data must never be accepted merely because it arrived through a synchronization channel.
+- Financially related changes must remain transactionally consistent.
+- Backend V1 will remain a modular monolith.
+- The architecture must remain extensible without unnecessarily redesigning the core expense domain.
+
 ## 24. Open Questions
+
+### 24.1 Purpose
+
+This section contains architectural and product decisions that are intentionally not finalized in V1.
+
+These questions must be resolved before implementing the corresponding functionality.
+
+Open questions should not block the overall architecture unless they affect a foundational decision.
+
+### 24.2 User Authentication
+
+What authentication mechanism should be used when internet connectivity is available?
+
+Possible options:
+
+- Phone number + OTP.
+- Email + password.
+- Email + OTP.
+- Passwordless authentication.
+- Combination of phone number and email.
+
+The final mechanism must remain compatible with the offline local-profile model.
+
+### 24.3 Local Profile to Backend Account Linking
+
+How should an offline-created local profile become associated with a backend account later?
+
+Possible flow:
+
+    Local User
+        ↓
+    Internet Available
+        ↓
+    Account Creation / Login
+        ↓
+    Link Local User
+        ↓
+    Backend User
+
+The exact identity-linking mechanism must prevent duplicate users and accidental account merging.
+
+### 24.4 Phone Number and Email Requirement
+
+Should V1 require:
+
+- Phone number.
+- Email.
+- Both.
+- Neither during offline profile creation.
+
+The current architecture allows local profile creation without internet, but the final identity/verification rules are still open.
+
+### 24.5 User Profile Visibility
+
+What profile information should be visible to:
+
+- Group members.
+- Nearby SplitSync devices.
+- Users receiving invitations.
+- Backend services.
+
+Possible fields include:
+
+- Display name.
+- Profile photo.
+- Phone number.
+- Email.
+
+Privacy rules must be finalized before implementing profile discovery and peer-to-peer synchronization.
+
+### 24.6 Group Joining Mechanism
+
+How should a user join a Group while offline?
+
+Possible options:
+
+- Nearby device invitation.
+- QR code.
+- Short pairing code.
+- Local network invitation.
+- Combination of the above.
+
+The selected mechanism must work without internet connectivity.
+
+### 24.7 Group Invitation Approval
+
+Should joining a Group require:
+
+- Owner approval.
+- Existing member approval.
+- Invitation-only access.
+- Direct local acceptance.
+
+The V1 permission model must define who is allowed to invite and approve members.
+
+### 24.8 Offline Membership Changes
+
+Which membership operations should be allowed while completely offline?
+
+Possible operations:
+
+- Add member.
+- Remove member.
+- Accept invitation.
+- Reject invitation.
+- Change role.
+- Transfer ownership.
+
+The authorization rules for each operation must be finalized before implementing offline membership synchronization.
+
+### 24.9 Group Ownership
+
+How should ownership changes work when multiple devices are offline?
+
+For example:
+
+    Device A
+        ↓
+    Makes Rahul Owner
+
+    Device B
+        ↓
+    Makes Amit Owner
+
+The final conflict-resolution behavior for ownership changes must be explicitly defined.
+
+### 24.10 Expense Editing Rules
+
+Who should be allowed to edit an Expense?
+
+Possible options:
+
+- Expense creator only.
+- Expense payer.
+- Any Group member.
+- Group owner/admin.
+- Configurable Group permission.
+
+The V1 permission model must define the exact rule.
+
+### 24.11 Expense Deletion Rules
+
+Who should be allowed to delete an Expense?
+
+Possible options:
+
+- Expense creator.
+- Expense payer.
+- Group owner.
+- Any member.
+
+The system must also define whether deletion is:
+
+- Permanent.
+- Logical deletion.
+- Recoverable.
+
+### 24.12 Settlement Editing Rules
+
+Who should be allowed to modify or delete a Settlement?
+
+Possible options:
+
+- Settlement creator.
+- Payer.
+- Receiver.
+- Group owner/admin.
+- Any Group member.
+
+This must be finalized before implementing settlement authorization.
+
+### 24.13 Settlement Model
+
+Should a Settlement represent:
+
+- A real payment that occurred.
+- A confirmation that an amount was paid.
+- A manual balance adjustment.
+
+The V1 meaning of Settlement must be explicitly fixed so that synchronization and balance calculations remain consistent.
+
+### 24.14 Settlement Direction
+
+Should Settlement always represent:
+
+    paidBy → paidTo
+
+or should the system support a more general adjustment model?
+
+The preferred V1 model should remain simple and deterministic.
+
+### 24.15 Currency Representation
+
+V1 currently assumes one primary currency per Group.
+
+Open questions include:
+
+- Should the currency be selected when the Group is created?
+- Can the Group currency be changed later?
+- What happens when the currency is changed after Expenses exist?
+- Should currency changes be prohibited once financial records exist?
+
+### 24.16 Decimal Precision
+
+What is the exact monetary precision supported by V1?
+
+For example:
+
+    ₹1.00
+    ₹1.50
+
+The system must define:
+
+- Minimum monetary unit.
+- Decimal scale.
+- Rounding rules.
+- Division rules.
+- Percentage precision.
+
+### 24.17 Rounding Rules
+
+How should rounding be handled when an Expense cannot be divided evenly?
+
+Example:
+
+    Expense = ₹100
+    Members = 3
+
+Possible allocation:
+
+    ₹33.33
+    ₹33.33
+    ₹33.34
+
+The exact rule for assigning the rounding remainder must be deterministic.
+
+### 24.18 Expense Split Rounding
+
+When using:
+
+- Equal split.
+- Percentage split.
+- Shares split.
+
+how should rounding differences be distributed?
+
+The final rule must ensure:
+
+    Sum(Splits) = Expense Amount
+
+### 24.19 Expense Date and Time
+
+Should an Expense contain:
+
+- Date only.
+- Date + time.
+- User-selected date/time.
+- Device creation timestamp.
+- Server timestamp when synchronized.
+
+The system should distinguish between:
+
+- Business event time.
+- Local creation time.
+- Synchronization time.
+
+### 24.20 Time Zone Handling
+
+How should timestamps be handled when Group members are in different time zones?
+
+This is particularly relevant for trips.
+
+Possible approach:
+
+- Store timestamps in UTC.
+- Convert to local timezone for display.
+- Preserve original event timezone where required.
+
+### 24.21 Expense Notes
+
+Should Expenses support free-form notes in V1?
+
+If supported:
+
+- Maximum length.
+- Formatting.
+- Searchability.
+- Synchronization behavior.
+
+must be defined.
+
+### 24.22 Expense Categories
+
+Should Expense categories be included in V1 or deferred?
+
+If included:
+
+- Fixed categories.
+- Custom categories.
+- Group-specific categories.
+
+must be decided.
+
+### 24.23 Expense Attachments
+
+Should receipt images or files be supported in V1?
+
+If yes, the architecture must define:
+
+- Local storage.
+- Backend storage.
+- Peer-to-peer transfer.
+- Encryption.
+- Maximum size.
+- Synchronization behavior.
+
+If not, attachments should remain a future extension.
+
+### 24.24 Peer-to-Peer Technology
+
+Which Android technology should be used for local communication?
+
+Candidates include:
+
+- Nearby Connections.
+- Wi-Fi Direct.
+- Local network sockets.
+- Other Android-supported mechanisms.
+
+The final selection must consider:
+
+- Android version compatibility.
+- Reliability.
+- Discovery.
+- Security.
+- Battery consumption.
+- Multiple-device support.
+- Background restrictions.
+
+### 24.25 Peer-to-Peer Pairing
+
+How should two devices establish trust?
+
+Possible options:
+
+- QR code.
+- Numeric verification code.
+- Nearby confirmation.
+- Cryptographic challenge-response.
+- Combination of methods.
+
+The selected mechanism must prevent unauthorized devices from joining synchronization sessions.
+
+### 24.26 Peer-to-Peer User Experience
+
+Should synchronization be:
+
+- Fully automatic.
+- User initiated.
+- Automatic after user approval.
+- Configurable.
+
+The preferred V1 experience should minimize manual technical steps while keeping authorization explicit.
+
+### 24.27 Peer-to-Peer Discovery Frequency
+
+How often should the application search for nearby SplitSync devices?
+
+Potential strategies:
+
+- Only when the user opens a Group.
+- Only when synchronization is requested.
+- While the application is active.
+- Background discovery.
+
+The decision must balance usability, battery consumption, and Android background restrictions.
+
+### 24.28 Backend Synchronization Frequency
+
+When internet connectivity becomes available, should synchronization happen:
+
+- Immediately.
+- Periodically.
+- On application launch.
+- When the user opens a Group.
+- Through WorkManager.
+- Through a combination of these.
+
+The final strategy must balance synchronization speed and battery usage.
+
+### 24.29 Sync Priority
+
+Should some synchronization operations have higher priority?
+
+For example:
+
+    Group Membership
+        ↓
+    Higher Priority
+
+    Expense
+        ↓
+    Normal Priority
+
+    Historical Data
+        ↓
+    Lower Priority
+
+The dependency model must be defined before introducing priority-based synchronization.
+
+### 24.30 Sync Ordering
+
+Should synchronization operations be processed according to:
+
+- Creation time.
+- Operation sequence.
+- Entity dependency.
+- Group.
+- Priority.
+
+The final ordering must preserve business consistency.
+
+### 24.31 Conflict Resolution Strategy
+
+Section 13 defines the conflict-resolution architecture, but the exact strategy for each entity type must be finalized.
+
+For example:
+
+- Expense update vs update.
+- Expense update vs delete.
+- Settlement update vs update.
+- Membership update vs update.
+- Ownership change vs ownership change.
+
+Each conflict type must have deterministic behavior.
+
+### 24.32 Conflict User Interface
+
+Should users be informed about synchronization conflicts?
+
+If yes, the UI must define:
+
+- Where conflicts appear.
+- What information is shown.
+- Whether users can manually resolve them.
+- Whether conflicts block synchronization.
+- How resolved conflicts are recorded.
+
+### 24.33 Deletion Retention
+
+How long should tombstones be retained?
+
+The system must ensure that a device that was offline for a long time cannot accidentally resurrect deleted data.
+
+The final retention strategy should consider:
+
+- Device synchronization frequency.
+- Group activity.
+- Storage requirements.
+
+### 24.34 Offline Group Lifetime
+
+Should a completely offline Group remain valid indefinitely?
+
+Or should there be any restrictions when:
+
+- The Group has never synchronized with the backend.
+- The Group has been inactive for a long time.
+- All known members are offline.
+
+The preferred V1 behavior should preserve local data unless the user explicitly removes it.
+
+### 24.35 Offline User Lifetime
+
+Should a locally created user remain valid indefinitely until the user deletes the profile?
+
+The final lifecycle rules must define:
+
+- Profile deletion.
+- Device reset.
+- Application uninstall.
+- Reinstallation.
+- Account linking.
+
+### 24.36 Application Reinstallation
+
+What should happen when the application is uninstalled and reinstalled?
+
+By default, Android application data may be removed.
+
+The architecture must define whether the user can recover the previous local identity through:
+
+- Backend account.
+- Backup.
+- Export/import.
+- Device restore.
+
+### 24.37 Device Replacement
+
+How should a user move their SplitSync identity to a new device?
+
+Potential approaches:
+
+- Backend account login.
+- Encrypted backup.
+- Device-to-device transfer.
+- QR-based migration.
+
+This becomes especially important when the original device contains offline-only data.
+
+### 24.38 Lost Device
+
+What should happen when a device containing unsynchronized offline data is lost?
+
+The architecture must define:
+
+- Device revocation.
+- Account security.
+- Recovery options.
+- Backup strategy.
+- Whether unsynchronized data can be recovered.
+
+A completely offline device cannot synchronize data that it cannot connect to the network with.
+
+### 24.39 Backend Account Recovery
+
+How should a user recover their backend identity if they lose their device?
+
+Possible mechanisms:
+
+- Phone OTP.
+- Email verification.
+- Recovery codes.
+- Another trusted device.
+
+The final mechanism must be defined with security requirements.
+
+### 24.40 Backend Hosting
+
+Where will the V1 backend be deployed?
+
+Potential options include:
+
+- Cloud VM.
+- Container-based hosting.
+- Managed application platform.
+- Self-hosted server.
+
+The deployment environment must support:
+
+- HTTPS.
+- MySQL.
+- Secure secrets.
+- Backups.
+- Monitoring.
+
+### 24.41 MySQL Deployment
+
+Will MySQL be:
+
+- Self-hosted.
+- Managed.
+- Containerized for development.
+- Managed separately in production.
+
+Development and production deployment strategies may differ.
+
+### 24.42 Backup Strategy
+
+How frequently should backend MySQL backups occur?
+
+The system should eventually define:
+
+- Backup frequency.
+- Retention.
+- Encryption.
+- Restore testing.
+- Disaster recovery.
+
+### 24.43 Disaster Recovery
+
+What Recovery Point Objective (RPO) and Recovery Time Objective (RTO) are required?
+
+These values will determine the appropriate:
+
+- Backup frequency.
+- Replication strategy.
+- Recovery procedures.
+
+This is not required for initial local development but should be defined before production deployment.
+
+### 24.44 API Authentication Mechanism
+
+Which token/session mechanism should V1 use?
+
+Candidates include:
+
+- JWT access token + refresh token.
+- Server-managed sessions.
+- OAuth2/OIDC-based authentication.
+
+The decision must consider:
+
+- Android storage.
+- Token expiration.
+- Refresh.
+- Revocation.
+- Offline behavior.
+
+### 24.45 API Rate Limiting
+
+What rate limits should be applied?
+
+Potentially different limits may be required for:
+
+- Authentication.
+- Normal APIs.
+- Synchronization.
+- Device registration.
+
+Limits must not prevent legitimate offline devices from synchronizing after reconnecting.
+
+### 24.46 API Versioning Policy
+
+V1 currently uses:
+
+    /api/v1/
+
+Open questions include:
+
+- When should V2 be introduced?
+- How long should V1 remain supported?
+- How should old Android clients synchronize with newer backends?
+
+The synchronization protocol may require independent versioning from the REST API.
+
+### 24.47 Synchronization Protocol Versioning
+
+What should the peer-to-peer and backend synchronization protocol version format be?
+
+The system should be able to determine whether two devices or clients can safely synchronize.
+
+### 24.48 Data Retention
+
+How long should the backend retain:
+
+- Groups.
+- Expenses.
+- Settlements.
+- Synchronization metadata.
+- Audit records.
+- Deleted records.
+
+The retention policy must balance:
+
+- User expectations.
+- Storage cost.
+- Synchronization correctness.
+- Privacy.
+
+### 24.49 Audit Requirements
+
+Is a complete audit trail required in V1?
+
+If yes, the architecture must define which operations are audited and how long audit records are retained.
+
+If not, audit functionality may remain a future extension.
+
+### 24.50 Privacy Requirements
+
+What privacy controls are required for V1?
+
+The final requirements should define:
+
+- Profile visibility.
+- Phone visibility.
+- Email visibility.
+- Group visibility.
+- Expense visibility.
+- Device visibility.
+
+### 24.51 Encryption at Rest
+
+Should the Android Room database be encrypted in V1?
+
+If yes, the exact implementation and key-management strategy must be selected.
+
+Backend database encryption requirements must also be defined according to the deployment environment.
+
+### 24.52 End-to-End Encryption
+
+Is true end-to-end encryption required for group financial data?
+
+If introduced, the architecture must define:
+
+- Group encryption keys.
+- Key distribution.
+- Key rotation.
+- New member access.
+- Removed member access.
+- Device replacement.
+- Backup and restore.
+
+This is a significant architectural decision and should not be implemented partially.
+
+### 24.53 Notification Strategy
+
+Should V1 support push notifications?
+
+If yes, the notification architecture must account for:
+
+- Android push services.
+- Offline operation.
+- Group invitations.
+- Settlement notifications.
+- Synchronization notifications.
+
+Notifications must remain optional for core functionality.
+
+### 24.54 Analytics
+
+Should V1 collect application analytics?
+
+If yes, the architecture must define:
+
+- What data is collected.
+- Whether financial information is excluded.
+- User consent.
+- Data retention.
+- Privacy requirements.
+
+Financial data should not be unnecessarily included in analytics.
+
+### 24.55 Crash Reporting
+
+Should V1 use a crash-reporting service?
+
+If yes, crash reports must be reviewed to ensure they do not expose:
+
+- Expense amounts.
+- Phone numbers.
+- Email addresses.
+- Authentication tokens.
+- Private keys.
+- Other sensitive information.
+
+### 24.56 Logging Strategy
+
+What level of logging should be enabled in:
+
+- Development.
+- Testing.
+- Production.
+
+Production logs should avoid sensitive financial and authentication data.
+
+### 24.57 Supported Android Versions
+
+What is the minimum Android version supported by V1?
+
+This decision directly affects:
+
+- Room.
+- WorkManager.
+- Nearby communication.
+- Encryption APIs.
+- Background execution.
+- UI capabilities.
+
+### 24.58 UI Technology
+
+Should V1 use:
+
+- XML layouts + Views.
+- Jetpack Compose.
+- Hybrid approach.
+
+The selected approach should be consistent across the project unless a specific screen requires otherwise.
+
+### 24.59 Dependency Injection
+
+Which dependency-injection approach should be used?
+
+Possible options include:
+
+- Manual dependency injection.
+- Dagger.
+- Hilt.
+
+The final choice should consider the Java-based Android architecture.
+
+### 24.60 Networking Library
+
+Which Android HTTP client should be used?
+
+Possible options include:
+
+- Retrofit + OkHttp.
+- Another HTTP client.
+
+The final choice should support:
+
+- REST.
+- Authentication.
+- Retry.
+- Timeouts.
+- Error handling.
+- Serialization.
+
+### 24.61 JSON Serialization
+
+Which serialization library should be used?
+
+Possible options include:
+
+- Gson.
+- Jackson.
+- Moshi.
+- Kotlin Serialization if applicable.
+
+The selected library must be compatible with the Java Android implementation.
+
+### 24.62 Backend API Documentation
+
+Should the REST API use OpenAPI/Swagger documentation in V1?
+
+Using OpenAPI could provide:
+
+- API documentation.
+- Contract visibility.
+- Easier testing.
+- Client development support.
+
+### 24.63 Database Migration Tool
+
+Hibernate/JPA will manage persistence, but the production database migration strategy remains open.
+
+Potential options include:
+
+- Flyway.
+- Liquibase.
+
+A dedicated migration strategy should be selected before production database deployment.
+
+### 24.64 Backend Testing Database
+
+What database should be used for backend integration tests?
+
+The preferred approach should provide behavior close to production MySQL.
+
+Possible options include:
+
+- Dedicated MySQL test instance.
+- Containerized MySQL.
+- Testcontainers.
+
+### 24.65 CI/CD Platform
+
+Which CI/CD platform should be used?
+
+Potential options include:
+
+- GitHub Actions.
+- Other CI platforms.
+
+The pipeline should eventually build and test both:
+
+- Android application.
+- Spring Boot backend.
+
+### 24.66 Release Strategy
+
+How should V1 releases be managed?
+
+Possible approaches include:
+
+- Internal testing.
+- Closed beta.
+- Public beta.
+- Production release.
+
+The release strategy should include database/API compatibility requirements.
+
+### 24.67 Feature Scope for V1
+
+The final V1 feature boundary must be confirmed before implementation begins.
+
+The minimum expected V1 should include:
+
+- Local profile.
+- Device identity.
+- Group creation.
+- Group membership.
+- Expense creation.
+- Expense Splits.
+- Balance calculation.
+- Settlements.
+- Local offline operation.
+- Backend synchronization.
+- Local peer-to-peer synchronization.
+- Conflict handling.
+- Security basics.
+
+Features not required for this core V1 should remain future extensions unless explicitly promoted into scope.
+
+### 24.68 Open Question Resolution Process
+
+Each open question should be resolved before the corresponding implementation begins.
+
+The decision should be recorded in Section 23.
+
+The process should be:
+
+    Open Question
+        ↓
+    Evaluate Requirements
+        ↓
+    Evaluate Technical Constraints
+        ↓
+    Select Approach
+        ↓
+    Record Architecture Decision
+        ↓
+    Implement
+        ↓
+    Test
+
+### 24.69 Open Questions Status
+
+Current status:
+
+    Architecture V1
+        ↓
+    Core Structure Defined
+        ↓
+    Detailed Implementation Decisions Pending
+
+Open questions do not invalidate the architecture defined in Sections 1–23.
+
+They represent decisions that must be finalized before implementing the affected components.
+
+### 24.70 Priority Classification
+
+Open questions should be classified as:
+
+**High Priority**
+
+Questions that can affect the core architecture.
+
+Examples:
+
+- Authentication model.
+- Peer-to-peer technology.
+- Synchronization protocol.
+- Conflict rules.
+- Monetary precision.
+- Local-to-backend identity linking.
+
+**Medium Priority**
+
+Questions that affect implementation but not the overall architecture.
+
+Examples:
+
+- UI technology.
+- Networking library.
+- Dependency injection.
+- Database migration tooling.
+- Logging strategy.
+
+**Low Priority**
+
+Questions that can be deferred without affecting V1 architecture.
+
+Examples:
+
+- Advanced reports.
+- AI features.
+- Additional profile customization.
+- Advanced analytics.
+
+### 24.71 Foundational Open Questions
+
+The following questions should be resolved before production implementation of the corresponding systems:
+
+1. What exact authentication mechanism will V1 use?
+2. How will an offline local user be linked to a backend account?
+3. What exact phone/email requirements will V1 have?
+4. What exact peer-to-peer technology will Android use?
+5. What exact peer-to-peer pairing/authentication mechanism will be used?
+6. What exact synchronization protocol and cursor/version model will be used?
+7. What are the exact conflict-resolution rules for each entity type?
+8. What exact monetary precision and rounding rules will be used?
+9. What exact Group membership and permission rules will V1 use?
+10. What exact Settlement semantics will V1 use?
+11. What Android minimum version will V1 support?
+12. What local database encryption strategy will be used?
+13. What backend authentication/token mechanism will be used?
+14. What database migration strategy will be used?
+15. What exact V1 feature scope will be frozen before coding begins?
+
+### 24.72 Open Questions Invariant
+
+Open questions must not be resolved implicitly during implementation.
+
+Any decision that materially changes:
+
+- Data model.
+- Synchronization model.
+- Security model.
+- Financial model.
+- API contract.
+- Offline behavior.
+- Peer-to-peer architecture.
+
+must be explicitly reviewed and recorded as an Architecture Decision before implementation.
