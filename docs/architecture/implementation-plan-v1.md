@@ -18680,19 +18680,7319 @@ The following rules are mandatory:
 
 ## 22. Android Data Layer Implementation
 
+### 22.1 Purpose
+
+This section defines the implementation of the Android Data Layer in SplitSync V1.
+
+The Android Data Layer is responsible for:
+
+```text
+Local Persistence
+Remote API Communication
+Synchronization Persistence
+Repository Implementation
+Data Mapping
+Offline-First Data Access
+```
+
+The Data Layer must isolate infrastructure details from the Domain and Application layers.
+
+### 22.2 Data Layer Principle
+
+The dependency direction should remain:
+
+```text
+Presentation
+      ↓
+Application / Domain
+      ↓
+Repository Interface
+      ↓
+Data Layer Implementation
+      ↓
+Local / Remote Data Sources
+```
+
+### 22.3 Data Layer Components
+
+The Android Data Layer should contain:
+
+```text
+Repository Implementations
+Local Data Sources
+Remote Data Sources
+Room DAOs
+Room Entities
+API Clients
+DTOs
+Mappers
+Sync Data Sources
+```
+
+### 22.4 Repository Implementation
+
+Repository implementations coordinate:
+
+```text
+Local Data Source
++
+Remote Data Source
++
+Synchronization State
+```
+
+according to the Offline-First strategy.
+
+Conceptually:
+
+```text
+ExpenseRepositoryImpl
+        ↓
+ ┌──────┴──────┐
+ ↓             ↓
+Local        Remote
+```
+
+### 22.5 Repository Interface
+
+Repository interfaces must remain independent of Android infrastructure.
+
+Example:
+
+```text
+ExpenseRepository
+```
+
+is defined at the appropriate Domain/Application boundary, while:
+
+```text
+ExpenseRepositoryImpl
+```
+
+belongs to the Data Layer.
+
+### 22.6 Local Data Source
+
+The Local Data Source provides access to the local database.
+
+Examples:
+
+```text
+ExpenseLocalDataSource
+GroupLocalDataSource
+SettlementLocalDataSource
+MembershipLocalDataSource
+SyncLocalDataSource
+```
+
+### 22.7 Remote Data Source
+
+The Remote Data Source communicates with Backend APIs.
+
+Examples:
+
+```text
+ExpenseRemoteDataSource
+GroupRemoteDataSource
+SettlementRemoteDataSource
+SyncRemoteDataSource
+```
+
+### 22.8 Local Data Source Responsibility
+
+Local Data Sources should handle:
+
+```text
+DAO Access
+Local Queries
+Local Inserts
+Local Updates
+Local Deletes
+```
+
+They should not contain core business rules.
+
+### 22.9 Remote Data Source Responsibility
+
+Remote Data Sources should handle:
+
+```text
+API Requests
+API Responses
+HTTP Errors
+Network Errors
+DTO Conversion
+```
+
+### 22.10 Room Database
+
+Room should be used as the Android local persistence implementation according to the Database Architecture.
+
+Conceptually:
+
+```text
+RoomDatabase
+    ├── DAOs
+    └── Entities
+```
+
+### 22.11 Room Entity
+
+Room Entities represent persistence state.
+
+They must remain separate from Domain Models.
+
+```text
+Room Entity
+    ≠
+Domain Entity
+```
+
+### 22.12 Expense Entity
+
+The Expense Room Entity should persist the required Expense state.
+
+Conceptually:
+
+```text
+ExpenseEntity
+├── Expense ID
+├── Group ID
+├── Creator ID
+├── Amount
+├── Currency
+├── Description
+├── Created At
+├── Updated At
+├── Version
+└── State
+```
+
+### 22.13 Expense Split Entity
+
+ExpenseSplits should be persisted according to the Local Database Schema.
+
+Conceptually:
+
+```text
+ExpenseSplitEntity
+├── Split ID
+├── Expense ID
+├── User ID
+└── Amount
+```
+
+### 22.14 Group Entity
+
+The Group Entity should contain the persistence representation of Group state.
+
+### 22.15 Membership Entity
+
+The Membership Entity should represent:
+
+```text
+User ID
+Group ID
+Role
+State
+Version
+```
+
+where required.
+
+### 22.16 Settlement Entity
+
+The Settlement Entity should represent the persistence state of Settlement.
+
+### 22.17 SyncOperation Entity
+
+The SyncOperation Entity must persist pending synchronization operations.
+
+Conceptually:
+
+```text
+SyncOperationEntity
+├── Operation ID
+├── Device ID
+├── Entity Type
+├── Entity ID
+├── Operation Type
+├── Payload
+├── Version
+├── State
+├── Retry Count
+└── Created At
+```
+
+The exact fields must follow the Sync Data Model.
+
+### 22.18 SyncState Entity
+
+SyncState must persist the local synchronization position/state.
+
+Conceptually:
+
+```text
+SyncStateEntity
+├── Context
+├── Cursor
+├── Last Sync
+└── State
+```
+
+according to the Synchronization Data Model.
+
+### 22.19 Conflict Entity
+
+Conflict state must be persisted when required.
+
+Conceptually:
+
+```text
+ConflictEntity
+├── Conflict ID
+├── Entity Type
+├── Entity ID
+├── Local Version
+├── Remote Version
+├── State
+└── Metadata
+```
+
+### 22.20 Device Identity Storage
+
+Device Identity must be stored independently from normal business entities.
+
+Secure application storage should be used where required.
+
+### 22.21 Local Database Transactions
+
+Financial mutations must use Room transactions where multiple records must remain consistent.
+
+Example:
+
+```text
+Create Expense
+├── Expense
+├── Expense Splits
+└── SyncOperation
+```
+
+### 22.22 Repository Transaction Boundary
+
+Repository implementations should expose operations that preserve the required Application transaction boundary.
+
+### 22.23 Local Mutation Flow
+
+Offline-first mutation:
+
+```text
+Application Service
+      ↓
+Repository
+      ↓
+Room Transaction
+ ┌────┼─────────────┐
+ ↓    ↓             ↓
+Entity Splits   SyncOperation
+ └────┼─────────────┘
+      ↓
+   Commit
+```
+
+### 22.24 Local Read Flow
+
+```text
+Presentation
+      ↓
+Application / Domain
+      ↓
+Repository
+      ↓
+Local Data Source
+      ↓
+Room DAO
+      ↓
+Room Database
+```
+
+### 22.25 Remote Read Flow
+
+When remote data is required:
+
+```text
+Repository
+      ↓
+Remote Data Source
+      ↓
+API Client
+      ↓
+Backend
+```
+
+### 22.26 Remote-to-Local Flow
+
+Remote data should generally be persisted locally before being exposed as the current local state.
+
+```text
+Backend
+   ↓
+Remote DTO
+   ↓
+Mapper
+   ↓
+Domain / Persistence Model
+   ↓
+Room
+   ↓
+Local State
+```
+
+### 22.27 Offline-First Principle
+
+For supported operations:
+
+```text
+Local State
+      ↓
+Source for UI
+```
+
+must not depend on continuous Backend availability.
+
+### 22.28 Local Database as Offline Source
+
+The local database should contain enough information to support:
+
+```text
+Group Viewing
+Expense Viewing
+Expense Creation
+Expense Update
+Settlement Viewing
+Settlement Creation
+Balance Calculation
+Synchronization
+```
+
+according to the V1 offline requirements.
+
+### 22.29 Repository Read Strategy
+
+Repositories should prefer local state for normal application reads.
+
+Conceptually:
+
+```text
+UI Request
+      ↓
+Repository
+      ↓
+Local Database
+      ↓
+Current State
+```
+
+### 22.30 Synchronization Refresh
+
+When Backend data changes:
+
+```text
+Remote Changes
+      ↓
+Sync
+      ↓
+Local Database Updated
+      ↓
+Local Observers Notified
+```
+
+### 22.31 Local Data Observability
+
+Where reactive UI updates are required, the Data Layer should expose observable local state through the selected Android architecture.
+
+Possible mechanisms include:
+
+```text
+Flow
+StateFlow
+LiveData
+```
+
+The project should use the mechanism defined by the Android architecture.
+
+### 22.32 Local Source of Truth
+
+For normal UI state:
+
+```text
+Room
+  ↓
+Repository
+  ↓
+Presentation
+```
+
+should be the preferred flow.
+
+### 22.33 Network Availability
+
+Network availability must not be used as the sole indicator of data validity.
+
+The repository should handle:
+
+```text
+Available
+Unavailable
+Timeout
+Server Failure
+```
+
+explicitly.
+
+### 22.34 Remote Failure
+
+If a remote request fails:
+
+```text
+Network Failure
+      ↓
+Keep Valid Local State
+      ↓
+Return Appropriate Result
+```
+
+where the operation supports offline behavior.
+
+### 22.35 Local Mutation During Network Failure
+
+A supported mutation should still be committed locally when offline.
+
+```text
+Mutation
+      ↓
+Local Transaction
+      ↓
+SyncOperation = PENDING
+```
+
+### 22.36 Sync Queue
+
+The Sync Data Source should expose pending operations.
+
+Conceptually:
+
+```text
+PENDING
+   ↓
+SYNCING
+   ↓
+APPLIED
+```
+
+or:
+
+```text
+PENDING
+   ↓
+FAILED
+```
+
+according to the Sync State Model.
+
+### 22.37 Sync Queue Processing
+
+The synchronization worker should:
+
+```text
+Load Pending Operations
+      ↓
+Batch Operations
+      ↓
+Send to Backend
+      ↓
+Process Response
+      ↓
+Update Sync State
+```
+
+### 22.38 Sync Retry
+
+Transient failures should result in retryable state.
+
+### 22.39 Sync Retry Backoff
+
+Retries should use controlled backoff rather than continuously retrying.
+
+### 22.40 Sync Operation Atomicity
+
+Creating a local business mutation and its SyncOperation must occur in one transaction.
+
+### 22.41 Duplicate Sync Operations
+
+The local Data Layer must prevent accidental creation of duplicate operations for the same logical mutation.
+
+### 22.42 Remote DTO Handling
+
+Remote DTOs must not be persisted directly unless the persistence model is intentionally identical and the architecture explicitly permits it.
+
+### 22.43 DTO Mapping
+
+The mapping flow should be:
+
+```text
+Remote DTO
+      ↓
+Mapper
+      ↓
+Persistence Entity
+```
+
+or:
+
+```text
+Remote DTO
+      ↓
+Mapper
+      ↓
+Domain Model
+```
+
+depending on the operation.
+
+### 22.44 Entity Mapping
+
+Room Entities should map through dedicated mappers.
+
+Conceptually:
+
+```text
+ExpenseEntity
+      ↓
+ExpenseMapper
+      ↓
+Expense Domain Model
+```
+
+### 22.45 Domain-to-Entity Mapping
+
+```text
+Domain Model
+      ↓
+Mapper
+      ↓
+Room Entity
+```
+
+### 22.46 Mapping Rules
+
+Mappers must preserve:
+
+```text
+IDs
+Money
+Currency
+Timestamps
+Versions
+States
+Relationships
+```
+
+### 22.47 Money Mapping
+
+Money must retain exact precision when mapped between:
+
+```text
+Domain
+Room
+API
+```
+
+### 22.48 Timestamp Mapping
+
+Timestamp conversion must be deterministic and timezone-safe.
+
+### 22.49 Version Mapping
+
+Entity versions must map without loss.
+
+Version information is required for:
+
+```text
+Concurrency
+Synchronization
+Conflict Detection
+```
+
+### 22.50 State Mapping
+
+Domain state and persistence state must have explicit mapping rules.
+
+Unknown remote states must not silently map to an incorrect local state.
+
+### 22.51 Database Migration
+
+Room schema changes must use explicit migrations.
+
+Production data must not be lost during normal schema upgrades.
+
+### 22.52 Migration Testing
+
+Every migration must be tested against:
+
+```text
+Previous Schema
+      ↓
+Migration
+      ↓
+New Schema
+```
+
+### 22.53 Repository Error Mapping
+
+Infrastructure errors should be translated into application-level errors.
+
+Example:
+
+```text
+SQLException
+      ↓
+PersistenceFailure
+```
+
+### 22.54 Network Error Mapping
+
+Network-specific failures should be mapped to:
+
+```text
+NetworkUnavailable
+Timeout
+ServerFailure
+AuthenticationFailure
+AuthorizationFailure
+Conflict
+```
+
+where applicable.
+
+### 22.55 Authentication Error Handling
+
+If a remote request returns an authentication failure:
+
+```text
+API
+ ↓
+Authentication Failure
+ ↓
+Session Handling
+```
+
+must follow the Authentication implementation.
+
+### 22.56 Authorization Error Handling
+
+A Backend authorization failure must not be converted into a successful local mutation.
+
+### 22.57 Conflict Response Handling
+
+When synchronization returns a conflict:
+
+```text
+Remote Conflict
+      ↓
+Conflict Data
+      ↓
+Local Conflict Persistence
+      ↓
+Conflict Resolution Flow
+```
+
+### 22.58 Data Consistency
+
+The Data Layer must not expose partially persisted financial state.
+
+### 22.59 Financial Transaction
+
+The following must remain atomic where applicable:
+
+```text
+Expense
++
+ExpenseSplits
++
+SyncOperation
+```
+
+and:
+
+```text
+Settlement
++
+SyncOperation
+```
+
+### 22.60 Group Transaction
+
+Group creation must preserve:
+
+```text
+Group
++
+Initial Membership
++
+SyncOperation
+```
+
+### 22.61 Membership Transaction
+
+Membership mutations and required synchronization state must remain consistent.
+
+### 22.62 Local Delete Strategy
+
+Deletes must follow the synchronization strategy.
+
+Where tombstones are required:
+
+```text
+ACTIVE
+   ↓
+DELETED
+```
+
+must be represented rather than physically removing the record.
+
+### 22.63 Database Cleanup
+
+Physical cleanup of synchronized tombstones must only occur when the synchronization protocol confirms that the records are no longer required.
+
+### 22.64 Data Layer Security
+
+The Data Layer must protect:
+
+```text
+Authentication State
+Device Identity
+Local Financial Data
+Synchronization Metadata
+```
+
+### 22.65 Local Data Security
+
+Sensitive local data must follow the Security Architecture.
+
+### 22.66 API Security
+
+Remote communication must use:
+
+```text
+HTTPS
+Authenticated Requests
+Certificate / Transport Security
+```
+
+according to the Security Architecture.
+
+### 22.67 Data Layer Logging
+
+Data Layer logs should contain operational information only.
+
+Avoid logging:
+
+```text
+Passwords
+Tokens
+Full Financial Payloads
+Sensitive Personal Data
+```
+
+### 22.68 Data Layer Testing
+
+The Android Data Layer must include:
+
+```text
+Repository Tests
+DAO Tests
+Database Tests
+Mapper Tests
+Remote Data Source Tests
+Synchronization Tests
+Migration Tests
+```
+
+### 22.69 DAO Tests
+
+DAO tests must verify:
+
+```text
+Insert
+Read
+Update
+Delete
+Queries
+Indexes
+Relationships
+```
+
+### 22.70 Repository Tests
+
+Repository tests must verify:
+
+```text
+Local Read
+Local Mutation
+Remote Read
+Remote Mutation
+Offline Behavior
+Error Mapping
+Synchronization
+```
+
+### 22.71 Mapper Tests
+
+Mapper tests must verify:
+
+```text
+Domain → Entity
+Entity → Domain
+DTO → Entity
+DTO → Domain
+```
+
+### 22.72 Offline Repository Tests
+
+Test:
+
+```text
+No Network
+Local Read
+Local Create
+Local Update
+Local Delete
+Pending Sync
+```
+
+### 22.73 Remote Repository Tests
+
+Test:
+
+```text
+Successful Request
+Timeout
+Network Failure
+Authentication Failure
+Authorization Failure
+Server Error
+Conflict
+```
+
+### 22.74 Synchronization Repository Tests
+
+Test:
+
+```text
+Pending Operations
+Batching
+Successful Sync
+Retry
+Duplicate Operation
+Conflict
+Cursor Update
+```
+
+### 22.75 Data Migration Tests
+
+Every schema migration must have automated tests.
+
+### 22.76 Data Layer Performance
+
+The Data Layer should minimize:
+
+```text
+Unnecessary Database Reads
+Repeated Mapping
+Large In-Memory Collections
+Unnecessary Network Requests
+```
+
+### 22.77 Database Indexing
+
+Indexes must follow the Local Database Schema and actual query patterns.
+
+Important fields may include:
+
+```text
+Group ID
+Expense ID
+Settlement ID
+User ID
+Version
+Updated At
+Sync State
+```
+
+### 22.78 Database Pagination
+
+Large queries should use pagination or incremental loading.
+
+### 22.79 Data Layer Completion Criteria
+
+Android Data Layer Implementation is complete when:
+
+```text
+Repository Implementations Completed
+Local Data Sources Completed
+Remote Data Sources Completed
+Room Entities Completed
+DAOs Completed
+API Client Completed
+DTOs Completed
+Mappers Completed
+Offline-First Flow Completed
+Sync Queue Integrated
+Transactions Implemented
+Error Mapping Implemented
+Migration Strategy Implemented
+Security Integrated
+Tests Passing
+```
+
+### 22.80 Android Data Layer Invariants
+
+The following rules are mandatory:
+
+- Repository interfaces must remain independent of Android infrastructure.
+- Repository implementations belong to the Data Layer.
+- Room Entities must remain separate from Domain Models.
+- API DTOs must remain separate from Domain Models.
+- Local Data Sources must not contain core business rules.
+- Remote Data Sources must not contain core business rules.
+- Normal application reads should prefer the local database.
+- Supported offline mutations must not require Backend availability.
+- Local business mutations and required SyncOperations must be atomic.
+- Financial state must never be partially persisted.
+- Expense and ExpenseSplits must remain consistent.
+- Settlement and SyncOperation state must remain consistent.
+- Group, initial Membership, and required SyncOperation state must remain consistent.
+- Synchronization must update local state through the same persistence boundaries.
+- Duplicate synchronization operations must not create duplicate financial effects.
+- Version information must be preserved across mappings.
+- Monetary precision must be preserved across Domain, Database, and API layers.
+- Timestamp conversion must be deterministic.
+- Database schema changes must use explicit migrations.
+- Tombstones must not be physically removed before synchronization permits cleanup.
+- Infrastructure errors must be mapped to appropriate application-level errors.
+- Sensitive authentication and financial data must not be unnecessarily logged.
+- Local data security must follow the Security Architecture.
+- Repository, DAO, Mapper, Migration, and Synchronization behavior must be covered by automated tests.
+
+
 ## 23. Android Presentation Layer Implementation
+
+### 23.1 Purpose
+
+This section defines the implementation of the Android Presentation Layer in SplitSync V1.
+
+The Presentation Layer is responsible for:
+
+```text
+UI Rendering
+User Interaction
+UI State
+Navigation
+Loading State
+Error State
+User Feedback
+```
+
+It must consume application/domain data without directly accessing:
+
+```text
+Room
+DAO
+Retrofit / HTTP Client
+Backend API
+```
+
+### 23.2 Presentation Layer Principle
+
+The dependency direction should remain:
+
+```text
+UI
+ ↓
+ViewModel / Presentation Logic
+ ↓
+Application / Domain
+ ↓
+Repository
+```
+
+### 23.3 Presentation Components
+
+The Presentation Layer should contain:
+
+```text
+Screens
+UI Components
+ViewModels
+UI State
+UI Events
+Navigation
+Presentation Mappers
+```
+
+according to the Android Architecture.
+
+### 23.4 Screen Architecture
+
+Each major feature should have a dedicated screen/state boundary.
+
+Examples:
+
+```text
+Group Screen
+Expense List Screen
+Expense Detail Screen
+Create Expense Screen
+Settlement Screen
+Balance Screen
+Sync / Conflict Screen
+Settings Screen
+```
+
+### 23.5 ViewModel
+
+ViewModels should coordinate UI state and user actions.
+
+They should not directly access:
+
+```text
+Room DAO
+Retrofit
+Android Database
+```
+
+### 23.6 ViewModel Responsibility
+
+A ViewModel may handle:
+
+```text
+UI State
+User Events
+Use Case Invocation
+Loading State
+Error State
+Navigation Events
+```
+
+### 23.7 ViewModel Dependency
+
+Preferred:
+
+```text
+ViewModel
+    ↓
+Application Use Case
+    ↓
+Repository
+```
+
+### 23.8 UI State
+
+Each screen should expose an explicit UI state.
+
+Conceptually:
+
+```text
+UiState
+├── Loading
+├── Content
+└── Error
+```
+
+The exact representation may use sealed classes or another project-standard approach.
+
+### 23.9 Loading State
+
+The UI must represent loading explicitly.
+
+```text
+Loading
+   ↓
+Content
+```
+
+### 23.10 Empty State
+
+Screens displaying collections should distinguish:
+
+```text
+Loading
+      ≠
+Empty
+```
+
+### 23.11 Error State
+
+Recoverable errors should be represented explicitly.
+
+Examples:
+
+```text
+Network Error
+Validation Error
+Authorization Error
+Conflict
+Unknown Error
+```
+
+### 23.12 UI Event
+
+User interactions should be represented as explicit events.
+
+Examples:
+
+```text
+CreateExpense
+UpdateExpense
+DeleteExpense
+CreateSettlement
+AddMember
+Refresh
+Retry
+```
+
+### 23.13 Unidirectional Data Flow
+
+The preferred Presentation flow is:
+
+```text
+User Action
+    ↓
+UI Event
+    ↓
+ViewModel
+    ↓
+Use Case
+    ↓
+Repository
+    ↓
+State Update
+    ↓
+UI
+```
+
+### 23.14 State Observation
+
+UI should observe state from the ViewModel.
+
+Conceptually:
+
+```text
+ViewModel
+    ↓
+StateFlow / Flow
+    ↓
+UI
+```
+
+according to the Android architecture.
+
+### 23.15 Local Data Observation
+
+Where local data is reactive:
+
+```text
+Room
+ ↓
+Repository
+ ↓
+Use Case
+ ↓
+ViewModel
+ ↓
+UI
+```
+
+### 23.16 Offline-First UI
+
+The UI should display available local data even when the Backend is unavailable.
+
+```text
+Backend Unavailable
+      ↓
+Local Data
+      ↓
+UI Continues
+```
+
+### 23.17 Offline Mutation UI
+
+When a mutation succeeds locally but is not synchronized yet, the UI should represent the appropriate pending state.
+
+Example:
+
+```text
+Expense Created
+      ↓
+Local State Updated
+      ↓
+Sync Pending
+```
+
+### 23.18 Sync Status
+
+Where required, UI may expose:
+
+```text
+Synced
+Syncing
+Pending
+Failed
+Conflict
+```
+
+### 23.19 Expense Screen
+
+Expense screens should display:
+
+```text
+Expense Amount
+Description
+Payer
+Participants
+Splits
+Date
+Sync State
+```
+
+as required by the UI design.
+
+### 23.20 Expense Creation UI
+
+The Create Expense screen should collect:
+
+```text
+Amount
+Description
+Payer
+Participants
+Split Type
+Split Values
+```
+
+where required.
+
+### 23.21 Expense Validation UI
+
+UI should provide immediate validation feedback for obvious invalid input.
+
+Examples:
+
+```text
+Empty Amount
+Invalid Amount
+Invalid Split
+Missing Participant
+```
+
+### 23.22 Domain Validation UI
+
+UI validation must not replace Domain validation.
+
+```text
+UI Validation
+      ↓
+Early Feedback
+
+Domain Validation
+      ↓
+Authoritative Rule
+```
+
+### 23.23 Expense Split UI
+
+The UI should support the split types defined by V1.
+
+Conceptually:
+
+```text
+Equal
+Custom
+```
+
+### 23.24 Split Total Feedback
+
+For custom splits, the UI should clearly indicate:
+
+```text
+Expense Total
+Allocated Total
+Remaining Amount
+```
+
+where useful.
+
+### 23.25 Balance Screen
+
+The Balance screen should display the derived balance state.
+
+Conceptually:
+
+```text
+User A → Receives
+User B → Pays
+User C → Settled
+```
+
+### 23.26 Balance Refresh
+
+Balance should update automatically when underlying:
+
+```text
+Expenses
+ExpenseSplits
+Settlements
+```
+
+change.
+
+### 23.27 Settlement UI
+
+The Settlement screen should allow supported Users to:
+
+```text
+Select Payer
+Select Receiver
+Enter Amount
+Confirm Settlement
+```
+
+### 23.28 Settlement Validation UI
+
+The UI should validate:
+
+```text
+Payer
+Receiver
+Amount
+```
+
+before invoking the use case.
+
+### 23.29 Group Screen
+
+The Group screen may display:
+
+```text
+Group Name
+Members
+Balances
+Expenses
+Settlements
+Sync State
+```
+
+according to the UI requirements.
+
+### 23.30 Membership UI
+
+Membership management UI should be shown only to Users with the required permission.
+
+```text
+Authorized
+      ↓
+Show Management Controls
+```
+
+### 23.31 Unauthorized UI
+
+The UI must not assume that hiding a control is sufficient authorization.
+
+Backend/Application authorization remains authoritative.
+
+### 23.32 Conflict UI
+
+If synchronization creates a Conflict:
+
+```text
+Conflict Detected
+      ↓
+Conflict State
+      ↓
+User Resolution
+```
+
+where manual resolution is supported.
+
+### 23.33 Conflict Details
+
+Conflict UI should provide enough information for the User to understand the conflicting state without exposing unnecessary internal synchronization data.
+
+### 23.34 Conflict Resolution Action
+
+Resolution actions should invoke an Application Use Case.
+
+```text
+UI
+ ↓
+ViewModel
+ ↓
+ResolveConflictUseCase
+ ↓
+Application
+```
+
+### 23.35 Authentication UI
+
+Authentication screens should handle:
+
+```text
+Login
+Registration
+Session Expiration
+Logout
+```
+
+according to the Authentication model.
+
+### 23.36 Authentication State
+
+The application root navigation should react to:
+
+```text
+Authenticated
+Unauthenticated
+Session Expired
+Device Revoked
+```
+
+as required.
+
+### 23.37 Navigation
+
+Navigation should be controlled through the Presentation architecture.
+
+The UI should not directly construct Repository or Database dependencies.
+
+### 23.38 Navigation State
+
+Navigation should respond to application state where appropriate.
+
+Example:
+
+```text
+Unauthenticated
+      ↓
+Login
+
+Authenticated
+      ↓
+Main Application
+```
+
+### 23.39 Deep Links
+
+If supported, deep links must still pass through:
+
+```text
+Authentication
+Authorization
+Resource Validation
+```
+
+### 23.40 Configuration
+
+Presentation behavior should use the application's configuration/environment strategy.
+
+Hard-coded Backend URLs must not be scattered across UI classes.
+
+### 23.41 Error Presentation
+
+Application errors should be mapped to user-friendly UI messages.
+
+Conceptually:
+
+```text
+Application Error
+      ↓
+Presentation Mapper
+      ↓
+User Message
+```
+
+### 23.42 Technical Error Separation
+
+The UI should not expose technical details such as:
+
+```text
+SQL Exception
+HTTP Stack Trace
+Server Stack Trace
+```
+
+### 23.43 Retry UI
+
+Recoverable failures should provide a retry action where appropriate.
+
+```text
+Error
+ ↓
+Retry
+ ↓
+Use Case
+```
+
+### 23.44 Network Error UI
+
+Network failures should not automatically imply that local data is unavailable.
+
+```text
+Network Failure
+      ↓
+Show Local Data
++
+Show Sync / Retry State
+```
+
+where applicable.
+
+### 23.45 Empty Group UI
+
+An empty Group should have a clear empty state rather than appearing broken.
+
+### 23.46 Empty Expense UI
+
+No Expenses should be represented explicitly.
+
+### 23.47 Empty Settlement UI
+
+No Settlements should be represented explicitly.
+
+### 23.48 Loading Behavior
+
+Loading indicators should not unnecessarily block already available local data.
+
+Preferred:
+
+```text
+Existing Local Data
+      +
+Background Refresh
+```
+
+where supported.
+
+### 23.49 UI Responsiveness
+
+Long-running operations must not execute on the main thread.
+
+Examples:
+
+```text
+Database Operations
+Network Operations
+Large Calculations
+Synchronization
+```
+
+### 23.50 Coroutine Usage
+
+If Kotlin Coroutines are used by the Android architecture, asynchronous work should use structured concurrency.
+
+### 23.51 Lifecycle Awareness
+
+Presentation state collection must respect Android lifecycle boundaries.
+
+### 23.52 Configuration Changes
+
+ViewModels should preserve appropriate UI state across configuration changes.
+
+### 23.53 Process Death
+
+Important application state that must survive process death should be reconstructed from:
+
+```text
+Local Database
+Persistent State
+Authentication State
+```
+
+rather than relying solely on in-memory ViewModel state.
+
+### 23.54 UI State Restoration
+
+Transient UI state may use Android's state restoration mechanisms where required.
+
+### 23.55 Presentation Mapping
+
+Domain models should not expose UI-specific formatting.
+
+For example:
+
+```text
+Money
+      ↓
+Presentation Mapper
+      ↓
+Formatted Currency String
+```
+
+### 23.56 Date Formatting
+
+Dates should be formatted only at the Presentation boundary.
+
+The Domain must preserve the underlying timestamp.
+
+### 23.57 Money Formatting
+
+Money formatting must use the correct:
+
+```text
+Currency
+Locale
+Precision
+```
+
+without changing the underlying financial value.
+
+### 23.58 Balance Formatting
+
+Positive/negative balances should follow the application's defined sign convention and user-facing wording.
+
+### 23.59 Accessibility
+
+Presentation components should support appropriate:
+
+```text
+Content Descriptions
+Readable Text
+Touch Targets
+Semantic Labels
+```
+
+according to Android accessibility requirements.
+
+### 23.60 UI Security
+
+Sensitive information should not unnecessarily appear in:
+
+```text
+Screenshots
+Logs
+Clipboard
+Accessibility Output
+```
+
+where security policy requires protection.
+
+### 23.61 Authentication UI Security
+
+Credential input fields must use appropriate secure input behavior.
+
+### 23.62 Presentation Logging
+
+UI logs should not contain:
+
+```text
+Passwords
+Tokens
+Sensitive Financial Payloads
+```
+
+### 23.63 Presentation Testing
+
+Presentation implementation must include:
+
+```text
+ViewModel Tests
+UI State Tests
+Navigation Tests
+UI Tests
+```
+
+### 23.64 ViewModel Tests
+
+Test:
+
+```text
+Initial State
+Loading
+Success
+Error
+Retry
+User Actions
+```
+
+### 23.65 Expense ViewModel Tests
+
+Test:
+
+```text
+Load Expenses
+Create Expense
+Update Expense
+Delete Expense
+Validation Failure
+Offline Mutation
+```
+
+### 23.66 Settlement ViewModel Tests
+
+Test:
+
+```text
+Load Settlements
+Create Settlement
+Update Settlement
+Delete Settlement
+Validation Failure
+Offline Mutation
+```
+
+### 23.67 Balance ViewModel Tests
+
+Test:
+
+```text
+Load Balance
+Expense Change
+Settlement Change
+Refresh
+Error
+```
+
+### 23.68 Group ViewModel Tests
+
+Test:
+
+```text
+Load Group
+Load Members
+Update Group
+Membership Changes
+Authorization State
+```
+
+### 23.69 Conflict ViewModel Tests
+
+Test:
+
+```text
+Load Conflict
+Display Conflict
+Resolve Conflict
+Resolution Failure
+Retry
+```
+
+### 23.70 Authentication ViewModel Tests
+
+Test:
+
+```text
+Login
+Invalid Credentials
+Session Expiration
+Logout
+Authentication State
+```
+
+### 23.71 UI Tests
+
+Important user flows should have UI tests.
+
+Examples:
+
+```text
+Create Group
+Create Expense
+Split Expense
+View Balance
+Create Settlement
+Add Member
+Resolve Conflict
+```
+
+### 23.72 Offline UI Tests
+
+Verify that the UI remains functional when:
+
+```text
+Network Unavailable
+```
+
+for supported offline features.
+
+### 23.73 Synchronization UI Tests
+
+Test:
+
+```text
+Pending Sync
+Syncing
+Sync Success
+Sync Failure
+Conflict
+```
+
+### 23.74 Presentation Performance
+
+UI rendering should avoid unnecessary recomposition/re-rendering.
+
+### 23.75 Large List Performance
+
+Expense and Settlement lists should support efficient rendering and incremental loading.
+
+### 23.76 Presentation Completion Criteria
+
+Android Presentation Layer Implementation is complete when:
+
+```text
+Screens Implemented
+ViewModels Implemented
+UI State Implemented
+UI Events Implemented
+Navigation Implemented
+Authentication UI Implemented
+Group UI Implemented
+Expense UI Implemented
+Settlement UI Implemented
+Balance UI Implemented
+Membership UI Implemented
+Conflict UI Implemented
+Offline UI Behavior Implemented
+Sync State UI Implemented
+Error Presentation Implemented
+Accessibility Implemented
+Unit Tests Passing
+UI Tests Passing
+```
+
+### 23.77 Android Presentation Invariants
+
+The following rules are mandatory:
+
+- Presentation must not directly access Room DAOs.
+- Presentation must not directly access the Backend API.
+- Presentation must not contain core business rules.
+- ViewModels must coordinate UI state and user actions.
+- UI state must be explicit.
+- Loading, Empty, Content, and Error states must be distinguishable.
+- UI must follow the defined unidirectional data flow.
+- Normal UI reads should originate from local application state.
+- Supported offline operations must remain usable without Backend availability.
+- UI validation must not replace Domain validation.
+- Client-side authorization must not replace Backend authorization.
+- Financial values must not be modified by presentation formatting.
+- Money formatting must preserve the underlying Domain value.
+- Date formatting must occur at the Presentation boundary.
+- Network failures must not unnecessarily hide valid local data.
+- Long-running operations must not block the Android main thread.
+- ViewModels must respect Android lifecycle behavior.
+- Important state must be recoverable after process recreation where required.
+- Authentication state must control protected navigation.
+- Conflict resolution must invoke Application Use Cases.
+- Sensitive authentication and financial information must not be unnecessarily logged or exposed.
+- Presentation behavior must be covered by ViewModel and UI tests.
 
 ## 24. Offline-First Implementation
 
+### 24.1 Purpose
+
+This section defines the implementation of the Offline-First architecture in SplitSync V1.
+
+The application must remain usable for supported operations when the Backend is unavailable.
+
+The fundamental principle is:
+
+```text
+Local Database
+      ↓
+Primary Application State
+      ↓
+Backend Synchronization
+```
+
+### 24.2 Offline-First Principle
+
+The application must not depend on continuous network connectivity for supported core operations.
+
+```text
+Network Available
+      ↓
+Local State + Synchronization
+
+Network Unavailable
+      ↓
+Local State
+```
+
+### 24.3 Local Source of Truth
+
+For Android application behavior, the local database is the primary source of truth for currently available application state.
+
+```text
+Room
+  ↓
+Repository
+  ↓
+Application
+  ↓
+Presentation
+```
+
+### 24.4 Supported Offline Operations
+
+V1 offline behavior should support the operations defined by the Offline Architecture.
+
+Core operations include:
+
+```text
+View Groups
+View Members
+View Expenses
+Create Expense
+Update Expense
+View Settlements
+Create Settlement
+Calculate Balances
+Queue Synchronization
+```
+
+Additional operations must follow their individual feature requirements.
+
+### 24.5 Offline Read Flow
+
+```text
+UI
+ ↓
+ViewModel
+ ↓
+Use Case
+ ↓
+Repository
+ ↓
+Local Data Source
+ ↓
+Room
+ ↓
+Current Local State
+```
+
+### 24.6 Offline Mutation Flow
+
+```text
+User Action
+      ↓
+Application Service
+      ↓
+Domain Validation
+      ↓
+Repository
+      ↓
+Local Transaction
+ ┌────┼─────────────┐
+ ↓    ↓             ↓
+Entity Related   SyncOperation
+Data             = PENDING
+ └────┼─────────────┘
+      ↓
+    Commit
+      ↓
+UI Updated
+```
+
+### 24.7 Offline Mutation Requirement
+
+A supported mutation must not wait for the Backend before updating valid local application state.
+
+### 24.8 Local Validation
+
+Offline mutations must execute the same Domain validation rules as online mutations.
+
+```text
+Offline
+   ↓
+Domain Validation
+
+Online
+   ↓
+Domain Validation
+```
+
+### 24.9 Offline Expense Creation
+
+Expense creation should follow:
+
+```text
+Create Expense
+      ↓
+Validate Group
+      ↓
+Validate Membership
+      ↓
+Validate Amount
+      ↓
+Validate Splits
+      ↓
+Persist Expense
+      ↓
+Persist Splits
+      ↓
+Create SyncOperation
+      ↓
+Commit
+```
+
+### 24.10 Offline Settlement Creation
+
+Settlement creation should follow:
+
+```text
+Create Settlement
+      ↓
+Validate
+      ↓
+Persist Settlement
+      ↓
+Create SyncOperation
+      ↓
+Commit
+```
+
+### 24.11 Offline Group Creation
+
+Group creation should follow:
+
+```text
+Create Group
+      ↓
+Create Owner Membership
+      ↓
+Create SyncOperation
+      ↓
+Commit
+```
+
+### 24.12 Offline Membership Changes
+
+Membership changes that are permitted offline must:
+
+```text
+Validate
+      ↓
+Persist Membership State
+      ↓
+Create SyncOperation
+      ↓
+Commit
+```
+
+### 24.13 Local Transaction Boundary
+
+Offline mutations must use a transaction whenever multiple records must remain consistent.
+
+Example:
+
+```text
+Expense
++
+ExpenseSplits
++
+SyncOperation
+```
+
+must commit together.
+
+### 24.14 Offline SyncOperation
+
+Every supported offline mutation that requires Backend synchronization must create a SyncOperation.
+
+Conceptually:
+
+```text
+Local Mutation
+      +
+SyncOperation
+```
+
+### 24.15 SyncOperation State
+
+A newly queued operation should enter:
+
+```text
+PENDING
+```
+
+according to the Sync State Model.
+
+### 24.16 Offline Queue
+
+The local database acts as the persistent synchronization queue.
+
+```text
+Local Mutation
+      ↓
+SyncOperation
+      ↓
+PENDING
+      ↓
+Sync Worker
+```
+
+### 24.17 Queue Persistence
+
+Pending operations must survive:
+
+```text
+Application Restart
+Process Death
+Temporary Network Failure
+Device Restart
+```
+
+where supported by the platform lifecycle.
+
+### 24.18 Application Restart
+
+After restart:
+
+```text
+Room
+ ↓
+Pending SyncOperations
+ ↓
+Synchronization Worker
+```
+
+must continue synchronization.
+
+### 24.19 Network Availability
+
+Network availability should be treated as an input to synchronization rather than a prerequisite for local application functionality.
+
+### 24.20 Network Recovery
+
+When connectivity becomes available:
+
+```text
+Network Available
+      ↓
+Sync Worker
+      ↓
+Pending Operations
+      ↓
+Backend
+```
+
+### 24.21 Synchronization Trigger
+
+Synchronization may be triggered by:
+
+```text
+Network Recovery
+Application Start
+Periodic Work
+User Refresh
+Background Work
+```
+
+according to the Sync Architecture and Android lifecycle constraints.
+
+### 24.22 Background Synchronization
+
+Background synchronization should use the Android background execution mechanism selected by the project architecture.
+
+### 24.23 Sync Worker
+
+Conceptually:
+
+```text
+SyncWorker
+      ↓
+Load Pending Operations
+      ↓
+Prepare Batch
+      ↓
+Send Request
+      ↓
+Process Response
+      ↓
+Update Local State
+```
+
+### 24.24 Batch Synchronization
+
+Pending operations should be processed in controlled batches.
+
+```text
+Pending Operations
+      ↓
+Batch
+      ↓
+Backend
+```
+
+### 24.25 Batch Size
+
+Batch size must be limited to prevent:
+
+```text
+Large Requests
+Memory Pressure
+Long Transactions
+Network Timeouts
+```
+
+### 24.26 Operation Ordering
+
+Operations must respect dependency ordering where required.
+
+Example:
+
+```text
+Create Group
+      ↓
+Create Membership
+      ↓
+Create Expense
+```
+
+### 24.27 Dependency Handling
+
+If an operation depends on state that has not yet synchronized:
+
+```text
+Dependency Missing
+      ↓
+Defer Operation
+      ↓
+Retry Later
+```
+
+### 24.28 Out-of-Order Operations
+
+The synchronization layer must not apply operations in an order that creates invalid Domain state.
+
+### 24.29 Offline Updates
+
+If a User updates an entity multiple times while offline:
+
+```text
+Update V1
+   ↓
+Update V2
+   ↓
+Update V3
+```
+
+the synchronization layer should follow the SyncOperation compaction/coalescing strategy defined by V1.
+
+### 24.30 Operation Coalescing
+
+If operation coalescing is supported:
+
+```text
+CREATE
++
+UPDATE
++
+UPDATE
+      ↓
+Final Synchronizable State
+```
+
+may be represented by a reduced operation set.
+
+The behavior must remain deterministic.
+
+### 24.31 No Operation Loss
+
+Operation coalescing must never remove a required financial state transition incorrectly.
+
+### 24.32 Offline Delete
+
+Offline deletion must follow the synchronization-safe deletion strategy.
+
+```text
+Delete
+   ↓
+Tombstone
+   ↓
+SyncOperation
+```
+
+where tombstones are required.
+
+### 24.33 Offline Conflict
+
+Conflicts may occur after an offline mutation reaches the Backend.
+
+```text
+Offline Change
+      ↓
+Local State
+      ↓
+Sync
+      ↓
+Remote Conflict
+```
+
+### 24.34 Conflict Handling
+
+A conflict must not silently overwrite newer remote state.
+
+```text
+Conflict
+      ↓
+Persist Conflict State
+      ↓
+Resolution
+```
+
+### 24.35 Offline Conflict UI
+
+If manual resolution is required:
+
+```text
+Conflict State
+      ↓
+Presentation
+      ↓
+User Resolution
+      ↓
+Application Service
+```
+
+### 24.36 Local Balance Calculation
+
+Balance must be calculated from local financial state.
+
+```text
+Local Expenses
++
+Local Settlements
+      ↓
+BalanceCalculator
+      ↓
+Current Balance
+```
+
+### 24.37 Offline Balance
+
+Balance calculation must not require Backend availability.
+
+### 24.38 Balance After Local Mutation
+
+After a successful local mutation:
+
+```text
+Local Mutation
+      ↓
+Room Commit
+      ↓
+Balance Recalculation
+      ↓
+UI Update
+```
+
+### 24.39 Offline UI State
+
+The UI should distinguish between:
+
+```text
+Local State
++
+Synchronization State
+```
+
+For example:
+
+```text
+Expense Visible
+Sync Pending
+```
+
+### 24.40 Offline Sync Indicator
+
+Where required, the UI may show:
+
+```text
+Synced
+Pending
+Syncing
+Failed
+Conflict
+```
+
+### 24.41 Offline Error Handling
+
+A network error should not be treated as a local persistence failure.
+
+```text
+Network Failure
+      ↓
+Local State Remains
+      ↓
+Sync Pending
+```
+
+where the mutation was successfully committed locally.
+
+### 24.42 Local Persistence Failure
+
+If local persistence fails:
+
+```text
+Database Failure
+      ↓
+Mutation Not Committed
+      ↓
+Error
+```
+
+The UI must not display the mutation as successfully persisted.
+
+### 24.43 Transaction Failure
+
+If any required part of an offline mutation fails:
+
+```text
+Rollback
+```
+
+must prevent partial state.
+
+### 24.44 Offline Authentication
+
+Offline authentication behavior must follow the Authentication and Security architecture.
+
+Previously authenticated Users may continue supported offline operations only when permitted by the security policy.
+
+### 24.45 Offline Authorization
+
+Offline authorization must use the locally available authorization state according to the defined security model.
+
+### 24.46 Remote Authorization Changes
+
+If authorization changes while the Device is offline, the Device may temporarily hold stale authorization state.
+
+Sensitive operations must follow the security policy and may require Backend confirmation.
+
+### 24.47 Device Identity
+
+All offline synchronization operations must use the current Device Identity.
+
+```text
+Device ID
+      ↓
+SyncOperation
+```
+
+### 24.48 Offline Operation Identity
+
+Every locally generated SyncOperation must receive a unique Operation ID.
+
+### 24.49 Idempotency
+
+Offline operations must remain idempotent when transmitted multiple times.
+
+```text
+Same Operation ID
+      ↓
+No Duplicate Financial Effect
+```
+
+### 24.50 Retry Strategy
+
+Transient synchronization failures should use controlled retries.
+
+```text
+FAILED
+  ↓
+Retry
+  ↓
+PENDING / SYNCING
+```
+
+according to the Sync State Model.
+
+### 24.51 Retry Backoff
+
+Retries should use exponential or otherwise controlled backoff with an appropriate upper limit.
+
+### 24.52 Permanent Failure
+
+Operations that cannot be applied after validation or authorization failure must not retry indefinitely.
+
+```text
+Permanent Failure
+      ↓
+Failed / Conflict State
+```
+
+### 24.53 Authentication Failure During Sync
+
+If synchronization fails because authentication has expired:
+
+```text
+Sync
+ ↓
+Authentication Failure
+ ↓
+Refresh / Re-authenticate
+ ↓
+Retry
+```
+
+according to the Authentication implementation.
+
+### 24.54 Authorization Failure During Sync
+
+If synchronization is rejected because the Device/User is no longer authorized:
+
+```text
+Authorization Failure
+      ↓
+Do Not Blindly Retry
+      ↓
+Update Local Security / Sync State
+```
+
+### 24.55 Server Conflict During Sync
+
+If the Backend detects a version conflict:
+
+```text
+Conflict Response
+      ↓
+Persist Conflict
+      ↓
+Stop Invalid Overwrite
+```
+
+### 24.56 Offline Data Recovery
+
+The local database must remain the persistent state across application restarts.
+
+### 24.57 Crash Recovery
+
+If the application crashes during a mutation transaction:
+
+```text
+Transaction
+      ↓
+Crash
+      ↓
+Room Recovery
+      ↓
+Atomic State
+```
+
+The application must not contain partial financial state.
+
+### 24.58 Sync Worker Crash Recovery
+
+If the Sync Worker terminates unexpectedly:
+
+```text
+SYNCING Operation
+      ↓
+Worker Termination
+      ↓
+Recoverable Sync State
+      ↓
+Retry
+```
+
+The exact recovery mechanism must follow the Sync State Model.
+
+### 24.59 Offline Data Consistency
+
+The following must remain consistent:
+
+```text
+Domain Entity
++
+Related Entities
++
+SyncOperation
+```
+
+### 24.60 Offline Expense Consistency
+
+```text
+Expense
++
+ExpenseSplits
++
+SyncOperation
+```
+
+must remain consistent.
+
+### 24.61 Offline Settlement Consistency
+
+```text
+Settlement
++
+SyncOperation
+```
+
+must remain consistent.
+
+### 24.62 Offline Group Consistency
+
+```text
+Group
++
+Initial Membership
++
+SyncOperation
+```
+
+must remain consistent.
+
+### 24.63 Local Database as Durable Queue
+
+The synchronization queue must not depend solely on:
+
+```text
+In-Memory Queue
+```
+
+because application process termination must not lose pending operations.
+
+### 24.64 Memory Usage
+
+Offline synchronization must process operations in bounded batches and must not load an unbounded queue into memory.
+
+### 24.65 Large Offline Queue
+
+If a Device accumulates a large number of pending operations:
+
+```text
+Pending Queue
+      ↓
+Bounded Batch Processing
+      ↓
+Progressive Synchronization
+```
+
+must be used.
+
+### 24.66 Offline Data Retention
+
+Local data retention must follow the Database and Security Architecture.
+
+### 24.67 Tombstone Retention
+
+Tombstones must remain until the synchronization protocol determines that they can be safely removed.
+
+### 24.68 Offline Logging
+
+Offline logs should provide enough information to diagnose:
+
+```text
+Sync Failure
+Database Failure
+Retry
+Conflict
+```
+
+without exposing sensitive data.
+
+### 24.69 Offline Metrics
+
+Where telemetry is supported, track:
+
+```text
+Pending Operations
+Sync Success
+Sync Failure
+Retry Count
+Conflict Count
+```
+
+without collecting unnecessary personal/financial data.
+
+### 24.70 Offline Testing
+
+Offline-First implementation must include:
+
+```text
+Unit Tests
+Repository Tests
+Database Tests
+Integration Tests
+UI Tests
+Synchronization Tests
+```
+
+### 24.71 Offline Read Tests
+
+Test:
+
+```text
+Network Available
+Network Unavailable
+Local Data Present
+Local Data Empty
+```
+
+### 24.72 Offline Mutation Tests
+
+Test:
+
+```text
+Create Expense Offline
+Update Expense Offline
+Create Settlement Offline
+Create Group Offline
+```
+
+according to supported operations.
+
+### 24.73 Offline Restart Tests
+
+Test:
+
+```text
+Create Offline
+Application Restart
+Pending Sync Still Present
+Synchronization Continues
+```
+
+### 24.74 Offline Crash Tests
+
+Test application termination during:
+
+```text
+Local Transaction
+Sync Processing
+```
+
+and verify consistent recovery.
+
+### 24.75 Offline Retry Tests
+
+Test:
+
+```text
+Network Failure
+Retry
+Network Recovery
+Successful Sync
+```
+
+### 24.76 Offline Conflict Tests
+
+Test:
+
+```text
+Offline Mutation
+Remote Mutation
+Sync
+Conflict
+Resolution
+Balance Recalculation
+```
+
+### 24.77 Offline Authorization Tests
+
+Test behavior when:
+
+```text
+User Authorized Offline
+Permission Changed Remotely
+Device Reconnects
+```
+
+### 24.78 Offline Completion Criteria
+
+Offline-First Implementation is complete when:
+
+```text
+Local Source of Truth Implemented
+Offline Reads Implemented
+Offline Mutations Implemented
+Local Transactions Implemented
+Sync Queue Implemented
+Persistent Pending Operations Implemented
+Retry Implemented
+Backoff Implemented
+Conflict Handling Integrated
+Offline Balance Implemented
+Offline UI State Implemented
+Crash Recovery Verified
+Restart Recovery Verified
+Security Policy Integrated
+Tests Passing
+```
+
+### 24.79 Offline-First Invariants
+
+The following rules are mandatory:
+
+- Supported core operations must work without continuous Backend availability.
+- Local database must be the primary Android application state.
+- Offline mutations must use Domain validation.
+- Local mutations and required SyncOperations must be atomic.
+- Pending SyncOperations must survive application restart.
+- Synchronization state must not depend solely on in-memory memory.
+- Every synchronizable offline mutation must have a unique Operation ID.
+- Duplicate delivery must not create duplicate financial effects.
+- Network failure must not erase successfully committed local state.
+- Local persistence failure must not report a successful mutation.
+- Financial data must never be partially persisted.
+- Expense and ExpenseSplits must remain consistent.
+- Settlement and SyncOperation state must remain consistent.
+- Group, Membership, and SyncOperation state must remain consistent.
+- Offline balance calculation must work from local financial state.
+- Offline UI must distinguish local state from synchronization state where required.
+- Authentication and Authorization rules must remain applicable offline.
+- Sensitive authorization changes may require Backend confirmation.
+- Tombstones must not be removed before synchronization permits cleanup.
+- Retryable synchronization failures must not cause uncontrolled retry loops.
+- Permanent failures must not be retried indefinitely.
+- Offline conflicts must not silently overwrite newer remote state.
+- Crash and process termination must not leave partial financial state.
+- Offline synchronization must use the current Device Identity.
+- Offline behavior must be covered by automated tests.
+
+
 ## 25. Sync Operation Implementation
+
+### 25.1 Purpose
+
+This section defines the implementation of SyncOperations in SplitSync V1.
+
+A SyncOperation represents a synchronizable change produced by a Device.
+
+Conceptually:
+
+```text
+Local Mutation
+      ↓
+SyncOperation
+      ↓
+Pending Queue
+      ↓
+Backend / P2P
+```
+
+### 25.2 SyncOperation Principle
+
+The synchronization system must synchronize logical operations/state changes rather than arbitrary database rows.
+
+### 25.3 SyncOperation Identity
+
+Every SyncOperation must have a globally unique:
+
+```text
+Operation ID
+```
+
+### 25.4 Operation ID Generation
+
+Operation IDs must be generated locally and must support:
+
+```text
+Offline Creation
+Global Uniqueness
+Idempotency
+P2P Synchronization
+Backend Synchronization
+```
+
+### 25.5 SyncOperation Structure
+
+Conceptually:
+
+```text
+SyncOperation
+├── Operation ID
+├── Device ID
+├── User ID
+├── Entity Type
+├── Entity ID
+├── Operation Type
+├── Base Version
+├── Resulting Version
+├── Payload
+├── Timestamp
+└── State
+```
+
+The exact fields must follow the Sync Operation Model.
+
+### 25.6 Entity Type
+
+Entity Type identifies the affected Domain resource.
+
+Examples:
+
+```text
+GROUP
+MEMBERSHIP
+EXPENSE
+EXPENSE_SPLIT
+SETTLEMENT
+```
+
+### 25.7 Operation Type
+
+Operation Type identifies the mutation.
+
+Examples:
+
+```text
+CREATE
+UPDATE
+DELETE
+```
+
+Membership-specific operations may use the operation model defined by the synchronization design.
+
+### 25.8 Entity ID
+
+Every operation must identify the affected entity.
+
+```text
+Entity Type
++
+Entity ID
+```
+
+must uniquely identify the target resource within the synchronization context.
+
+### 25.9 Device ID
+
+The SyncOperation must identify the Device that generated it.
+
+```text
+Device ID
+```
+
+is the source identity and must remain separate from:
+
+```text
+Operation ID
+Version
+```
+
+### 25.10 User ID
+
+Where required, the operation should identify the User responsible for the mutation.
+
+### 25.11 Base Version
+
+For version-aware synchronization, the operation should contain the version from which the mutation was produced.
+
+Conceptually:
+
+```text
+Base Version = 5
+```
+
+### 25.12 Resulting Version
+
+The resulting local version may be included according to the Sync Data Model.
+
+### 25.13 Operation Timestamp
+
+Operations should contain a timestamp according to the synchronization model.
+
+The timestamp must not be treated as the sole conflict-resolution mechanism.
+
+### 25.14 Operation Payload
+
+The payload must contain sufficient information for the receiving side to validate and apply the operation.
+
+### 25.15 Payload Principle
+
+The payload must not expose unnecessary infrastructure-specific data.
+
+### 25.16 Expense Operation Payload
+
+An Expense operation may contain:
+
+```text
+Expense ID
+Group ID
+Creator
+Amount
+Currency
+Description
+Timestamp
+Version
+Splits
+State
+```
+
+according to the operation type.
+
+### 25.17 Settlement Operation Payload
+
+A Settlement operation may contain:
+
+```text
+Settlement ID
+Group ID
+Payer
+Receiver
+Amount
+Currency
+Timestamp
+Version
+State
+```
+
+### 25.18 Group Operation Payload
+
+A Group operation may contain:
+
+```text
+Group ID
+Name
+Owner
+Version
+State
+```
+
+### 25.19 Membership Operation Payload
+
+A Membership operation may contain:
+
+```text
+Group ID
+User ID
+Role
+State
+Version
+```
+
+### 25.20 Operation Creation
+
+A SyncOperation must be created as part of the same transaction as the local mutation.
+
+```text
+Mutation
++
+SyncOperation
+      ↓
+Commit
+```
+
+### 25.21 Operation State
+
+The operation lifecycle should follow the Sync State Model.
+
+Conceptually:
+
+```text
+PENDING
+   ↓
+SYNCING
+   ↓
+APPLIED
+```
+
+or:
+
+```text
+PENDING
+   ↓
+FAILED
+```
+
+with conflict handling where applicable.
+
+### 25.22 PENDING
+
+PENDING means:
+
+```text
+Operation Created Locally
++
+Not Yet Successfully Synchronized
+```
+
+### 25.23 SYNCING
+
+SYNCING means:
+
+```text
+Operation Currently Being Processed
+```
+
+### 25.24 APPLIED
+
+APPLIED means the synchronization target has acknowledged the operation according to the synchronization protocol.
+
+### 25.25 FAILED
+
+FAILED represents an operation that could not currently be applied.
+
+The failure must be classified as:
+
+```text
+Retryable
+```
+
+or:
+
+```text
+Permanent
+```
+
+where required.
+
+### 25.26 CONFLICT
+
+If the operation cannot be safely applied because of concurrent state:
+
+```text
+Operation
+      ↓
+Conflict
+```
+
+must be represented according to the Conflict Data Model.
+
+### 25.27 Retryable Failure
+
+Examples:
+
+```text
+Network Failure
+Timeout
+Temporary Server Failure
+```
+
+should remain retryable.
+
+### 25.28 Permanent Failure
+
+Examples may include:
+
+```text
+Invalid Domain State
+Unauthorized Operation
+Invalid Resource
+Unsupported Operation
+```
+
+These must not be retried indefinitely.
+
+### 25.29 SyncOperation Queue
+
+Pending operations must be persisted in the local database.
+
+```text
+Room
+ ↓
+SyncOperation
+ ↓
+PENDING
+```
+
+### 25.30 Queue Retrieval
+
+The synchronization worker should retrieve operations using deterministic ordering.
+
+### 25.31 Operation Ordering
+
+Ordering may consider:
+
+```text
+Creation Time
+Dependency
+Entity Relationship
+Sequence
+```
+
+according to the synchronization protocol.
+
+### 25.32 Dependency Ordering
+
+Dependent operations must respect required dependencies.
+
+Example:
+
+```text
+CREATE GROUP
+      ↓
+CREATE MEMBERSHIP
+      ↓
+CREATE EXPENSE
+```
+
+### 25.33 Operation Batching
+
+Operations should be sent in bounded batches.
+
+### 25.34 Batch Processing
+
+```text
+Load Pending
+      ↓
+Validate Batch
+      ↓
+Send
+      ↓
+Process Individual Results
+      ↓
+Update States
+```
+
+### 25.35 Partial Batch Failure
+
+If some operations succeed and others fail:
+
+```text
+Operation A → APPLIED
+Operation B → RETRY
+Operation C → CONFLICT
+```
+
+the system must preserve each operation's independent state.
+
+### 25.36 Batch Transaction
+
+Updating local synchronization state after a response must use appropriate transaction boundaries.
+
+### 25.37 Idempotency
+
+The Backend must recognize duplicate Operation IDs.
+
+```text
+Operation ID
+      ↓
+Already Applied?
+      ↓
+Return Existing Result
+```
+
+### 25.38 P2P Idempotency
+
+P2P receivers must also detect duplicate Operation IDs.
+
+### 25.39 Duplicate Delivery
+
+Duplicate delivery must not create:
+
+```text
+Duplicate Expense
+Duplicate Settlement
+Duplicate Membership
+```
+
+or another duplicate business effect.
+
+### 25.40 Operation Acknowledgement
+
+The synchronization target should acknowledge successfully processed operations.
+
+### 25.41 Acknowledgement Handling
+
+After acknowledgement:
+
+```text
+PENDING
+   ↓
+APPLIED
+```
+
+and required synchronization metadata should be updated.
+
+### 25.42 Cursor Update
+
+Incoming synchronization data and cursor updates must remain consistent.
+
+```text
+Apply Remote Changes
+      +
+Update Cursor
+      ↓
+Commit
+```
+
+### 25.43 Cursor Safety
+
+A cursor must not advance beyond changes that have not been successfully persisted.
+
+### 25.44 Incoming Operation
+
+Incoming operations should follow:
+
+```text
+Receive
+   ↓
+Authenticate
+   ↓
+Authorize
+   ↓
+Validate
+   ↓
+Check Dependency
+   ↓
+Check Version
+   ↓
+Apply / Conflict
+   ↓
+Persist
+```
+
+### 25.45 Incoming Operation Persistence
+
+Incoming changes must be persisted atomically with the required synchronization state.
+
+### 25.46 Version Validation
+
+For version-aware operations:
+
+```text
+Incoming Base Version
+      +
+Current Local Version
+      ↓
+Compatible?
+```
+
+### 25.47 Version Match
+
+If versions are compatible:
+
+```text
+Apply Operation
+```
+
+### 25.48 Version Mismatch
+
+If versions are incompatible:
+
+```text
+Version Mismatch
+      ↓
+Conflict Detection
+```
+
+### 25.49 Conflict Creation
+
+A Conflict record should preserve enough information to support resolution.
+
+Conceptually:
+
+```text
+Conflict
+├── Conflict ID
+├── Entity ID
+├── Local State
+├── Remote State
+├── Local Version
+└── Remote Version
+```
+
+### 25.50 Conflict Operation State
+
+An operation involved in a conflict must not be marked APPLIED until the conflict is resolved according to the synchronization protocol.
+
+### 25.51 Conflict Resolution
+
+Resolution should follow:
+
+```text
+Conflict
+      ↓
+Resolution Decision
+      ↓
+Valid Domain State
+      ↓
+Persist
+      ↓
+Synchronization State Updated
+```
+
+### 25.52 Operation Retry
+
+Retryable operations should return to a retryable state.
+
+### 25.53 Retry Count
+
+The system may track:
+
+```text
+Retry Count
+```
+
+for operational control.
+
+### 25.54 Retry Limit
+
+Retry limits should prevent infinite processing loops.
+
+### 25.55 Backoff
+
+Retries should use controlled backoff.
+
+### 25.56 Dead-Letter / Permanent Failure
+
+If the architecture uses a dead-letter or permanent failure state, operations that exceed retry policy should move there.
+
+### 25.57 Operation Compaction
+
+Where supported, multiple operations for the same entity may be compacted.
+
+Example:
+
+```text
+CREATE
+UPDATE
+UPDATE
+      ↓
+Final State Operation
+```
+
+### 25.58 Compaction Safety
+
+Compaction must preserve:
+
+```text
+Final Entity State
+Dependencies
+Conflict Detection
+Audit Requirements
+```
+
+### 25.59 Financial Operation Compaction
+
+Financial operations must not be compacted in a way that changes the financial outcome.
+
+### 25.60 Operation Serialization
+
+Operation payload serialization must be:
+
+```text
+Deterministic
+Versioned
+Compatible
+Validated
+```
+
+### 25.61 Serialization Format
+
+The synchronization payload format should follow the defined API/Data Model.
+
+JSON may be used where the Backend API uses JSON.
+
+### 25.62 Payload Version
+
+If payload structure evolves, the operation should carry or be associated with the appropriate protocol/schema version.
+
+### 25.63 Unknown Payload Version
+
+Unsupported payload versions must be rejected safely.
+
+### 25.64 Unknown Operation Type
+
+Unknown operation types must not be silently applied.
+
+```text
+Unknown Operation
+      ↓
+Reject
+```
+
+### 25.65 Unknown Entity Type
+
+Unknown Entity Types must be rejected safely.
+
+### 25.66 Operation Validation
+
+Before applying an operation, validate:
+
+```text
+Operation ID
+Device ID
+Entity Type
+Entity ID
+Operation Type
+Payload
+Version
+Authorization
+```
+
+### 25.67 Domain Validation
+
+After synchronization-level validation:
+
+```text
+Sync Validation
+      ↓
+Domain Validation
+      ↓
+Apply
+```
+
+### 25.68 Operation Authorization
+
+The receiving side must verify that the operation source is authorized to mutate the target resource.
+
+### 25.69 Operation Authentication
+
+Remote operations must be associated with an authenticated/trusted source.
+
+### 25.70 Operation Replay Protection
+
+Operation IDs and synchronization metadata must prevent malicious or accidental replay.
+
+### 25.71 Operation Source Verification
+
+A received:
+
+```text
+Device ID
+```
+
+must correspond to the authenticated/trusted source.
+
+### 25.72 Operation and Device Revocation
+
+Operations from revoked Devices must not be accepted for protected synchronization.
+
+### 25.73 Operation Logging
+
+Synchronization logs may contain:
+
+```text
+Operation ID
+Entity Type
+Entity ID
+Device ID
+Operation Type
+Result
+```
+
+but must not unnecessarily log full financial payloads.
+
+### 25.74 Operation Metrics
+
+Useful synchronization metrics include:
+
+```text
+Pending Count
+Applied Count
+Failed Count
+Conflict Count
+Retry Count
+Batch Size
+Sync Latency
+```
+
+### 25.75 Operation Cleanup
+
+Successfully synchronized operations may be cleaned up according to the retention strategy.
+
+Cleanup must not occur before the protocol guarantees that the operation is no longer required.
+
+### 25.76 Operation Audit
+
+If auditability is required, operation metadata must remain available according to the retention policy.
+
+### 25.77 Operation and Local Database
+
+The local SyncOperation table must be indexed for:
+
+```text
+Operation ID
+State
+Device ID
+Entity Type
+Entity ID
+Created At
+```
+
+where required.
+
+### 25.78 Operation Query
+
+The Data Layer should provide queries for:
+
+```text
+Pending Operations
+Retryable Operations
+Operations By Entity
+Operation By ID
+Conflicted Operations
+```
+
+### 25.79 Operation Repository
+
+A SyncOperationRepository should abstract persistence and retrieval of synchronization operations.
+
+### 25.80 Sync Service
+
+The SyncService should coordinate:
+
+```text
+Operation Retrieval
+Batching
+Remote Transmission
+Response Processing
+Retry
+Conflict Handling
+State Updates
+```
+
+### 25.81 Sync Worker
+
+The Android SyncWorker should invoke SyncService rather than implementing the complete synchronization algorithm itself.
+
+### 25.82 Backend Sync Service
+
+The Backend should use a dedicated synchronization service to:
+
+```text
+Authenticate
+Authorize
+Validate
+Deduplicate
+Apply
+Detect Conflict
+Return Changes
+```
+
+### 25.83 P2P Sync Service
+
+P2P synchronization should use the same logical SyncOperation processing rules.
+
+### 25.84 Sync Protocol Consistency
+
+Backend and P2P synchronization must apply the same:
+
+```text
+Operation Validation
+Domain Validation
+Version Rules
+Conflict Rules
+Idempotency Rules
+```
+
+### 25.85 Operation and Balance
+
+After an Expense or Settlement operation is applied:
+
+```text
+Persist Financial State
+      ↓
+Balance Calculation
+```
+
+must reflect the resulting state.
+
+### 25.86 Operation and Membership
+
+Membership operations must affect authorization and future financial operations according to the Group and Membership rules.
+
+### 25.87 Operation and Group Dependency
+
+Group operations must be available before dependent operations are applied where required.
+
+### 25.88 Operation Transaction
+
+The following must be atomic where applicable:
+
+```text
+Incoming Operation
++
+Domain State Change
++
+Sync State
++
+Cursor
+```
+
+### 25.89 Local Operation Transaction
+
+For local mutations:
+
+```text
+Domain State
++
+SyncOperation
+```
+
+must be atomic.
+
+### 25.90 Remote Operation Transaction
+
+For incoming changes:
+
+```text
+Incoming State
++
+Applied Operation State
++
+Cursor
+```
+
+must remain consistent.
+
+### 25.91 Operation Testing
+
+SyncOperation implementation must include:
+
+```text
+Unit Tests
+Repository Tests
+Serialization Tests
+Synchronization Tests
+Integration Tests
+Security Tests
+```
+
+### 25.92 Operation Creation Tests
+
+Test:
+
+```text
+Unique ID
+Correct Entity
+Correct Operation Type
+Correct Version
+Correct Device ID
+Correct Payload
+```
+
+### 25.93 Operation Queue Tests
+
+Test:
+
+```text
+Pending
+Ordering
+Batching
+Retry
+Failure
+Cleanup
+```
+
+### 25.94 Idempotency Tests
+
+Test:
+
+```text
+Same Operation Twice
+      ↓
+One Business Effect
+```
+
+### 25.95 Version Tests
+
+Test:
+
+```text
+Matching Version
+Stale Version
+Future Version
+Concurrent Update
+```
+
+### 25.96 Conflict Tests
+
+Test:
+
+```text
+Conflict Detection
+Conflict Persistence
+Conflict Resolution
+Operation State
+Balance Recalculation
+```
+
+### 25.97 Retry Tests
+
+Test:
+
+```text
+Transient Failure
+Retry
+Backoff
+Success
+Permanent Failure
+```
+
+### 25.98 Dependency Tests
+
+Test:
+
+```text
+Group Before Expense
+Membership Before Expense
+Out-of-Order Operations
+Deferred Operation
+```
+
+### 25.99 P2P Tests
+
+Test:
+
+```text
+Operation Transfer
+Duplicate Operation
+Unknown Operation
+Version Conflict
+Peer Authentication
+Peer Authorization
+```
+
+### 25.100 Operation Security Tests
+
+Test:
+
+```text
+Invalid Device
+Revoked Device
+Unauthorized Entity
+Operation Replay
+Invalid Payload
+Unknown Operation Type
+```
+
+### 25.101 Operation Performance Tests
+
+Test:
+
+```text
+Large Queue
+Large Batch
+Multiple Entities
+Repeated Synchronization
+```
+
+### 25.102 SyncOperation Completion Criteria
+
+Sync Operation Implementation is complete when:
+
+```text
+Operation Model Implemented
+Operation ID Generation Implemented
+Local Queue Implemented
+Operation Persistence Implemented
+Operation Serialization Implemented
+Batch Processing Implemented
+Idempotency Implemented
+Version Validation Implemented
+Conflict Integration Implemented
+Retry Implemented
+Backoff Implemented
+Dependency Handling Implemented
+Backend Integration Implemented
+P2P Integration Implemented
+Security Validation Implemented
+Cleanup Strategy Implemented
+Tests Passing
+```
+
+### 25.103 SyncOperation Invariants
+
+The following rules are mandatory:
+
+- Every SyncOperation must have a unique Operation ID.
+- Operation IDs must support offline creation.
+- Operation ID, Device ID, and Version must remain separate concepts.
+- Every synchronizable mutation must produce the required SyncOperation.
+- Local mutation and SyncOperation creation must be atomic.
+- SyncOperations must survive application restart until successfully processed or permanently resolved.
+- Pending operations must be processed in a controlled manner.
+- Operation ordering must respect required dependencies.
+- Duplicate Operation IDs must not produce duplicate business effects.
+- Incoming operations must be authenticated.
+- Incoming operations must be authorized.
+- Incoming operations must pass synchronization validation.
+- Incoming operations must pass Domain validation.
+- Version mismatches must not silently overwrite newer state.
+- Conflicting operations must follow the Conflict Resolution architecture.
+- Retryable failures must not become permanent failures prematurely.
+- Permanent failures must not be retried indefinitely.
+- Retry processing must use controlled backoff.
+- Unknown operation types must be rejected safely.
+- Unknown entity types must be rejected safely.
+- Unsupported payload versions must be rejected safely.
+- Operation payloads must be validated before application.
+- Operation replay must be prevented.
+- Revoked Devices must not submit protected synchronization operations.
+- Backend and P2P synchronization must use the same logical operation rules.
+- Cursor advancement must occur only after required changes are safely persisted.
+- Financial operations must not be compacted in a way that changes their financial outcome.
+- Incoming financial state and synchronization metadata must remain transactionally consistent.
+- Successfully applied operations may only be cleaned up when synchronization no longer requires them.
+- SyncOperation implementation must be covered by automated tests.
 
 ## 26. Sync Engine Implementation
 
+### 26.1 Purpose
+
+This section defines the implementation of the Sync Engine in SplitSync V1.
+
+The Sync Engine coordinates synchronization between the local Android state and remote synchronization targets.
+
+Conceptually:
+
+```text
+Local Database
+      ↓
+Sync Engine
+      ↓
+┌─────┴─────┐
+↓           ↓
+Backend     Peer
+```
+
+### 26.2 Sync Engine Responsibility
+
+The Sync Engine is responsible for:
+
+```text
+Pending Operation Processing
+Push Coordination
+Pull Coordination
+Operation Ordering
+Batching
+Retry Handling
+Conflict Handling
+Sync State Management
+Cursor Management
+```
+
+### 26.3 Sync Engine Boundary
+
+The Sync Engine belongs to the Application/Data synchronization infrastructure.
+
+It must not contain UI logic.
+
+```text
+Presentation
+      ↓
+Application
+      ↓
+Sync Engine
+      ↓
+Data Sources
+```
+
+### 26.4 Sync Engine Components
+
+The implementation should contain logical components such as:
+
+```text
+SyncEngine
+SyncCoordinator
+PushProcessor
+PullProcessor
+SyncOperationRepository
+SyncStateRepository
+ConflictProcessor
+SyncTransport
+```
+
+### 26.5 SyncCoordinator
+
+The SyncCoordinator coordinates the complete synchronization cycle.
+
+Conceptually:
+
+```text
+SyncCoordinator
+      ↓
+Push
+      ↓
+Pull
+      ↓
+Apply
+      ↓
+Update Sync State
+```
+
+### 26.6 SyncEngine Interface
+
+The Sync Engine should expose a high-level synchronization operation.
+
+Conceptually:
+
+```text
+sync()
+```
+
+The caller should not need to know the internal push/pull sequence.
+
+### 26.7 Synchronization Cycle
+
+The complete cycle should follow the defined synchronization protocol.
+
+Conceptually:
+
+```text
+Start
+  ↓
+Load Sync State
+  ↓
+Push Local Changes
+  ↓
+Pull Remote Changes
+  ↓
+Apply Remote Changes
+  ↓
+Update Cursor
+  ↓
+Complete
+```
+
+The exact ordering must follow the final synchronization protocol.
+
+### 26.8 Sync State Loading
+
+At the beginning of synchronization:
+
+```text
+SyncState
+      ↓
+Load Cursor
+      ↓
+Load Pending Operations
+```
+
+### 26.9 Sync State Validation
+
+The Sync Engine must validate that the local synchronization state is internally consistent before processing.
+
+### 26.10 Pending Operation Loading
+
+Pending operations should be loaded using deterministic ordering.
+
+```text
+SyncOperationRepository
+      ↓
+Pending Operations
+      ↓
+Ordered Batch
+```
+
+### 26.11 Batch Preparation
+
+The Sync Engine should prepare bounded batches.
+
+Batching must consider:
+
+```text
+Maximum Operation Count
+Payload Size
+Dependencies
+Network Constraints
+```
+
+### 26.12 Operation Dependency
+
+Before sending a batch, required dependencies must be satisfied.
+
+Example:
+
+```text
+CREATE GROUP
+      ↓
+CREATE MEMBERSHIP
+      ↓
+CREATE EXPENSE
+```
+
+### 26.13 Sync Transport
+
+The Sync Engine should communicate through an abstraction.
+
+Conceptually:
+
+```text
+SyncTransport
+├── BackendSyncTransport
+└── PeerSyncTransport
+```
+
+### 26.14 Transport Independence
+
+The Sync Engine must not depend directly on:
+
+```text
+HTTP Client
+Bluetooth API
+Wi-Fi API
+Socket API
+```
+
+The transport implementation must remain replaceable.
+
+### 26.15 Backend Synchronization
+
+Backend synchronization uses:
+
+```text
+SyncEngine
+      ↓
+BackendSyncTransport
+      ↓
+Backend API
+```
+
+### 26.16 P2P Synchronization
+
+P2P synchronization uses:
+
+```text
+SyncEngine
+      ↓
+PeerSyncTransport
+      ↓
+Trusted Peer
+```
+
+### 26.17 Common Synchronization Logic
+
+Backend and P2P synchronization must share:
+
+```text
+Operation Validation
+Idempotency
+Version Checking
+Conflict Detection
+Domain Validation
+Sync State Rules
+```
+
+### 26.18 Push Phase
+
+The Push phase sends locally generated operations to the synchronization target.
+
+```text
+Local Pending Operations
+      ↓
+Push Processor
+      ↓
+Transport
+      ↓
+Remote Target
+```
+
+### 26.19 Pull Phase
+
+The Pull phase retrieves remote changes not yet present locally.
+
+```text
+Sync Cursor
+      ↓
+Pull Processor
+      ↓
+Transport
+      ↓
+Remote Changes
+```
+
+### 26.20 Apply Phase
+
+Remote changes must be applied through the defined synchronization/application logic.
+
+```text
+Remote Operation
+      ↓
+Validate
+      ↓
+Authorize
+      ↓
+Version Check
+      ↓
+Domain Apply
+      ↓
+Persist
+```
+
+### 26.21 Cursor Management
+
+The Sync Engine must maintain a synchronization cursor.
+
+```text
+Current Cursor
+      ↓
+Pull Changes
+      ↓
+Apply Successfully
+      ↓
+Advance Cursor
+```
+
+### 26.22 Cursor Safety
+
+The cursor must never advance past changes that have not been successfully persisted.
+
+### 26.23 Cursor Transaction
+
+Where applicable:
+
+```text
+Apply Remote Changes
++
+Update Cursor
+      ↓
+Single Transaction
+```
+
+must be used.
+
+### 26.24 Sync State Update
+
+The Sync Engine must update:
+
+```text
+Last Sync
+Cursor
+Sync Status
+Failure State
+```
+
+according to the Sync State Model.
+
+### 26.25 Sync Status
+
+The engine may expose:
+
+```text
+IDLE
+SYNCING
+SUCCESS
+FAILED
+CONFLICT
+```
+
+according to the defined Sync State Model.
+
+### 26.26 Concurrent Sync Prevention
+
+Multiple synchronization executions for the same Device/context must not modify synchronization state concurrently without coordination.
+
+### 26.27 Sync Lock
+
+The implementation should use a synchronization lock or equivalent coordination mechanism.
+
+```text
+Sync Request A
+      ↓
+SYNCING
+
+Sync Request B
+      ↓
+Wait / Skip
+```
+
+### 26.28 Application Start
+
+Application startup may trigger synchronization when permitted.
+
+```text
+Application Start
+      ↓
+Load Local State
+      ↓
+Schedule Sync
+```
+
+### 26.29 Manual Sync
+
+A User-triggered refresh may request synchronization.
+
+The UI should not directly execute the synchronization algorithm.
+
+### 26.30 Background Sync
+
+Background synchronization should be scheduled through the Android background execution mechanism selected by the architecture.
+
+### 26.31 Network Constraint
+
+Synchronization should execute only when required network conditions are satisfied.
+
+### 26.32 Offline State
+
+If the network is unavailable:
+
+```text
+Sync Request
+      ↓
+Network Unavailable
+      ↓
+Keep Pending Operations
+      ↓
+Retry Later
+```
+
+### 26.33 Authentication Handling
+
+If authentication expires:
+
+```text
+Sync
+ ↓
+Authentication Failure
+ ↓
+Refresh / Re-authenticate
+ ↓
+Retry
+```
+
+according to the Authentication implementation.
+
+### 26.34 Authorization Handling
+
+If synchronization is no longer authorized:
+
+```text
+Authorization Failure
+      ↓
+Stop Invalid Operation
+      ↓
+Update Sync State
+```
+
+### 26.35 Device Revocation
+
+If the Device is revoked:
+
+```text
+Device Revoked
+      ↓
+Synchronization Blocked
+```
+
+### 26.36 Retryable Failure
+
+Transient errors should be retried.
+
+Examples:
+
+```text
+Network Timeout
+Temporary Server Failure
+Connection Failure
+```
+
+### 26.37 Permanent Failure
+
+Permanent failures must not enter an endless retry loop.
+
+### 26.38 Retry Backoff
+
+The Sync Engine should use controlled retry backoff.
+
+### 26.39 Retry State
+
+Retry metadata may include:
+
+```text
+Retry Count
+Last Attempt
+Next Retry Time
+Failure Type
+```
+
+### 26.40 Sync Failure Isolation
+
+A failure affecting one operation should not incorrectly mark unrelated successfully processed operations as failed.
+
+### 26.41 Partial Success
+
+The Sync Engine must support partial results.
+
+Example:
+
+```text
+Operation A → APPLIED
+Operation B → RETRY
+Operation C → CONFLICT
+```
+
+Each state must be persisted correctly.
+
+### 26.42 Conflict Handling
+
+Conflicts must be delegated to the Conflict Processor.
+
+```text
+Version Conflict
+      ↓
+ConflictProcessor
+      ↓
+Conflict State
+```
+
+### 26.43 Conflict Persistence
+
+Conflict information must be persisted before the Sync Engine reports the conflict state.
+
+### 26.44 Conflict Isolation
+
+One conflict must not corrupt unrelated synchronized entities.
+
+### 26.45 Operation Idempotency
+
+The Sync Engine must rely on Operation IDs for idempotency.
+
+```text
+Operation ID
+      ↓
+Duplicate Detection
+      ↓
+No Duplicate Effect
+```
+
+### 26.46 Remote Operation Deduplication
+
+Incoming operations must be checked against already processed operations where required.
+
+### 26.47 Operation Ordering
+
+The Sync Engine must preserve ordering where the Domain requires it.
+
+### 26.48 Operation Coalescing
+
+If operation coalescing is enabled, the Sync Engine must apply the rules defined in the SyncOperation model.
+
+### 26.49 Financial Safety
+
+The Sync Engine must never merge or reorder operations in a way that changes financial results.
+
+### 26.50 Local Transaction
+
+When applying a remote financial operation:
+
+```text
+Financial State
++
+Required Related State
++
+Sync Metadata
+```
+
+must be persisted atomically.
+
+### 26.51 Sync Engine and Balance
+
+After applying financial changes:
+
+```text
+Expenses
++
+Settlements
+      ↓
+Balance Calculation
+```
+
+must reflect the resulting local state.
+
+### 26.52 Sync Engine and Membership
+
+Membership changes must update the local authorization-relevant state.
+
+### 26.53 Sync Engine and Group
+
+Group changes must be available before dependent operations are applied.
+
+### 26.54 Sync Engine and Tombstones
+
+Deleted entities must remain represented through synchronization-safe tombstones where required.
+
+### 26.55 Tombstone Processing
+
+The Sync Engine must synchronize deletion state before physical cleanup is allowed.
+
+### 26.56 Sync Engine Logging
+
+Logs should include operational identifiers such as:
+
+```text
+Sync ID
+Operation ID
+Device ID
+Batch ID
+Result
+```
+
+without logging sensitive payloads unnecessarily.
+
+### 26.57 Sync ID
+
+Each synchronization execution may have a unique Sync ID for tracing.
+
+Conceptually:
+
+```text
+Sync ID
+   ↓
+Push
+   ↓
+Pull
+   ↓
+Apply
+```
+
+### 26.58 Batch ID
+
+Each batch may have a unique identifier for diagnostics.
+
+### 26.59 Sync Metrics
+
+The engine may record:
+
+```text
+Sync Duration
+Push Count
+Pull Count
+Applied Count
+Failed Count
+Conflict Count
+Retry Count
+```
+
+### 26.60 Sync Performance
+
+The Sync Engine should:
+
+```text
+Use Bounded Batches
+Avoid Unnecessary Reads
+Avoid Duplicate Network Requests
+Avoid Unbounded Memory Usage
+```
+
+### 26.61 Large Queue Handling
+
+A large pending queue must be processed incrementally.
+
+```text
+Large Queue
+      ↓
+Batch 1
+      ↓
+Batch 2
+      ↓
+Batch 3
+```
+
+### 26.62 Sync Cancellation
+
+Synchronization should support safe cancellation where required by Android lifecycle/background execution.
+
+Cancellation must not leave partially persisted synchronization state.
+
+### 26.63 Sync Crash Recovery
+
+If the Sync Engine stops unexpectedly:
+
+```text
+Process Termination
+      ↓
+Persisted Sync State
+      ↓
+Next Sync
+      ↓
+Resume Safely
+```
+
+### 26.64 Sync Restart
+
+Synchronization must be safely restartable after:
+
+```text
+Application Restart
+Device Restart
+Worker Restart
+Network Recovery
+```
+
+### 26.65 Sync State Recovery
+
+The engine must derive recoverable state from persisted data rather than relying solely on in-memory state.
+
+### 26.66 Sync Engine Testing
+
+The Sync Engine must have dedicated tests for:
+
+```text
+Push
+Pull
+Apply
+Retry
+Conflict
+Cursor
+Idempotency
+Ordering
+Crash Recovery
+Concurrency
+```
+
+### 26.67 Sync Engine Unit Tests
+
+Test:
+
+```text
+Batch Creation
+Ordering
+Retry Decision
+Conflict Decision
+State Transition
+```
+
+### 26.68 Sync Engine Integration Tests
+
+Test:
+
+```text
+Local Database
+Sync Engine
+Transport
+Backend
+```
+
+as a complete flow.
+
+### 26.69 Sync Engine Offline Tests
+
+Test:
+
+```text
+No Network
+Pending Queue
+Network Recovery
+Successful Synchronization
+```
+
+### 26.70 Sync Engine Concurrency Tests
+
+Test:
+
+```text
+Two Sync Requests
+      ↓
+Only One Active Synchronization
+```
+
+### 26.71 Sync Engine Crash Tests
+
+Test termination during:
+
+```text
+Push
+Pull
+Apply
+Cursor Update
+```
+
+and verify safe recovery.
+
+### 26.72 Sync Engine Security Tests
+
+Test:
+
+```text
+Expired Authentication
+Revoked Device
+Unauthorized Operation
+Invalid Peer
+Replay
+```
+
+### 26.73 Sync Engine Completion Criteria
+
+Sync Engine Implementation is complete when:
+
+```text
+SyncCoordinator Implemented
+Push Processing Implemented
+Pull Processing Implemented
+Apply Processing Implemented
+Sync State Management Implemented
+Cursor Management Implemented
+Concurrency Control Implemented
+Retry Implemented
+Backoff Implemented
+Conflict Integration Implemented
+Backend Transport Integrated
+P2P Transport Integrated
+Crash Recovery Implemented
+Security Integrated
+Metrics / Logging Implemented
+Tests Passing
+```
+
+### 26.74 Sync Engine Invariants
+
+The following rules are mandatory:
+
+- The Sync Engine must coordinate synchronization without containing UI logic.
+- Backend and P2P synchronization must share the same logical synchronization rules.
+- Pending operations must be loaded from durable local storage.
+- Synchronization must process operations in deterministic order where required.
+- Operation dependencies must be respected.
+- Synchronization batches must be bounded.
+- Multiple synchronization executions must not corrupt shared SyncState.
+- Cursor advancement must occur only after required changes are safely persisted.
+- Remote financial changes and required synchronization metadata must be transactionally consistent.
+- Duplicate Operation IDs must not create duplicate financial effects.
+- Version conflicts must not silently overwrite newer state.
+- Conflicts must be persisted before being surfaced as unresolved.
+- Retryable failures must use controlled retry/backoff.
+- Permanent failures must not be retried indefinitely.
+- Device revocation must prevent protected synchronization.
+- Authentication failures must follow the Authentication flow.
+- Authorization failures must not be blindly retried.
+- Tombstones must be retained until synchronization permits cleanup.
+- Synchronization must recover safely after application or worker termination.
+- Synchronization must not depend solely on in-memory state.
+- Financial operation ordering/compaction must not alter financial outcomes.
+- Sync Engine behavior must be covered by automated tests.
+
+
 ## 27. Push Synchronization Implementation
+
+### 27.1 Purpose
+
+This section defines the implementation of Push Synchronization in SplitSync V1.
+
+Push Synchronization transfers locally generated SyncOperations from an Android Device to a synchronization target.
+
+```text
+Local Device
+      ↓
+Pending SyncOperations
+      ↓
+Push Synchronization
+      ↓
+Backend / Peer
+```
+
+### 27.2 Push Principle
+
+Push must transmit only operations that are eligible for synchronization.
+
+```text
+PENDING
+      ↓
+Push
+      ↓
+Remote Processing
+```
+
+### 27.3 Push Entry Point
+
+The Sync Engine should invoke Push Synchronization.
+
+```text
+SyncEngine
+      ↓
+PushProcessor
+```
+
+### 27.4 PushProcessor
+
+The PushProcessor is responsible for:
+
+```text
+Loading Operations
+Ordering
+Batching
+Serialization
+Transmission
+Response Processing
+State Updates
+```
+
+### 27.5 Push Source
+
+The PushProcessor retrieves operations from:
+
+```text
+SyncOperationRepository
+```
+
+### 27.6 Pushable States
+
+Only operations in an eligible state should be pushed.
+
+Typically:
+
+```text
+PENDING
+```
+
+and retryable operations according to the Sync State Model.
+
+### 27.7 Syncing State
+
+Before transmission, operations may transition:
+
+```text
+PENDING
+   ↓
+SYNCING
+```
+
+to prevent duplicate concurrent processing.
+
+### 27.8 Claiming Operations
+
+The operation claim/update must be performed safely so that multiple workers cannot process the same operations concurrently.
+
+### 27.9 Push Batch
+
+The PushProcessor should create a bounded batch.
+
+```text
+Pending Operations
+      ↓
+Select
+      ↓
+Order
+      ↓
+Batch
+```
+
+### 27.10 Push Batch Ordering
+
+Operations must be ordered according to:
+
+```text
+Dependency
+Creation Order
+Sequence
+```
+
+as required.
+
+### 27.11 Push Dependency Validation
+
+Before transmission, the PushProcessor should verify required dependencies.
+
+Example:
+
+```text
+Group CREATE
+      ↓
+Membership CREATE
+      ↓
+Expense CREATE
+```
+
+### 27.12 Push Serialization
+
+Operations must be converted into the defined synchronization wire representation.
+
+```text
+SyncOperation
+      ↓
+Push DTO
+      ↓
+JSON / Protocol Payload
+```
+
+### 27.13 Push Request
+
+A Push request should contain:
+
+```text
+Device Identity
+Authentication Context
+Protocol Version
+Operations
+```
+
+according to the API contract.
+
+### 27.14 Push Authentication
+
+Push requests must be authenticated.
+
+### 27.15 Push Authorization
+
+The receiving side must authorize every operation according to the resource and Device/User context.
+
+### 27.16 Push Device Validation
+
+The receiving side must verify:
+
+```text
+Authenticated User
++
+Registered Device
++
+Device State
+```
+
+### 27.17 Push Operation Validation
+
+Each operation must be validated before application.
+
+```text
+Operation ID
+Entity Type
+Entity ID
+Operation Type
+Payload
+Version
+```
+
+### 27.18 Push Operation ID
+
+The receiving side must use Operation ID for idempotency.
+
+### 27.19 Duplicate Push
+
+If an operation has already been applied:
+
+```text
+Push Same Operation
+      ↓
+Already Applied
+      ↓
+Return Existing Result
+```
+
+No duplicate Domain mutation may occur.
+
+### 27.20 Push Response
+
+The receiving target should return a result for each submitted operation.
+
+Conceptually:
+
+```text
+Operation A → APPLIED
+Operation B → CONFLICT
+Operation C → RETRY
+```
+
+### 27.21 Push Result
+
+Possible results include:
+
+```text
+APPLIED
+ALREADY_APPLIED
+RETRY
+CONFLICT
+REJECTED
+```
+
+The exact result enumeration must follow the Sync API contract.
+
+### 27.22 Applied Operation
+
+When the target confirms successful application:
+
+```text
+SYNCING
+   ↓
+APPLIED
+```
+
+### 27.23 Already Applied Operation
+
+If the target reports the operation was already applied:
+
+```text
+SYNCING
+   ↓
+APPLIED
+```
+
+because the synchronization effect already exists.
+
+### 27.24 Retry Result
+
+For transient failures:
+
+```text
+SYNCING
+   ↓
+PENDING
+```
+
+or the equivalent retryable state.
+
+### 27.25 Conflict Result
+
+For a conflict:
+
+```text
+SYNCING
+   ↓
+CONFLICT
+```
+
+and Conflict data must be persisted.
+
+### 27.26 Rejected Operation
+
+For permanent rejection:
+
+```text
+SYNCING
+   ↓
+FAILED
+```
+
+with an appropriate failure reason.
+
+### 27.27 Push Response Transaction
+
+Local SyncOperation state updates must be transactionally consistent.
+
+### 27.28 Partial Push Success
+
+Each operation must be updated based on its own result.
+
+```text
+A → APPLIED
+B → RETRY
+C → CONFLICT
+```
+
+must remain represented independently.
+
+### 27.29 Push Retry
+
+Retryable operations should return to a retryable queue state.
+
+### 27.30 Push Backoff
+
+The Sync Engine must apply controlled retry backoff.
+
+### 27.31 Authentication Failure
+
+If Push returns an authentication failure:
+
+```text
+Authentication Failure
+      ↓
+Refresh / Re-authenticate
+      ↓
+Retry Push
+```
+
+according to the Authentication implementation.
+
+### 27.32 Authorization Failure
+
+If Push returns authorization failure:
+
+```text
+Authorization Failure
+      ↓
+Do Not Blindly Retry
+```
+
+The operation should transition to the appropriate failure/security state.
+
+### 27.33 Device Revocation
+
+If the Device is revoked:
+
+```text
+Device Revoked
+      ↓
+Push Blocked
+```
+
+### 27.34 Network Failure
+
+If transmission fails because of network unavailability:
+
+```text
+SYNCING
+   ↓
+PENDING
+   ↓
+Retry Later
+```
+
+according to the worker's recovery strategy.
+
+### 27.35 Timeout
+
+A timeout should be treated as potentially ambiguous.
+
+The client must not assume that the operation was never received.
+
+```text
+Push
+ ↓
+Timeout
+ ↓
+Retry Same Operation ID
+```
+
+### 27.36 Timeout Idempotency
+
+Operation ID ensures that retrying after an ambiguous timeout does not duplicate the business effect.
+
+### 27.37 Server Failure
+
+Temporary server failures should return operations to a retryable state.
+
+### 27.38 Permanent Validation Failure
+
+Invalid operations must not be retried indefinitely.
+
+### 27.39 Push Ordering After Failure
+
+If an operation is a dependency for later operations:
+
+```text
+Dependency Failed
+      ↓
+Dependent Operations
+      ↓
+Defer
+```
+
+until the dependency is resolved.
+
+### 27.40 Push Dependency Queue
+
+The PushProcessor must not send dependent operations in a way that causes invalid remote state.
+
+### 27.41 Push Operation Coalescing
+
+If V1 enables operation coalescing, it should occur before batching.
+
+```text
+Pending Operations
+      ↓
+Coalesce
+      ↓
+Validate Dependencies
+      ↓
+Batch
+```
+
+### 27.42 Push Coalescing Safety
+
+Coalescing must preserve the final valid Domain state and financial outcome.
+
+### 27.43 Push Payload Size
+
+The PushProcessor must enforce request payload limits.
+
+### 27.44 Push Batch Size
+
+Batch size should be configurable within safe operational limits.
+
+### 27.45 Push Progress
+
+For large queues:
+
+```text
+Batch 1
+ ↓
+Batch 2
+ ↓
+Batch 3
+```
+
+should be processed progressively.
+
+### 27.46 Push Queue Cleanup
+
+Successfully applied operations may be removed or archived according to the retention strategy.
+
+### 27.47 Push Cleanup Safety
+
+Cleanup must not occur before the target has acknowledged successful application.
+
+### 27.48 Push Auditability
+
+If operation audit history is required, cleanup must preserve the necessary audit metadata.
+
+### 27.49 Push and Local State
+
+Local financial state should remain available regardless of whether Push has completed.
+
+```text
+Local Mutation
+      ↓
+Local State Updated
+      ↓
+Push Pending
+```
+
+### 27.50 Push and UI
+
+The UI may observe:
+
+```text
+PENDING
+SYNCING
+APPLIED
+FAILED
+CONFLICT
+```
+
+through the local SyncState/operation state.
+
+### 27.51 Push and Balance
+
+Push completion itself must not independently modify balances.
+
+Balance changes must result from applying valid Domain state.
+
+### 27.52 Push and Pull
+
+Push and Pull must coordinate through the Sync Engine.
+
+```text
+Push
+ ↓
+Pull
+ ↓
+Apply
+```
+
+or the protocol-defined sequence.
+
+### 27.53 Push and Cursor
+
+Push should not incorrectly advance the pull cursor.
+
+Push acknowledgements and pull cursors are separate synchronization concepts.
+
+### 27.54 Push and Conflict
+
+A Push conflict must create/update the local Conflict state.
+
+### 27.55 Push Conflict Resolution
+
+Conflict resolution should produce a new valid synchronization state/operation according to the Conflict Resolution architecture.
+
+### 27.56 Push Security
+
+Push must enforce:
+
+```text
+Authentication
+Authorization
+Device Verification
+Operation Validation
+Replay Protection
+Transport Security
+```
+
+### 27.57 Push Transport Security
+
+Backend Push must use HTTPS.
+
+P2P Push must use the authenticated secure peer transport defined by the P2P architecture.
+
+### 27.58 Push Logging
+
+Push logs may contain:
+
+```text
+Sync ID
+Batch ID
+Operation ID
+Operation Result
+Latency
+```
+
+but must not log sensitive payloads unnecessarily.
+
+### 27.59 Push Metrics
+
+Useful metrics include:
+
+```text
+Push Requests
+Operations Sent
+Operations Applied
+Duplicates
+Conflicts
+Failures
+Retries
+Latency
+```
+
+### 27.60 Push Concurrency
+
+Only one Push process should claim the same operations for a synchronization context at a time.
+
+### 27.61 Push Worker Safety
+
+If the worker stops after operations are marked SYNCING:
+
+```text
+Worker Stops
+      ↓
+Recovery
+      ↓
+Recoverable Operations
+      ↓
+Retry
+```
+
+### 27.62 Push Crash Recovery
+
+The implementation must prevent permanently stuck SYNCING operations.
+
+### 27.63 Push State Recovery
+
+On startup or next synchronization, stale SYNCING operations must be detected and recovered according to the Sync State Model.
+
+### 27.64 Push Testing
+
+Push Synchronization must include:
+
+```text
+Unit Tests
+Integration Tests
+API Tests
+Security Tests
+Failure Tests
+Concurrency Tests
+```
+
+### 27.65 Push Success Test
+
+Test:
+
+```text
+PENDING
+ ↓
+Push
+ ↓
+APPLIED
+```
+
+### 27.66 Duplicate Push Test
+
+Test:
+
+```text
+Push Operation
+Push Same Operation Again
+      ↓
+One Business Effect
+```
+
+### 27.67 Push Timeout Test
+
+Test:
+
+```text
+Push
+ ↓
+Timeout
+ ↓
+Retry
+ ↓
+Already Applied
+ ↓
+APPLIED
+```
+
+### 27.68 Push Conflict Test
+
+Test:
+
+```text
+Push
+ ↓
+Version Conflict
+ ↓
+Conflict Persisted
+ ↓
+Operation Not Marked APPLIED
+```
+
+### 27.69 Push Partial Success Test
+
+Test:
+
+```text
+A → APPLIED
+B → RETRY
+C → CONFLICT
+```
+
+and verify independent state persistence.
+
+### 27.70 Push Dependency Test
+
+Test:
+
+```text
+Group
+ ↓
+Membership
+ ↓
+Expense
+```
+
+and verify that dependent operations are not incorrectly sent before required dependencies.
+
+### 27.71 Push Retry Test
+
+Test:
+
+```text
+Transient Failure
+ ↓
+Backoff
+ ↓
+Retry
+ ↓
+Success
+```
+
+### 27.72 Push Authentication Test
+
+Test:
+
+```text
+Expired Token
+ ↓
+Refresh
+ ↓
+Push
+```
+
+### 27.73 Push Authorization Test
+
+Test:
+
+```text
+Unauthorized Operation
+ ↓
+Rejected
+ ↓
+No Financial Mutation
+```
+
+### 27.74 Push Revocation Test
+
+Test:
+
+```text
+Active Device
+ ↓
+Revoked
+ ↓
+Push
+ ↓
+Rejected
+```
+
+### 27.75 Push Crash Recovery Test
+
+Test termination during:
+
+```text
+Operation Claim
+Transmission
+Response Processing
+State Update
+```
+
+and verify recoverability.
+
+### 27.76 Push Performance Test
+
+Test:
+
+```text
+Small Queue
+Large Queue
+Large Batch
+Repeated Retry
+```
+
+### 27.77 Push Completion Criteria
+
+Push Synchronization Implementation is complete when:
+
+```text
+Pending Operation Selection Implemented
+Operation Claiming Implemented
+Dependency Ordering Implemented
+Batching Implemented
+Serialization Implemented
+Authentication Integrated
+Authorization Integrated
+Idempotency Implemented
+Push Response Processing Implemented
+Partial Success Handling Implemented
+Retry Implemented
+Backoff Implemented
+Conflict Handling Implemented
+Timeout Handling Implemented
+Crash Recovery Implemented
+Cleanup Strategy Implemented
+Security Integrated
+Metrics / Logging Implemented
+Tests Passing
+```
+
+### 27.78 Push Synchronization Invariants
+
+The following rules are mandatory:
+
+- Only eligible SyncOperations may be pushed.
+- Operations must be safely claimed before processing.
+- Concurrent workers must not process the same operation incorrectly.
+- Operation dependencies must be respected.
+- Push batches must remain bounded.
+- Every pushed operation must retain its unique Operation ID.
+- Duplicate Push requests must not create duplicate business effects.
+- Timeout retries must use the same Operation ID.
+- Authentication must be validated before protected Push processing.
+- Authorization must be validated for every protected operation.
+- Revoked Devices must not successfully Push protected operations.
+- Partial batch results must be processed independently.
+- Retryable failures must return to a retryable state.
+- Permanent failures must not retry indefinitely.
+- Push conflicts must not be marked as successfully applied.
+- Conflict information must be persisted before the conflict is surfaced.
+- Push acknowledgements must not incorrectly advance the pull cursor.
+- Successfully applied operations may only be cleaned up after safe acknowledgement.
+- Financial state must not be modified merely because an operation was transmitted.
+- Financial state changes must occur only through valid Domain application.
+- Stale SYNCING operations must be recoverable after worker/application termination.
+- Backend and P2P Push must use the same logical operation validation and idempotency rules.
+- Push synchronization must be covered by automated tests.
 
 ## 28. Pull Synchronization Implementation
 
+### 28.1 Purpose
+
+This section defines the implementation of Pull Synchronization in SplitSync V1.
+
+Pull Synchronization retrieves remote changes that are not yet present in the local Android state.
+
+```text
+Remote Changes
+      ↓
+Pull Synchronization
+      ↓
+Local Sync Engine
+      ↓
+Local Database
+```
+
+### 28.2 Pull Principle
+
+Pull Synchronization must retrieve changes incrementally using the synchronization cursor.
+
+```text
+Local Cursor
+      ↓
+Pull Request
+      ↓
+Remote Changes
+      ↓
+Apply Locally
+      ↓
+Advance Cursor
+```
+
+### 28.3 Pull Entry Point
+
+The Sync Engine should invoke Pull Synchronization.
+
+```text
+SyncEngine
+      ↓
+PullProcessor
+```
+
+### 28.4 PullProcessor
+
+The PullProcessor is responsible for:
+
+```text
+Loading Cursor
+Requesting Remote Changes
+Receiving Operations
+Validating Operations
+Applying Operations
+Updating Cursor
+Handling Conflicts
+```
+
+### 28.5 Pull Cursor
+
+The local SyncState contains the cursor representing the latest successfully processed remote position.
+
+Conceptually:
+
+```text
+SyncState
+└── Cursor
+```
+
+### 28.6 Initial Pull
+
+For a new Device or synchronization context:
+
+```text
+No Cursor
+      ↓
+Initial Synchronization
+      ↓
+Retrieve Required Remote State
+```
+
+The exact bootstrap behavior must follow the synchronization protocol.
+
+### 28.7 Incremental Pull
+
+For an existing synchronization context:
+
+```text
+Cursor = N
+      ↓
+Request Changes After N
+      ↓
+Receive N+1 ... M
+```
+
+### 28.8 Pull Request
+
+A Pull request should contain the required synchronization context.
+
+Conceptually:
+
+```text
+User / Device Identity
+Protocol Version
+Cursor
+Batch Size
+```
+
+### 28.9 Pull Authentication
+
+Pull requests must be authenticated.
+
+### 28.10 Pull Authorization
+
+The Backend or trusted peer must verify that the requesting User/Device is authorized to retrieve the requested synchronization data.
+
+### 28.11 Pull Device Validation
+
+The receiving side must verify:
+
+```text
+Authenticated User
++
+Registered Device
++
+Device State
+```
+
+where applicable.
+
+### 28.12 Pull Response
+
+A Pull response may contain:
+
+```text
+Operations
+Next Cursor
+Has More
+Conflicts
+Protocol Metadata
+```
+
+according to the synchronization API.
+
+### 28.13 Pull Batch
+
+Remote changes must be retrieved in bounded batches.
+
+```text
+Remote Changes
+      ↓
+Batch
+      ↓
+Local Processing
+```
+
+### 28.14 Batch Size
+
+Pull batch size must be limited to avoid:
+
+```text
+Large Responses
+Memory Pressure
+Long Transactions
+Database Locking
+```
+
+### 28.15 Pull Ordering
+
+Remote operations must be returned and processed in deterministic synchronization order.
+
+### 28.16 Operation Validation
+
+Every incoming operation must be validated before it is applied.
+
+```text
+Incoming Operation
+      ↓
+Structural Validation
+      ↓
+Authentication
+      ↓
+Authorization
+      ↓
+Domain Validation
+```
+
+### 28.17 Operation Identity
+
+The Pull Processor must use Operation ID to detect duplicate operations.
+
+### 28.18 Duplicate Remote Operation
+
+If an operation has already been applied:
+
+```text
+Incoming Operation
+      ↓
+Operation ID Already Known
+      ↓
+Skip Duplicate Effect
+```
+
+### 28.19 Duplicate Safety
+
+Duplicate remote delivery must never create duplicate:
+
+```text
+Expenses
+Settlements
+Memberships
+Groups
+```
+
+or other financial effects.
+
+### 28.20 Remote Version
+
+The Pull Processor must preserve the version associated with the incoming state.
+
+### 28.21 Version Validation
+
+Before applying an incoming operation:
+
+```text
+Remote Base Version
+      +
+Local Current Version
+      ↓
+Version Check
+```
+
+### 28.22 Compatible Version
+
+If the incoming operation is compatible:
+
+```text
+Version Valid
+      ↓
+Apply Operation
+```
+
+### 28.23 Version Conflict
+
+If the incoming operation conflicts with local state:
+
+```text
+Version Mismatch
+      ↓
+Conflict Processor
+```
+
+### 28.24 Conflict Persistence
+
+Conflict information must be persisted before the Pull operation is considered successfully handled.
+
+### 28.25 Conflict Isolation
+
+A conflict for one entity must not corrupt unrelated entities.
+
+### 28.26 Remote Operation Application
+
+The application flow should be:
+
+```text
+Remote Operation
+      ↓
+Validate
+      ↓
+Authorize
+      ↓
+Check Duplicate
+      ↓
+Check Version
+      ↓
+Domain Validation
+      ↓
+Apply
+      ↓
+Persist
+```
+
+### 28.27 Local Transaction
+
+Applying a remote operation must use a transaction where multiple records are affected.
+
+Example:
+
+```text
+Expense
++
+ExpenseSplits
++
+Synchronization Metadata
+```
+
+must remain consistent.
+
+### 28.28 Remote Expense Application
+
+An incoming Expense operation may require:
+
+```text
+Expense
++
+ExpenseSplits
++
+Group Validation
+```
+
+to be persisted consistently.
+
+### 28.29 Remote Settlement Application
+
+An incoming Settlement operation must preserve:
+
+```text
+Settlement
++
+Synchronization State
+```
+
+consistency.
+
+### 28.30 Remote Group Application
+
+An incoming Group operation must preserve the required Group state.
+
+### 28.31 Remote Membership Application
+
+Membership changes must update local authorization-relevant state.
+
+### 28.32 Balance Update
+
+After applying financial changes:
+
+```text
+Expenses
++
+Settlements
+      ↓
+Local Balance
+```
+
+must reflect the resulting state.
+
+### 28.33 Pull and Local UI
+
+Once remote changes are committed:
+
+```text
+Room
+ ↓
+Repository
+ ↓
+ViewModel
+ ↓
+UI
+```
+
+should expose the updated state.
+
+### 28.34 Pull and Offline State
+
+Pull only executes when the required transport is available.
+
+If the Device is offline:
+
+```text
+No Network
+      ↓
+Keep Current Local State
+      ↓
+Retry Later
+```
+
+### 28.35 Pull Retry
+
+Transient Pull failures should be retried.
+
+Examples:
+
+```text
+Network Failure
+Timeout
+Temporary Server Failure
+```
+
+### 28.36 Pull Backoff
+
+Retries must use controlled backoff.
+
+### 28.37 Pull Authentication Failure
+
+If authentication has expired:
+
+```text
+Pull
+ ↓
+Authentication Failure
+ ↓
+Refresh / Re-authenticate
+ ↓
+Retry
+```
+
+according to the Authentication implementation.
+
+### 28.38 Pull Authorization Failure
+
+If the Device/User is no longer authorized:
+
+```text
+Authorization Failure
+      ↓
+Stop Pull
+      ↓
+Update Security / Sync State
+```
+
+### 28.39 Device Revocation
+
+A revoked Device must not continue receiving protected synchronization data.
+
+### 28.40 Pull Timeout
+
+A timeout must not cause the local cursor to advance.
+
+```text
+Timeout
+      ↓
+Cursor Unchanged
+```
+
+### 28.41 Pull Partial Response
+
+If only part of a batch is successfully persisted:
+
+```text
+Applied Changes
+      +
+Cursor
+```
+
+must remain consistent.
+
+The cursor must advance only to the last safely persisted remote position.
+
+### 28.42 Cursor Advancement
+
+The cursor must advance only after all changes represented by that cursor have been successfully handled.
+
+```text
+Receive
+ ↓
+Apply
+ ↓
+Commit
+ ↓
+Advance Cursor
+```
+
+### 28.43 Cursor Transaction
+
+Where supported by the local database:
+
+```text
+Apply Remote Changes
++
+Update Cursor
+      ↓
+Atomic Transaction
+```
+
+must be used.
+
+### 28.44 Cursor Failure
+
+If cursor persistence fails:
+
+```text
+Remote Changes
+      ↓
+Transaction Rollback
+      ↓
+Cursor Unchanged
+```
+
+### 28.45 Duplicate After Cursor Failure
+
+If changes are received again after cursor failure:
+
+```text
+Same Operation ID
+      ↓
+Duplicate Detection
+      ↓
+No Duplicate Effect
+```
+
+This makes retry safe.
+
+### 28.46 Multiple Pull Batches
+
+If more changes remain:
+
+```text
+Batch 1
+ ↓
+Next Cursor
+ ↓
+Batch 2
+ ↓
+Next Cursor
+```
+
+must continue until the synchronization protocol indicates completion.
+
+### 28.47 Has More
+
+If the response contains:
+
+```text
+hasMore = true
+```
+
+the Pull Processor must continue from the returned cursor.
+
+### 28.48 Empty Pull
+
+If no new changes exist:
+
+```text
+Cursor
+      ↓
+No Changes
+      ↓
+Sync Complete
+```
+
+### 28.49 Pull and Push Coordination
+
+Pull must coordinate with Push through the Sync Engine.
+
+```text
+SyncEngine
+ ├── Push
+ └── Pull
+```
+
+The ordering must follow the synchronization protocol.
+
+### 28.50 Pull and Local Pending Operations
+
+Incoming remote changes must be evaluated against local pending operations.
+
+```text
+Local Pending Change
+      +
+Remote Change
+      ↓
+Version / Conflict Check
+```
+
+### 28.51 Pull and Conflict Detection
+
+If local pending state conflicts with remote state:
+
+```text
+Remote Operation
+      ↓
+Conflict Detection
+      ↓
+Conflict State
+```
+
+must be used instead of silent overwrite.
+
+### 28.52 Pull and Tombstones
+
+Remote deletion operations must be represented through synchronization-safe tombstones where required.
+
+### 28.53 Tombstone Application
+
+```text
+Remote DELETE
+      ↓
+Local Tombstone
+      ↓
+Cursor Update
+```
+
+Physical deletion should only occur when safe cleanup is permitted.
+
+### 28.54 Pull and Authorization State
+
+Remote Membership changes may change what the current User is allowed to access.
+
+The local authorization-relevant state must be updated accordingly.
+
+### 28.55 Pull and Group Membership
+
+If a User is removed from a Group remotely:
+
+```text
+Remote Membership Change
+      ↓
+Local Membership Update
+      ↓
+Authorization State Update
+```
+
+### 28.56 Pull and Device State
+
+If remote security state indicates Device revocation:
+
+```text
+Device Revoked
+      ↓
+Local Authentication / Sync State Updated
+```
+
+according to the Security Architecture.
+
+### 28.57 Pull Security
+
+Pull must enforce:
+
+```text
+Authentication
+Authorization
+Device Verification
+Operation Validation
+Replay Protection
+Transport Security
+```
+
+### 28.58 Pull Transport Security
+
+Backend Pull must use HTTPS.
+
+P2P Pull must use the authenticated secure peer transport.
+
+### 28.59 Pull Logging
+
+Logs may contain:
+
+```text
+Sync ID
+Batch ID
+Cursor
+Operation ID
+Result
+Latency
+```
+
+but should not expose sensitive payloads.
+
+### 28.60 Pull Metrics
+
+Useful metrics include:
+
+```text
+Pull Requests
+Operations Received
+Operations Applied
+Duplicates
+Conflicts
+Failures
+Retries
+Latency
+Batch Size
+```
+
+### 28.61 Pull Performance
+
+Pull should:
+
+```text
+Use Bounded Batches
+Avoid Unnecessary Queries
+Avoid Duplicate Processing
+Use Incremental Cursors
+```
+
+### 28.62 Large Remote Dataset
+
+Initial synchronization must process large datasets incrementally.
+
+```text
+Remote Dataset
+      ↓
+Batch 1
+      ↓
+Batch 2
+      ↓
+Batch N
+```
+
+### 28.63 Pull Memory Safety
+
+The Pull Processor must not load the entire remote dataset into memory.
+
+### 28.64 Pull Crash Recovery
+
+If the application terminates during Pull:
+
+```text
+Process Stops
+      ↓
+Transaction Recovery
+      ↓
+Cursor Remains Safe
+      ↓
+Next Pull
+```
+
+### 28.65 Pull Restart
+
+Pull must be safely restartable after:
+
+```text
+Application Restart
+Worker Restart
+Device Restart
+Network Recovery
+```
+
+### 28.66 Pull State Recovery
+
+Recovery must rely on persisted:
+
+```text
+SyncState
+Operation State
+Conflict State
+```
+
+rather than transient in-memory state.
+
+### 28.67 Pull Testing
+
+Pull Synchronization must include:
+
+```text
+Unit Tests
+Repository Tests
+Integration Tests
+API Tests
+Security Tests
+Failure Tests
+```
+
+### 28.68 Pull Basic Test
+
+Test:
+
+```text
+Cursor N
+ ↓
+Remote Changes
+ ↓
+Apply
+ ↓
+Cursor M
+```
+
+### 28.69 Pull Empty Test
+
+Test:
+
+```text
+Cursor Current
+ ↓
+No Changes
+ ↓
+Sync Complete
+```
+
+### 28.70 Pull Duplicate Test
+
+Test:
+
+```text
+Operation Already Applied
+      ↓
+Remote Operation Received Again
+      ↓
+No Duplicate Effect
+```
+
+### 28.71 Pull Conflict Test
+
+Test:
+
+```text
+Local Version
++
+Remote Version
+      ↓
+Conflict
+      ↓
+Conflict Persisted
+```
+
+### 28.72 Pull Cursor Test
+
+Test that the cursor advances only after successful persistence.
+
+### 28.73 Pull Failure Test
+
+Test:
+
+```text
+Network Failure
+ ↓
+Cursor Unchanged
+ ↓
+Retry
+```
+
+### 28.74 Pull Partial Batch Test
+
+Test partial processing and verify that the cursor never skips unprocessed changes.
+
+### 28.75 Pull Authentication Test
+
+Test:
+
+```text
+Expired Authentication
+ ↓
+Refresh
+ ↓
+Pull
+```
+
+### 28.76 Pull Authorization Test
+
+Test that unauthorized synchronization data cannot be retrieved or applied.
+
+### 28.77 Pull Revocation Test
+
+Test:
+
+```text
+Active Device
+ ↓
+Revoked
+ ↓
+Pull
+ ↓
+Rejected
+```
+
+### 28.78 Pull Crash Recovery Test
+
+Test application termination during:
+
+```text
+Operation Apply
+Cursor Update
+```
+
+and verify safe recovery.
+
+### 28.79 Pull Performance Test
+
+Test:
+
+```text
+Small Dataset
+Large Dataset
+Large Batch
+Multiple Batches
+```
+
+### 28.80 Pull Completion Criteria
+
+Pull Synchronization Implementation is complete when:
+
+```text
+Cursor Loading Implemented
+Pull Request Implemented
+Authentication Integrated
+Authorization Integrated
+Batching Implemented
+Operation Validation Implemented
+Duplicate Detection Implemented
+Version Checking Implemented
+Conflict Handling Implemented
+Remote State Application Implemented
+Cursor Advancement Implemented
+Cursor Transaction Implemented
+Retry Implemented
+Backoff Implemented
+Tombstone Handling Implemented
+Crash Recovery Implemented
+Security Integrated
+Metrics / Logging Implemented
+Tests Passing
+```
+
+### 28.81 Pull Synchronization Invariants
+
+The following rules are mandatory:
+
+- Pull must use the persisted synchronization cursor.
+- Pull requests must be authenticated.
+- Pull requests must be authorized.
+- Revoked Devices must not retrieve protected synchronization data.
+- Remote operations must be validated before application.
+- Remote operations must pass Domain validation.
+- Duplicate Operation IDs must not create duplicate business effects.
+- Version mismatches must not silently overwrite newer local state.
+- Conflicts must be persisted when they cannot be safely resolved automatically.
+- Remote financial changes must be applied transactionally with required related state.
+- Balance state must reflect successfully applied financial changes.
+- Cursor advancement must occur only after successful persistence.
+- Cursor updates must not skip unprocessed remote changes.
+- Cursor persistence failure must leave the previous cursor intact.
+- Retry after cursor failure must remain safe through idempotency.
+- Pull batches must be bounded.
+- Large remote datasets must be processed incrementally.
+- Network failure must not advance the cursor.
+- Authentication failure must follow the Authentication flow.
+- Authorization failure must not be blindly retried.
+- Remote deletion must follow the tombstone strategy.
+- Membership changes must update local authorization state.
+- Pull must recover safely after application or worker termination.
+- Pull must not depend solely on in-memory synchronization state.
+- Pull behavior must be covered by automated tests.
+
+
 ## 29. Sync State Implementation
+
+### 29.1 Purpose
+
+This section defines the implementation of Sync State in SplitSync V1.
+
+Sync State represents the current synchronization status of the Android Device and its synchronization context.
+
+Conceptually:
+
+```text
+Local Data
++
+Pending Operations
++
+Remote Cursor
+      ↓
+Sync State
+```
+
+### 29.2 Sync State Principle
+
+Synchronization state must be:
+
+```text
+Persistent
+Recoverable
+Deterministic
+Consistent
+```
+
+### 29.3 Sync State Components
+
+Sync State may contain:
+
+```text
+Sync Status
+Cursor
+Last Successful Sync
+Last Attempt
+Failure Information
+Retry Information
+```
+
+according to the Sync State Model.
+
+### 29.4 Sync Context
+
+Sync State must be associated with the appropriate synchronization context.
+
+Depending on the architecture, this may include:
+
+```text
+Device
+User
+Backend
+Peer
+Group
+Synchronization Scope
+```
+
+### 29.5 Sync State Entity
+
+Conceptually:
+
+```text
+SyncStateEntity
+├── Context ID
+├── Device ID
+├── Cursor
+├── Status
+├── Last Successful Sync
+├── Last Attempt
+├── Retry Count
+└── Error State
+```
+
+The exact fields must follow the defined Sync State Model.
+
+### 29.6 Sync Status
+
+The implementation should represent explicit states.
+
+Example:
+
+```text
+IDLE
+SYNCING
+SUCCESS
+FAILED
+CONFLICT
+```
+
+### 29.7 IDLE
+
+IDLE means:
+
+```text
+No Synchronization Currently Running
+```
+
+### 29.8 SYNCING
+
+SYNCING means:
+
+```text
+Synchronization Is Currently Running
+```
+
+### 29.9 SUCCESS
+
+SUCCESS means:
+
+```text
+The Latest Synchronization Completed Successfully
+```
+
+### 29.10 FAILED
+
+FAILED means:
+
+```text
+Synchronization Did Not Complete Successfully
+```
+
+The failure should be classified where possible.
+
+### 29.11 CONFLICT
+
+CONFLICT indicates unresolved synchronization conflicts requiring the defined handling flow.
+
+### 29.12 Status Transition
+
+Conceptually:
+
+```text
+IDLE
+ ↓
+SYNCING
+ ↓
+SUCCESS
+```
+
+or:
+
+```text
+SYNCING
+ ↓
+FAILED
+```
+
+or:
+
+```text
+SYNCING
+ ↓
+CONFLICT
+```
+
+### 29.13 State Transition Authority
+
+Sync State transitions must be controlled by the Sync Engine rather than arbitrary UI code.
+
+### 29.14 State Persistence
+
+Sync State must be persisted in the local database.
+
+### 29.15 State Recovery
+
+After application restart:
+
+```text
+Room
+ ↓
+SyncState
+ ↓
+Recover Synchronization
+```
+
+### 29.16 Last Successful Sync
+
+The system may persist the timestamp of the latest successful synchronization.
+
+### 29.17 Last Attempt
+
+The system may persist the timestamp of the latest synchronization attempt.
+
+### 29.18 Cursor
+
+The Cursor identifies the latest remote synchronization position successfully processed.
+
+### 29.19 Cursor Ownership
+
+A cursor must belong to the synchronization context for which it was generated.
+
+### 29.20 Cursor Independence
+
+Independent synchronization contexts must not incorrectly share cursors.
+
+### 29.21 Cursor Monotonicity
+
+A cursor should move forward according to the synchronization protocol.
+
+```text
+Cursor 10
+   ↓
+Cursor 11
+   ↓
+Cursor 12
+```
+
+It must not move backward during normal synchronization.
+
+### 29.22 Cursor Rollback
+
+If a synchronization transaction fails:
+
+```text
+Current Cursor
+      ↓
+Transaction Failure
+      ↓
+Previous Cursor Retained
+```
+
+### 29.23 Cursor Persistence
+
+Cursor updates must be persisted atomically with the corresponding remote changes where required.
+
+### 29.24 Sync Failure State
+
+Failure state should capture enough information to determine:
+
+```text
+Retryable
+Permanent
+Authentication
+Authorization
+Conflict
+```
+
+### 29.25 Error Classification
+
+Synchronization errors should be categorized.
+
+Example:
+
+```text
+NETWORK
+TIMEOUT
+AUTHENTICATION
+AUTHORIZATION
+VALIDATION
+CONFLICT
+SERVER
+UNKNOWN
+```
+
+### 29.26 Retry Count
+
+Retry count may be tracked for retry policy.
+
+### 29.27 Retry Reset
+
+After successful synchronization:
+
+```text
+Retry Count → Reset
+```
+
+according to the implementation.
+
+### 29.28 Retry Scheduling
+
+The Sync State may contain the next retry time if the architecture requires persisted scheduling metadata.
+
+### 29.29 Stale SYNCING State
+
+If the application terminates while state is:
+
+```text
+SYNCING
+```
+
+the next synchronization must detect and recover the stale state.
+
+### 29.30 Sync Recovery
+
+Recovery may follow:
+
+```text
+SYNCING
+      ↓
+Worker Terminated
+      ↓
+Recover
+      ↓
+IDLE / Retryable
+```
+
+according to the Sync State Model.
+
+### 29.31 Sync Lock State
+
+Synchronization locking should not depend solely on persisted status.
+
+Runtime synchronization coordination may use an in-process lock in addition to persisted state.
+
+### 29.32 Concurrent Synchronization
+
+Two synchronization executions for the same context must not concurrently modify:
+
+```text
+Cursor
+SyncState
+Pending Operation State
+```
+
+without coordination.
+
+### 29.33 State Transaction
+
+State changes that affect multiple synchronization records should be transactionally consistent.
+
+### 29.34 Push State Integration
+
+Push results must update the relevant operation state without incorrectly changing the Pull cursor.
+
+### 29.35 Pull State Integration
+
+Pull completion must update:
+
+```text
+Cursor
+Last Successful Sync
+Status
+```
+
+only after successful application.
+
+### 29.36 Conflict State Integration
+
+When unresolved conflicts exist:
+
+```text
+SyncState = CONFLICT
+```
+
+where required by the Sync State Model.
+
+### 29.37 Conflict Resolution
+
+After all required conflicts are resolved:
+
+```text
+CONFLICT
+   ↓
+Sync
+   ↓
+SUCCESS
+```
+
+### 29.38 Partial Conflict
+
+If only some operations conflict:
+
+```text
+Successful Operations
++
+Unresolved Conflicts
+```
+
+must remain independently represented.
+
+### 29.39 Operation State vs Sync State
+
+These concepts must remain separate.
+
+```text
+SyncOperation State
+      ↓
+State of One Operation
+
+SyncState
+      ↓
+State of Synchronization Context
+```
+
+### 29.40 Sync State and UI
+
+The UI may observe SyncState through the Repository/Application layer.
+
+```text
+SyncState
+ ↓
+Repository
+ ↓
+ViewModel
+ ↓
+UI
+```
+
+### 29.41 UI Sync Status
+
+The UI may display:
+
+```text
+Synced
+Syncing
+Sync Pending
+Sync Failed
+Conflict
+```
+
+based on the Presentation mapping.
+
+### 29.42 Sync State and Offline Mode
+
+Offline mode should not be represented simply as:
+
+```text
+SYNC FAILED
+```
+
+when no synchronization attempt was possible.
+
+The application should distinguish:
+
+```text
+Network Unavailable
+```
+
+from:
+
+```text
+Synchronization Failed
+```
+
+where required.
+
+### 29.43 Network State
+
+Network availability and SyncState are separate concepts.
+
+```text
+Network State
+      ≠
+Sync State
+```
+
+### 29.44 Sync Pending
+
+If local operations exist that have not yet synchronized:
+
+```text
+Pending Operations > 0
+```
+
+the application may expose a pending synchronization indicator.
+
+### 29.45 Sync Completion
+
+Synchronization should be considered complete only when:
+
+```text
+Required Push Complete
++
+Required Pull Complete
++
+Local State Consistent
+```
+
+according to the protocol.
+
+### 29.46 Last Successful Sync
+
+Last Successful Sync must only be updated after the synchronization cycle reaches its successful completion condition.
+
+### 29.47 Failed Sync
+
+A failed synchronization must not update Last Successful Sync.
+
+### 29.48 Conflict Sync
+
+If unresolved conflicts prevent synchronization completion:
+
+```text
+Last Successful Sync
+```
+
+must not incorrectly indicate that all synchronization work is complete.
+
+### 29.49 Sync State and Authentication
+
+If synchronization cannot execute because authentication has expired:
+
+```text
+Authentication Required
+```
+
+must be represented without corrupting the synchronization cursor.
+
+### 29.50 Sync State and Authorization
+
+If authorization fails:
+
+```text
+Authorization Failure
+```
+
+must be represented distinctly from network failure.
+
+### 29.51 Sync State and Device Revocation
+
+A revoked Device must enter an appropriate blocked synchronization state.
+
+### 29.52 Sync State and Device Identity
+
+Sync State must be associated with the correct Device Identity.
+
+### 29.53 Sync State and P2P
+
+P2P synchronization may require peer-specific synchronization state.
+
+Conceptually:
+
+```text
+Device A
+   ↕
+Peer B
+```
+
+may have a synchronization context associated with that peer.
+
+### 29.54 Peer Cursor
+
+Peer-specific synchronization cursors must not be incorrectly shared with Backend cursors if the protocols use different positions.
+
+### 29.55 Backend Cursor
+
+Backend synchronization should maintain the cursor defined by the Backend synchronization protocol.
+
+### 29.56 Cursor Namespace
+
+Cursor values must be interpreted only within their defined synchronization context.
+
+A cursor from one Backend/peer context must not automatically be used for another context.
+
+### 29.57 Sync State Repository
+
+A dedicated repository should manage SyncState persistence.
+
+Conceptually:
+
+```text
+SyncStateRepository
+```
+
+### 29.58 Sync State Queries
+
+The repository should support:
+
+```text
+Get Sync State
+Get Cursor
+Get Status
+Get Pending State
+Update Status
+Update Cursor
+Record Failure
+Record Success
+```
+
+where required.
+
+### 29.59 Sync State Transaction
+
+Cursor and state updates must be transactionally coordinated with remote data application where required.
+
+### 29.60 Sync State Cleanup
+
+Old synchronization metadata may be cleaned up according to retention rules.
+
+Active cursors must never be removed while required.
+
+### 29.61 Sync State Migration
+
+Changes to SyncState schema must use explicit database migrations.
+
+### 29.62 Sync State Logging
+
+Logs may include:
+
+```text
+Sync ID
+Context
+Status
+Cursor
+Failure Category
+```
+
+Sensitive information must not be logged.
+
+### 29.63 Sync State Metrics
+
+Useful metrics include:
+
+```text
+Sync Success Rate
+Sync Failure Rate
+Pending Queue Size
+Conflict Count
+Retry Count
+Time Since Last Successful Sync
+```
+
+### 29.64 Sync State Performance
+
+SyncState operations should be lightweight and indexed appropriately.
+
+### 29.65 Sync State Testing
+
+Sync State implementation must include:
+
+```text
+State Transition Tests
+Cursor Tests
+Failure Tests
+Recovery Tests
+Concurrency Tests
+Persistence Tests
+Migration Tests
+```
+
+### 29.66 State Transition Tests
+
+Test:
+
+```text
+IDLE → SYNCING
+SYNCING → SUCCESS
+SYNCING → FAILED
+SYNCING → CONFLICT
+```
+
+### 29.67 Cursor Tests
+
+Test:
+
+```text
+Cursor Creation
+Cursor Advancement
+Cursor Persistence
+Cursor Failure
+Cursor Recovery
+Cursor Isolation
+```
+
+### 29.68 Recovery Tests
+
+Test:
+
+```text
+SYNCING
+ ↓
+Application Termination
+ ↓
+Restart
+ ↓
+Recovery
+```
+
+### 29.69 Authentication State Tests
+
+Test:
+
+```text
+Sync
+ ↓
+Authentication Expired
+ ↓
+Authentication Required
+```
+
+### 29.70 Authorization State Tests
+
+Test:
+
+```text
+Sync
+ ↓
+Authorization Failure
+ ↓
+Correct Sync State
+```
+
+### 29.71 Conflict State Tests
+
+Test:
+
+```text
+Conflict
+ ↓
+CONFLICT
+ ↓
+Resolve
+ ↓
+SUCCESS
+```
+
+### 29.72 Concurrent Sync Tests
+
+Test:
+
+```text
+Sync Request A
+Sync Request B
+      ↓
+Safe Coordination
+```
+
+### 29.73 Persistence Tests
+
+Test that SyncState survives:
+
+```text
+Application Restart
+Process Death
+Device Restart
+```
+
+### 29.74 Migration Tests
+
+Test every SyncState schema migration.
+
+### 29.75 Sync State Completion Criteria
+
+Sync State Implementation is complete when:
+
+```text
+SyncState Entity Implemented
+SyncState Repository Implemented
+Status Model Implemented
+Cursor Implemented
+Cursor Persistence Implemented
+Failure Classification Implemented
+Retry Metadata Implemented
+Recovery Implemented
+Concurrency Control Integrated
+Push Integration Implemented
+Pull Integration Implemented
+Conflict Integration Implemented
+Backend Context Supported
+P2P Context Supported
+UI Integration Implemented
+Migration Implemented
+Tests Passing
+```
+
+### 29.76 Sync State Invariants
+
+The following rules are mandatory:
+
+- SyncState must be persistent.
+- SyncState must be recoverable after application/process termination.
+- SyncState must be scoped to the correct synchronization context.
+- Backend and P2P cursors must not be incorrectly shared when they represent different synchronization contexts.
+- Cursor values must be interpreted only within their defined namespace/context.
+- Cursor advancement must occur only after corresponding remote changes are safely persisted.
+- Cursor must not advance after failed transactions.
+- Cursor must not move backward during normal synchronization.
+- SyncState and SyncOperation state must remain separate concepts.
+- Push acknowledgements must not incorrectly advance the Pull cursor.
+- Last Successful Sync must only update after successful synchronization completion.
+- Failed synchronization must not update Last Successful Sync.
+- Unresolved conflicts must be represented explicitly.
+- Authentication failure must remain distinguishable from network failure.
+- Authorization failure must remain distinguishable from network failure.
+- Device revocation must prevent protected synchronization.
+- Concurrent synchronization must not corrupt SyncState.
+- Stale SYNCING state must be recoverable.
+- SyncState updates must be transactionally consistent with required synchronization changes.
+- Network availability and SyncState must remain separate concepts.
+- SyncState must be covered by automated persistence, transition, recovery, and concurrency tests.
 
 ## 30. Retry and Recovery Implementation
 
