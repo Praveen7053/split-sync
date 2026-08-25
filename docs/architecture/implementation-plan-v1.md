@@ -25996,55 +25996,9831 @@ The following rules are mandatory:
 
 ## 30. Retry and Recovery Implementation
 
+### 30.1 Purpose
+
+This section defines the implementation of retry and recovery mechanisms in SplitSync V1.
+
+The retry and recovery system must ensure that temporary failures do not result in:
+
+```text
+Lost Operations
+Duplicate Financial Effects
+Corrupted Sync State
+Stuck Synchronization
+```
+
+### 30.2 Retry Principle
+
+Only failures that are potentially recoverable should be retried.
+
+```text
+Failure
+   ↓
+Classify
+   ↓
+┌───────────────┬────────────────┐
+↓               ↓
+Retryable      Permanent
+↓               ↓
+Retry          Stop
+```
+
+### 30.3 Retryable Failures
+
+Typical retryable failures include:
+
+```text
+Network Unavailable
+Connection Failure
+Timeout
+Temporary Server Error
+Temporary Peer Failure
+```
+
+### 30.4 Permanent Failures
+
+Typical permanent failures include:
+
+```text
+Invalid Payload
+Invalid Domain State
+Unauthorized Operation
+Unsupported Operation
+Invalid Resource
+Revoked Device
+```
+
+### 30.5 Retry State
+
+Retry metadata should be persisted where required.
+
+Conceptually:
+
+```text
+Retry Count
+Last Attempt
+Next Retry
+Failure Type
+Failure Reason
+```
+
+### 30.6 Retry Count
+
+Each retryable operation may maintain a retry count.
+
+```text
+Retry 0
+ ↓
+Retry 1
+ ↓
+Retry 2
+ ↓
+Retry 3
+```
+
+### 30.7 Retry Limit
+
+The system must define a maximum retry policy to prevent infinite retries.
+
+### 30.8 Exponential Backoff
+
+Retry delays should increase between attempts.
+
+Conceptually:
+
+```text
+Attempt 1 → Short Delay
+Attempt 2 → Longer Delay
+Attempt 3 → Longer Delay
+...
+```
+
+### 30.9 Backoff Jitter
+
+Where appropriate, jitter should be added to prevent multiple Devices from retrying simultaneously.
+
+### 30.10 Retry Scheduling
+
+Retry scheduling should be delegated to the Android background execution mechanism.
+
+The application must not use an uncontrolled loop such as:
+
+```text
+while (failure) {
+    retry();
+}
+```
+
+### 30.11 Network Recovery
+
+When the network becomes available:
+
+```text
+Network Recovery
+      ↓
+Eligible Sync Work
+      ↓
+Retry
+```
+
+### 30.12 Authentication Recovery
+
+If authentication expires:
+
+```text
+Sync
+ ↓
+Authentication Failure
+ ↓
+Refresh / Re-authenticate
+ ↓
+Retry
+```
+
+according to the Authentication implementation.
+
+### 30.13 Authentication Failure Limit
+
+Repeated authentication failures must not cause endless synchronization retries.
+
+### 30.14 Authorization Failure
+
+Authorization failures must not be blindly retried.
+
+```text
+Authorization Failure
+      ↓
+Stop Operation
+      ↓
+Update State
+```
+
+### 30.15 Device Revocation
+
+If the Device is revoked:
+
+```text
+Device Revoked
+      ↓
+Stop Protected Synchronization
+```
+
+### 30.16 Conflict Recovery
+
+Conflicts are not ordinary retry failures.
+
+```text
+Conflict
+   ↓
+Conflict Handling
+   ↓
+Resolution
+```
+
+### 30.17 Retry After Conflict
+
+An operation involved in a conflict should only be retried after the conflict resolution process produces a valid synchronization state.
+
+### 30.18 Timeout Recovery
+
+Timeouts are potentially ambiguous.
+
+The receiving side may have already processed the operation.
+
+Therefore:
+
+```text
+Timeout
+   ↓
+Retry Same Operation ID
+```
+
+must be used rather than generating a new operation.
+
+### 30.19 Idempotent Recovery
+
+All retryable synchronization operations must remain idempotent.
+
+```text
+Same Operation ID
+      ↓
+Repeated Delivery
+      ↓
+Single Business Effect
+```
+
+### 30.20 Push Recovery
+
+Push recovery should follow:
+
+```text
+PENDING
+   ↓
+SYNCING
+   ↓
+Failure
+   ↓
+PENDING
+   ↓
+Retry
+```
+
+for retryable failures.
+
+### 30.21 Pull Recovery
+
+Pull recovery should preserve the last safely committed cursor.
+
+```text
+Pull
+ ↓
+Failure
+ ↓
+Cursor Unchanged
+ ↓
+Retry
+```
+
+### 30.22 Cursor Recovery
+
+The cursor must only advance after corresponding remote changes are safely persisted.
+
+### 30.23 Partial Batch Recovery
+
+If a batch contains:
+
+```text
+A → APPLIED
+B → RETRY
+C → CONFLICT
+```
+
+each result must be persisted independently.
+
+### 30.24 Sync Worker Recovery
+
+If the Android Sync Worker terminates unexpectedly:
+
+```text
+Worker Termination
+      ↓
+Persisted Sync State
+      ↓
+Detect Incomplete Work
+      ↓
+Recover
+```
+
+### 30.25 Stale SYNCING Operations
+
+Operations left in:
+
+```text
+SYNCING
+```
+
+after unexpected termination must be detected as stale according to a defined timeout/recovery policy.
+
+### 30.26 Stale State Recovery
+
+Stale operations should transition to a retryable state where safe.
+
+```text
+SYNCING
+   ↓
+Stale
+   ↓
+PENDING
+```
+
+### 30.27 Crash During Local Transaction
+
+If a crash occurs during a local mutation:
+
+```text
+Transaction
+ ↓
+Crash
+ ↓
+Database Recovery
+```
+
+must preserve atomicity.
+
+### 30.28 Crash During Sync
+
+If a crash occurs while synchronization is processing:
+
+```text
+Crash
+ ↓
+Persisted State
+ ↓
+Retry
+```
+
+must not create duplicate financial effects.
+
+### 30.29 Application Restart
+
+After application restart:
+
+```text
+Load SyncState
+Load Pending Operations
+Recover Stale Operations
+Schedule Sync
+```
+
+### 30.30 Device Restart
+
+The same recovery process must work after a complete Device restart.
+
+### 30.31 Recovery Ordering
+
+Recovery should occur before normal synchronization resumes.
+
+```text
+Recover
+   ↓
+Validate State
+   ↓
+Normal Sync
+```
+
+### 30.32 Recovery Validation
+
+Before retrying recovered operations, validate:
+
+```text
+Operation State
+Operation ID
+Entity State
+Version
+Sync Context
+```
+
+### 30.33 Recovery and Dependencies
+
+Recovered operations must continue to respect operation dependencies.
+
+### 30.34 Recovery and Conflicts
+
+An operation already identified as conflicting must not be automatically moved back to PENDING without valid conflict handling.
+
+### 30.35 Recovery and Permanent Failure
+
+Permanent failures must remain permanently failed until an explicit valid resolution/retry mechanism exists.
+
+### 30.36 Retry State Persistence
+
+Retry state must survive application termination where required.
+
+### 30.37 Retry Cleanup
+
+After successful synchronization:
+
+```text
+Retry Count → Reset / Cleanup
+```
+
+according to the retention strategy.
+
+### 30.38 Retry Logging
+
+Retry logs may contain:
+
+```text
+Operation ID
+Retry Count
+Failure Type
+Next Retry
+```
+
+but must not expose sensitive payloads.
+
+### 30.39 Retry Metrics
+
+Useful metrics include:
+
+```text
+Retry Count
+Retry Success Rate
+Permanent Failure Count
+Average Retry Attempts
+Recovery Count
+Stale Operation Count
+```
+
+### 30.40 Retry Testing
+
+Test:
+
+```text
+Network Failure
+Timeout
+Server Failure
+Authentication Failure
+Authorization Failure
+Crash
+Restart
+Stale Operation
+Repeated Retry
+```
+
+### 30.41 Retry Completion Criteria
+
+Retry and Recovery Implementation is complete when:
+
+```text
+Failure Classification Implemented
+Retry Policy Implemented
+Retry Limit Implemented
+Backoff Implemented
+Jitter Implemented Where Required
+Authentication Recovery Implemented
+Timeout Recovery Implemented
+Crash Recovery Implemented
+Restart Recovery Implemented
+Stale Operation Recovery Implemented
+Cursor Recovery Implemented
+Conflict Integration Implemented
+Metrics / Logging Implemented
+Tests Passing
+```
+
+### 30.42 Retry and Recovery Invariants
+
+The following rules are mandatory:
+
+- Only retryable failures may be automatically retried.
+- Permanent failures must not retry indefinitely.
+- Authentication failures must follow the Authentication recovery flow.
+- Authorization failures must not be blindly retried.
+- Revoked Devices must not continue protected synchronization.
+- Conflicts must be handled through the Conflict architecture.
+- Timeout retries must reuse the same Operation ID.
+- Retry must never create duplicate financial effects.
+- Retry state must survive application termination where required.
+- Retry delays must be controlled.
+- Synchronization must not use uncontrolled retry loops.
+- Pull failures must not advance the cursor.
+- Stale SYNCING operations must be recoverable.
+- Recovery must respect operation dependencies.
+- Recovery must preserve transaction atomicity.
+- Recovered operations must pass the normal synchronization validation process.
+- Retry and recovery behavior must be covered by automated tests.
+
+
 ## 31. Conflict Detection Implementation
+
+### 31.1 Purpose
+
+This section defines the implementation of Conflict Detection in SplitSync V1.
+
+Conflict Detection determines whether a local or remote synchronization operation can be safely applied to the current state.
+
+```text
+Incoming / Local Operation
+          ↓
+Current Entity State
+          ↓
+Version / Rule Check
+          ↓
+┌─────────┴─────────┐
+↓                   ↓
+Compatible        Conflict
+↓                   ↓
+Apply             Resolve
+```
+
+### 31.2 Conflict Principle
+
+The system must never silently overwrite a newer or incompatible state.
+
+### 31.3 Conflict Detection Boundary
+
+Conflict Detection belongs to the synchronization/domain integration layer.
+
+It must not be implemented in the UI.
+
+### 31.4 Conflict Inputs
+
+Conflict detection may use:
+
+```text
+Entity ID
+Operation ID
+Device ID
+Base Version
+Current Version
+Incoming Version
+Operation Type
+Entity State
+```
+
+### 31.5 Version-Based Detection
+
+The primary detection mechanism should use the versioning strategy defined by the synchronization model.
+
+Conceptually:
+
+```text
+Expected Version
+      +
+Current Version
+      ↓
+Compatible?
+```
+
+### 31.6 Compatible Operation
+
+If the incoming operation is compatible:
+
+```text
+No Conflict
+   ↓
+Apply
+```
+
+### 31.7 Version Mismatch
+
+If the operation was generated against an incompatible version:
+
+```text
+Version Mismatch
+      ↓
+Conflict Candidate
+```
+
+### 31.8 Concurrent Modification
+
+A conflict may occur when:
+
+```text
+Device A
+   ↓
+Update V5
+
+Device B
+   ↓
+Update V5
+```
+
+and both changes cannot be safely merged.
+
+### 31.9 Conflict Detection Result
+
+The detector should return an explicit result.
+
+Conceptually:
+
+```text
+NO_CONFLICT
+CONFLICT
+INVALID
+```
+
+### 31.10 Conflict Detector
+
+A dedicated component should encapsulate conflict detection logic.
+
+Conceptually:
+
+```text
+ConflictDetector
+```
+
+### 31.11 Conflict Detection Flow
+
+```text
+Operation
+   ↓
+Load Current State
+   ↓
+Check Entity Existence
+   ↓
+Check Version
+   ↓
+Check Operation Compatibility
+   ↓
+Return Result
+```
+
+### 31.12 Entity Existence
+
+The detector must determine whether the target entity exists when required.
+
+Examples:
+
+```text
+CREATE on existing Entity
+UPDATE on missing Entity
+DELETE on missing Entity
+```
+
+must follow explicit rules.
+
+### 31.13 Create Conflict
+
+A CREATE operation may conflict when the same logical entity already exists with incompatible state.
+
+### 31.14 Update Conflict
+
+An UPDATE operation may conflict when its Base Version does not match the applicable current version.
+
+### 31.15 Delete Conflict
+
+A DELETE operation may conflict when the target has changed after the operation was generated.
+
+### 31.16 Tombstone Conflict
+
+A mutation against an entity already represented by a tombstone must follow the deletion/conflict rules.
+
+### 31.17 Membership Conflict
+
+Membership changes must consider:
+
+```text
+Current Membership State
++
+Incoming Membership Operation
++
+Version
+```
+
+### 31.18 Group Conflict
+
+Group updates must use the Group versioning rules.
+
+### 31.19 Expense Conflict
+
+Expense conflicts must preserve:
+
+```text
+Amount
+Splits
+Payer
+Participants
+Version
+```
+
+and must never silently alter financial values.
+
+### 31.20 Settlement Conflict
+
+Settlement conflicts must preserve:
+
+```text
+Payer
+Receiver
+Amount
+Version
+```
+
+### 31.21 Financial Conflict Safety
+
+Conflict detection must never resolve a financial conflict by simply choosing an arbitrary value.
+
+### 31.22 Conflict and Balance
+
+A conflicting financial operation must not incorrectly modify the balance until its resulting Domain state is valid.
+
+### 31.23 Conflict Detection Transaction
+
+Conflict detection and the related state check must occur against a consistent local snapshot.
+
+### 31.24 Atomic Detection and Apply
+
+Where required:
+
+```text
+Load Current State
++
+Detect Conflict
++
+Apply
+```
+
+must occur within one transaction or equivalent concurrency boundary.
+
+### 31.25 Race Prevention
+
+Two synchronization processes must not perform conflict detection against stale state and then both apply incompatible mutations.
+
+### 31.26 Concurrency Control
+
+Conflict detection must use the concurrency mechanism defined by the persistence architecture.
+
+### 31.27 Operation ID Check
+
+Duplicate Operation IDs should be checked before generating a new conflict.
+
+### 31.28 Already Applied Operation
+
+If the operation has already been successfully applied:
+
+```text
+Already Applied
+      ↓
+No New Conflict
+```
+
+### 31.29 Remote Conflict
+
+A remote operation may conflict with local unsynchronized state.
+
+```text
+Local Pending Change
+      +
+Remote Change
+      ↓
+Conflict Detection
+```
+
+### 31.30 Local Conflict
+
+A locally generated operation may be rejected by the Backend/Peer because the remote state has changed.
+
+```text
+Local Operation
+      ↓
+Remote Version Check
+      ↓
+Conflict
+```
+
+### 31.31 Conflict Metadata
+
+A detected conflict should capture:
+
+```text
+Conflict ID
+Entity Type
+Entity ID
+Operation ID
+Local Version
+Remote Version
+Local State
+Remote State
+Detection Time
+Status
+```
+
+according to the Conflict Data Model.
+
+### 31.32 Conflict Persistence
+
+Conflict information must be persisted durably.
+
+### 31.33 Conflict State
+
+Conceptually:
+
+```text
+OPEN
+RESOLVING
+RESOLVED
+REJECTED
+```
+
+according to the Conflict Data Model.
+
+### 31.34 Conflict Status Authority
+
+Conflict status transitions must be controlled by the synchronization/application layer.
+
+### 31.35 Conflict Detection Failure
+
+If conflict detection cannot reliably determine the state:
+
+```text
+Do Not Apply Blindly
+      ↓
+Safe Failure
+```
+
+### 31.36 Invalid Operation
+
+An operation that fails Domain validation is not automatically a conflict.
+
+It should be classified as:
+
+```text
+INVALID
+```
+
+unless the synchronization protocol explicitly defines it as a conflict.
+
+### 31.37 Conflict vs Validation
+
+These concepts must remain separate:
+
+```text
+Validation Failure
+      ≠
+Synchronization Conflict
+```
+
+### 31.38 Conflict vs Authorization
+
+Authorization failure is not a conflict.
+
+```text
+Unauthorized
+      ≠
+Conflict
+```
+
+### 31.39 Conflict vs Network Failure
+
+Network failure is not a conflict.
+
+```text
+Network Failure
+      ≠
+Conflict
+```
+
+### 31.40 Conflict Detection and P2P
+
+P2P synchronization must use the same logical conflict detection rules.
+
+### 31.41 Conflict Detection and Backend
+
+Backend synchronization must use the same version/conflict rules defined by the protocol.
+
+### 31.42 Conflict Detection Result
+
+The result must be deterministic for the same:
+
+```text
+Current State
++
+Operation
++
+Synchronization Rules
+```
+
+### 31.43 Conflict Logging
+
+Logs may contain:
+
+```text
+Conflict ID
+Operation ID
+Entity Type
+Entity ID
+Local Version
+Remote Version
+```
+
+but should not expose unnecessary financial payloads.
+
+### 31.44 Conflict Metrics
+
+Useful metrics include:
+
+```text
+Conflict Count
+Conflict Rate
+Conflict Type
+Resolution Time
+Unresolved Conflicts
+```
+
+### 31.45 Conflict Testing
+
+Test:
+
+```text
+Matching Version
+Stale Version
+Concurrent Update
+Duplicate Operation
+Create Conflict
+Update Conflict
+Delete Conflict
+Membership Conflict
+Financial Conflict
+```
+
+### 31.46 Conflict Completion Criteria
+
+Conflict Detection Implementation is complete when:
+
+```text
+ConflictDetector Implemented
+Version Checks Implemented
+Entity Existence Checks Implemented
+Create Conflict Rules Implemented
+Update Conflict Rules Implemented
+Delete Conflict Rules Implemented
+Duplicate Detection Integrated
+Conflict Persistence Implemented
+Concurrency Control Implemented
+Backend Integration Implemented
+P2P Integration Implemented
+Logging / Metrics Implemented
+Tests Passing
+```
+
+### 31.47 Conflict Detection Invariants
+
+The following rules are mandatory:
+
+- Conflicts must be detected deterministically.
+- Version mismatches must not be silently ignored.
+- Newer or incompatible state must not be silently overwritten.
+- Duplicate operations must not create duplicate conflicts unnecessarily.
+- Validation failures must remain distinct from conflicts.
+- Authorization failures must remain distinct from conflicts.
+- Network failures must remain distinct from conflicts.
+- Financial conflicts must preserve financial correctness.
+- Conflict detection must operate against a consistent state.
+- Concurrent synchronization must not allow stale conflict checks to produce invalid state.
+- Conflict information must be persisted durably.
+- Conflict detection must be shared logically between Backend and P2P synchronization.
+- Conflict detection must be covered by automated tests.
+
 
 ## 32. Conflict Resolution Implementation
 
+### 32.1 Purpose
+
+This section defines the implementation of Conflict Resolution in SplitSync V1.
+
+Conflict Resolution determines how a detected synchronization conflict is converted into a valid final Domain state.
+
+```text
+Conflict
+   ↓
+Resolution Strategy
+   ↓
+Valid Domain State
+   ↓
+Synchronization
+```
+
+### 32.2 Resolution Principle
+
+Conflict resolution must never produce invalid Domain or financial state.
+
+### 32.3 Resolution Strategies
+
+The supported strategy must follow the Conflict Data Model.
+
+Possible categories include:
+
+```text
+Automatic Resolution
+Manual Resolution
+Reject
+Retry After Reconciliation
+```
+
+Only strategies explicitly supported by V1 should be implemented.
+
+### 32.4 Conflict Resolver
+
+A dedicated component should perform resolution.
+
+Conceptually:
+
+```text
+ConflictResolver
+```
+
+### 32.5 Resolution Inputs
+
+The resolver may require:
+
+```text
+Conflict
+Local State
+Remote State
+Operation
+Version Information
+Resolution Decision
+```
+
+### 32.6 Automatic Resolution
+
+Automatic resolution may be used only where the conflict rules define an unambiguous result.
+
+### 32.7 Manual Resolution
+
+Manual resolution should be used where the system cannot safely determine the correct outcome automatically.
+
+```text
+Conflict
+ ↓
+User Decision
+ ↓
+Resolve Conflict
+```
+
+### 32.8 Financial Conflict Resolution
+
+Financial conflicts require stricter handling.
+
+The system must not automatically choose:
+
+```text
+Higher Amount
+Lower Amount
+Latest Timestamp
+```
+
+unless explicitly defined by the Domain rules.
+
+### 32.9 Expense Conflict Resolution
+
+An Expense conflict must preserve consistency between:
+
+```text
+Expense
++
+ExpenseSplits
+```
+
+### 32.10 Settlement Conflict Resolution
+
+A Settlement conflict must preserve:
+
+```text
+Payer
+Receiver
+Amount
+```
+
+and the resulting balance.
+
+### 32.11 Membership Conflict Resolution
+
+Membership conflicts must preserve valid:
+
+```text
+Group Membership
+Role
+Authorization State
+```
+
+### 32.12 Group Conflict Resolution
+
+Group conflicts must preserve the Group's valid Domain state.
+
+### 32.13 Resolution Validation
+
+Every resolution must pass Domain validation.
+
+```text
+Resolution
+   ↓
+Domain Validation
+   ↓
+Valid?
+```
+
+### 32.14 Invalid Resolution
+
+If the proposed resolution is invalid:
+
+```text
+Resolution
+   ↓
+Validation Failure
+   ↓
+Conflict Remains Open
+```
+
+### 32.15 Resolution Transaction
+
+Resolution must be transactional.
+
+```text
+Resolved Entity State
++
+Conflict State
++
+Required SyncOperation
+      ↓
+Commit
+```
+
+### 32.16 Conflict State Transition
+
+Conceptually:
+
+```text
+OPEN
+ ↓
+RESOLVING
+ ↓
+RESOLVED
+```
+
+or:
+
+```text
+OPEN
+ ↓
+REJECTED
+```
+
+where supported.
+
+### 32.17 Resolution Operation
+
+A manual resolution should produce a new valid synchronization operation where required.
+
+```text
+Conflict Resolution
+      ↓
+New Domain Mutation
+      ↓
+New SyncOperation
+```
+
+### 32.18 Original Operation
+
+The original conflicting operation must retain its history/state according to the synchronization model.
+
+### 32.19 No Silent Overwrite
+
+Resolution must explicitly account for both conflicting states.
+
+### 32.20 Resolution Metadata
+
+The system may retain:
+
+```text
+Resolution ID
+Conflict ID
+Resolver
+Resolution Type
+Resolution Time
+Resulting Version
+```
+
+according to the data model.
+
+### 32.21 Conflict Resolution UI
+
+If manual resolution is supported:
+
+```text
+Conflict
+ ↓
+Conflict Screen
+ ↓
+User Decision
+ ↓
+ViewModel
+ ↓
+ResolveConflictUseCase
+ ↓
+ConflictResolver
+```
+
+### 32.22 UI Responsibility
+
+The UI must not directly modify conflict persistence.
+
+### 32.23 Resolution Options
+
+Only valid resolution options should be exposed to the User.
+
+### 32.24 Resolution Authorization
+
+Only an authorized User may resolve a conflict.
+
+### 32.25 Resolution Authentication
+
+Conflict resolution must operate under a valid authenticated context where required.
+
+### 32.26 Resolution Revalidation
+
+Before committing a manual resolution:
+
+```text
+Reload Current State
+      ↓
+Revalidate Conflict
+      ↓
+Apply Resolution
+```
+
+This prevents resolving against stale state.
+
+### 32.27 Concurrent Resolution
+
+Two Devices must not independently resolve the same conflict into incompatible final state without the synchronization protocol detecting it.
+
+### 32.28 Resolution Version
+
+A successful resolution must produce the appropriate resulting version.
+
+### 32.29 Resolution Sync
+
+After local resolution:
+
+```text
+Resolved State
+      ↓
+SyncOperation
+      ↓
+Push
+```
+
+where required.
+
+### 32.30 Resolution and Pull
+
+The resolved state may subsequently be received by other Devices through Pull synchronization.
+
+### 32.31 Resolution Idempotency
+
+Repeated processing of the same resolution operation must not create duplicate financial effects.
+
+### 32.32 Resolution Failure
+
+If resolution cannot be applied:
+
+```text
+Conflict
+      ↓
+Resolution Failure
+      ↓
+Conflict Remains Open
+```
+
+### 32.33 Resolution Retry
+
+A resolution operation may be retried if the failure is transient.
+
+### 32.34 Resolution Conflict
+
+A conflict resolution itself may conflict with a newer remote state.
+
+```text
+Resolution
+      ↓
+Remote State Changed
+      ↓
+New Conflict
+```
+
+The normal conflict detection process must then apply.
+
+### 32.35 Resolution Audit
+
+Where required, resolution actions should be auditable.
+
+### 32.36 Resolution Logging
+
+Logs may contain:
+
+```text
+Conflict ID
+Resolution ID
+Entity ID
+Resolution Type
+Result
+```
+
+Sensitive payloads should not be logged unnecessarily.
+
+### 32.37 Resolution Metrics
+
+Useful metrics include:
+
+```text
+Open Conflicts
+Resolved Conflicts
+Rejected Conflicts
+Resolution Time
+Automatic Resolution Rate
+```
+
+### 32.38 Resolution Cleanup
+
+Resolved conflicts may be archived or cleaned according to the retention policy.
+
+### 32.39 Resolution Testing
+
+Test:
+
+```text
+Automatic Resolution
+Manual Resolution
+Invalid Resolution
+Concurrent Resolution
+Resolution Retry
+Resolution Conflict
+Resolution Idempotency
+```
+
+### 32.40 Financial Resolution Tests
+
+Test that resolving an Expense or Settlement conflict preserves:
+
+```text
+Amount
+Currency
+Splits
+Payer
+Receiver
+Balance
+```
+
+### 32.41 Membership Resolution Tests
+
+Test:
+
+```text
+Role
+Membership State
+Authorization State
+```
+
+after resolution.
+
+### 32.42 Resolution Completion Criteria
+
+Conflict Resolution Implementation is complete when:
+
+```text
+ConflictResolver Implemented
+Resolution Strategies Implemented
+Domain Validation Integrated
+Transactional Resolution Implemented
+Manual Resolution Integrated Where Required
+Authorization Integrated
+Resolution SyncOperation Implemented
+Revalidation Implemented
+Idempotency Implemented
+Retry Implemented
+Conflict Re-detection Implemented
+Logging / Metrics Implemented
+Tests Passing
+```
+
+### 32.43 Conflict Resolution Invariants
+
+The following rules are mandatory:
+
+- Conflict resolution must produce valid Domain state.
+- Financial conflicts must never be resolved through arbitrary value selection.
+- Expense and ExpenseSplits must remain consistent after resolution.
+- Settlement state must remain financially correct after resolution.
+- Membership resolution must preserve valid authorization state.
+- Every resolution must pass Domain validation.
+- Resolution must be transactional.
+- The original conflict state must be preserved according to the conflict model.
+- Manual resolution must be authorized.
+- Manual resolution must revalidate current state before commit.
+- Resolution must not silently overwrite newer state.
+- Resolution operations must be idempotent.
+- Resolution failures must leave the conflict recoverable.
+- A resolution that encounters a newer conflicting state must enter normal conflict detection again.
+- Resolved state must synchronize through the normal synchronization protocol.
+- Conflict resolution must be covered by automated tests.
+
+
 ## 33. Peer-to-Peer Implementation
+
+### 33.1 Purpose
+
+This section defines the implementation of local Peer-to-Peer synchronization in SplitSync V1.
+
+P2P synchronization allows trusted Devices to exchange synchronization operations without requiring the Backend for the transfer itself.
+
+```text
+Device A
+   ↕
+Trusted P2P Channel
+   ↕
+Device B
+```
+
+### 33.2 P2P Principle
+
+P2P synchronization must use the same logical synchronization model as Backend synchronization.
+
+```text
+SyncOperation
+      ↓
+P2P Transport
+      ↓
+Remote Device
+```
+
+### 33.3 P2P Responsibilities
+
+The P2P implementation is responsible for:
+
+```text
+Peer Discovery
+Peer Authentication
+Peer Trust Verification
+Connection Establishment
+Capability Negotiation
+Push
+Pull
+Operation Validation
+Conflict Detection
+Synchronization State
+Connection Recovery
+```
+
+### 33.4 P2P Architecture
+
+Conceptually:
+
+```text
+P2P Sync Engine
+      ↓
+Peer Manager
+      ↓
+P2P Transport
+      ↓
+Secure Peer Connection
+      ↓
+Remote Sync Engine
+```
+
+### 33.5 P2P Components
+
+Logical components include:
+
+```text
+PeerManager
+PeerDiscovery
+PeerAuthenticator
+PeerConnection
+PeerTransport
+PeerSyncService
+PeerStateRepository
+```
+
+### 33.6 Peer Identity
+
+Each Device must have a stable Device Identity.
+
+```text
+Device Identity
+      ↓
+Peer Identity
+```
+
+### 33.7 Peer Trust
+
+A discovered Device must not automatically become a trusted synchronization peer.
+
+```text
+Discovered
+      ↓
+Verify
+      ↓
+Trusted
+```
+
+### 33.8 Peer Authentication
+
+P2P connections must authenticate both endpoints.
+
+```text
+Device A ↔ Device B
+      ↓
+Mutual Authentication
+```
+
+### 33.9 Peer Authorization
+
+Authentication alone is not sufficient.
+
+The peer must be authorized to exchange synchronization data for the relevant context.
+
+### 33.10 Group Context
+
+P2P synchronization must be scoped to the appropriate Group/context.
+
+```text
+Peer Connection
+      +
+Group Context
+      ↓
+Synchronization
+```
+
+### 33.11 P2P Transport
+
+The transport implementation must be abstracted from the synchronization logic.
+
+```text
+PeerSyncTransport
+```
+
+may use the platform/network mechanism selected by the architecture.
+
+### 33.12 Transport Independence
+
+The Sync Engine must not depend directly on the underlying discovery or transport technology.
+
+### 33.13 P2P Connection Flow
+
+```text
+Discover Peer
+      ↓
+Select Peer
+      ↓
+Authenticate
+      ↓
+Authorize
+      ↓
+Establish Secure Channel
+      ↓
+Negotiate Protocol
+      ↓
+Synchronize
+      ↓
+Close / Maintain Connection
+```
+
+### 33.14 P2P Protocol Version
+
+Peers must negotiate a compatible synchronization protocol version.
+
+### 33.15 Unsupported Version
+
+If protocol versions are incompatible:
+
+```text
+Version Mismatch
+      ↓
+Reject Synchronization
+```
+
+without corrupting local state.
+
+### 33.16 P2P Capabilities
+
+Peers may exchange supported capabilities.
+
+Examples:
+
+```text
+Supported Entity Types
+Protocol Version
+Maximum Batch Size
+Compression Support
+Conflict Protocol
+```
+
+### 33.17 Capability Validation
+
+Synchronization must only use mutually supported capabilities.
+
+### 33.18 P2P Push
+
+P2P Push follows the same logical operation model:
+
+```text
+Pending Operations
+      ↓
+P2P Push
+      ↓
+Peer
+```
+
+### 33.19 P2P Pull
+
+P2P Pull retrieves peer changes:
+
+```text
+Peer Changes
+      ↓
+P2P Pull
+      ↓
+Local Database
+```
+
+### 33.20 P2P Sync State
+
+Peer synchronization state must be persisted where required.
+
+```text
+Peer
++
+Sync Context
++
+Cursor / State
+```
+
+### 33.21 Peer-Specific Cursor
+
+If the P2P protocol uses cursors, they must be scoped to the peer synchronization context.
+
+### 33.22 P2P Operation Idempotency
+
+P2P synchronization must use Operation IDs for duplicate detection.
+
+### 33.23 P2P Duplicate Operation
+
+If the same operation is received twice:
+
+```text
+Operation ID
+      ↓
+Already Processed
+      ↓
+No Duplicate Effect
+```
+
+### 33.24 P2P Conflict Detection
+
+P2P synchronization must use the same conflict detection rules.
+
+```text
+Remote Operation
+      ↓
+Version Check
+      ↓
+Conflict Detection
+```
+
+### 33.25 P2P Conflict Resolution
+
+Conflicts must follow the common Conflict Resolution implementation.
+
+### 33.26 P2P Financial Safety
+
+P2P synchronization must not introduce financial state that could not be introduced through Backend synchronization.
+
+### 33.27 P2P Domain Validation
+
+All received operations must pass Domain validation before application.
+
+### 33.28 P2P Authorization
+
+The receiving Device must verify that the operation source is permitted to mutate the relevant Group/resource.
+
+### 33.29 P2P Replay Protection
+
+Previously processed operations must not be replayed to produce additional business effects.
+
+### 33.30 P2P Secure Channel
+
+The communication channel must provide appropriate:
+
+```text
+Confidentiality
+Integrity
+Peer Authentication
+```
+
+according to the Security Architecture.
+
+### 33.31 P2P Key Management
+
+Cryptographic keys and trust material must follow the Security Architecture.
+
+### 33.32 P2P Data Exposure
+
+Only synchronization data required for the authorized context should be exchanged.
+
+### 33.33 P2P Group Isolation
+
+A peer must not receive data belonging to Groups for which synchronization is not authorized.
+
+### 33.34 P2P Connection Loss
+
+If the peer connection is lost:
+
+```text
+Connection Lost
+      ↓
+Preserve Local State
+      ↓
+Keep Pending Operations
+      ↓
+Retry Later
+```
+
+### 33.35 P2P Retry
+
+P2P connection failures should use controlled retry.
+
+### 33.36 P2P Backoff
+
+Repeated connection attempts must use backoff.
+
+### 33.37 P2P Partial Transfer
+
+If a connection fails during transfer:
+
+```text
+Partial Transfer
+      ↓
+Do Not Assume Complete
+      ↓
+Resume / Retry
+```
+
+using Operation IDs and protocol state.
+
+### 33.38 P2P Transfer Atomicity
+
+A partially received operation must not be applied until the complete operation payload has been validated.
+
+### 33.39 P2P Batch Processing
+
+P2P synchronization should use bounded batches.
+
+### 33.40 P2P Large Queue
+
+Large queues must be transferred incrementally.
+
+### 33.41 P2P Discovery Integration
+
+Peer discovery must provide candidate peers to the PeerManager.
+
+```text
+Discovery
+      ↓
+PeerManager
+      ↓
+Verification
+```
+
+### 33.42 P2P Discovery Security
+
+Discovery results must be treated as untrusted until peer identity is verified.
+
+### 33.43 Peer Trust Store
+
+Trusted peer information may be persisted securely according to the Security Architecture.
+
+### 33.44 Peer Revocation
+
+A previously trusted peer must be removable/revocable.
+
+```text
+Trusted Peer
+      ↓
+Revoked
+      ↓
+Synchronization Blocked
+```
+
+### 33.45 P2P Session
+
+A P2P session should have a bounded lifecycle.
+
+Conceptually:
+
+```text
+CONNECTING
+CONNECTED
+SYNCING
+IDLE
+DISCONNECTED
+FAILED
+```
+
+### 33.46 Session State
+
+Session state must not be confused with persistent SyncState.
+
+### 33.47 P2P Session Recovery
+
+A disconnected session must be recreated rather than leaving synchronization permanently stuck.
+
+### 33.48 P2P Peer Selection
+
+If multiple peers are available, the PeerManager may select a suitable peer based on:
+
+```text
+Trust
+Availability
+Group Membership
+Protocol Compatibility
+Signal / Connection Quality
+```
+
+according to V1 requirements.
+
+### 33.49 Multiple Peer Synchronization
+
+When multiple peers are used:
+
+```text
+Peer A
+Peer B
+Peer C
+```
+
+the same Operation ID and conflict rules must apply across all peers.
+
+### 33.50 P2P Concurrency
+
+Concurrent synchronization with multiple peers must not corrupt local:
+
+```text
+Entity State
+SyncState
+Conflict State
+Operation State
+```
+
+### 33.51 P2P Synchronization Lock
+
+Appropriate synchronization coordination must prevent incompatible concurrent modifications.
+
+### 33.52 P2P and Backend
+
+P2P synchronization does not replace Backend synchronization.
+
+```text
+P2P
+ +
+Backend
+```
+
+must converge toward the same valid Domain state.
+
+### 33.53 Eventual Convergence
+
+If all valid operations are eventually exchanged and conflicts are resolved:
+
+```text
+Device A
+   ↕
+Device B
+   ↕
+Backend
+```
+
+should converge according to the synchronization protocol.
+
+### 33.54 P2P Offline Use
+
+P2P synchronization is specifically intended to support data exchange when Backend connectivity is unavailable.
+
+### 33.55 P2P Reconnection to Backend
+
+After Backend connectivity returns:
+
+```text
+P2P Changes
+      ↓
+Local Sync Queue
+      ↓
+Backend Push
+      ↓
+Backend Pull
+```
+
+must reconcile the Device with the Backend.
+
+### 33.56 P2P Logging
+
+P2P logs may contain:
+
+```text
+Peer ID
+Session ID
+Operation ID
+Connection Result
+Sync Result
+```
+
+Sensitive payloads must not be logged unnecessarily.
+
+### 33.57 P2P Metrics
+
+Useful metrics include:
+
+```text
+Peers Discovered
+Successful Connections
+Failed Connections
+P2P Syncs
+Operations Exchanged
+Conflicts
+Retries
+Transfer Duration
+```
+
+### 33.58 P2P Testing
+
+P2P implementation must include:
+
+```text
+Discovery Tests
+Authentication Tests
+Authorization Tests
+Transport Tests
+Synchronization Tests
+Conflict Tests
+Failure Tests
+Security Tests
+```
+
+### 33.59 P2P Connection Tests
+
+Test:
+
+```text
+Discovery
+Connection
+Authentication
+Protocol Negotiation
+Disconnect
+Reconnect
+```
+
+### 33.60 P2P Synchronization Tests
+
+Test:
+
+```text
+Push
+Pull
+Duplicate Operation
+Version Conflict
+Retry
+Partial Transfer
+```
+
+### 33.61 P2P Security Tests
+
+Test:
+
+```text
+Unknown Peer
+Untrusted Peer
+Revoked Peer
+Invalid Identity
+Replay
+Unauthorized Group
+```
+
+### 33.62 P2P Offline Tests
+
+Test:
+
+```text
+Backend Unavailable
+Peer Available
+P2P Sync
+Backend Returns
+Backend Reconciliation
+```
+
+### 33.63 P2P Completion Criteria
+
+Peer-to-Peer Implementation is complete when:
+
+```text
+Peer Identity Implemented
+Peer Trust Implemented
+Peer Authentication Implemented
+Peer Authorization Implemented
+Secure Transport Implemented
+Protocol Negotiation Implemented
+P2P Push Implemented
+P2P Pull Implemented
+P2P Sync State Implemented
+Idempotency Implemented
+Conflict Integration Implemented
+Connection Recovery Implemented
+Peer Revocation Implemented
+Backend Reconciliation Implemented
+Security Integrated
+Tests Passing
+```
+
+### 33.64 P2P Invariants
+
+The following rules are mandatory:
+
+- Discovery does not imply trust.
+- Every P2P synchronization session must authenticate the peer.
+- Every P2P synchronization session must be authorized.
+- P2P synchronization must be scoped to the authorized Group/context.
+- Untrusted peers must not receive protected synchronization data.
+- P2P must use the common SyncOperation model.
+- P2P must use Operation IDs for idempotency.
+- Duplicate operations must not create duplicate business effects.
+- P2P must use the common conflict detection rules.
+- P2P must use the common conflict resolution rules.
+- P2P received operations must pass Domain validation.
+- Partial operations must never be applied.
+- Connection loss must not lose locally persisted operations.
+- P2P retry must use controlled backoff.
+- Peer revocation must block further protected synchronization.
+- P2P synchronization must not corrupt local SyncState.
+- P2P synchronization must not change financial outcomes compared with the common Domain rules.
+- P2P changes must eventually reconcile with Backend state when Backend connectivity returns.
+- P2P implementation must be covered by automated tests.
+
 
 ## 34. P2P Discovery Implementation
 
+### 34.1 Purpose
+
+This section defines the implementation of Peer-to-Peer Device Discovery in SplitSync V1.
+
+P2P Discovery identifies nearby candidate Devices that may participate in synchronization.
+
+```text
+Nearby Devices
+      ↓
+Discovery
+      ↓
+Candidate Peers
+      ↓
+Identity Verification
+      ↓
+Trusted Peer
+```
+
+### 34.2 Discovery Principle
+
+Discovery only identifies potential peers.
+
+```text
+Discovered
+      ≠
+Trusted
+```
+
+### 34.3 Discovery Responsibility
+
+The Discovery layer is responsible for:
+
+```text
+Scanning
+Advertising
+Candidate Detection
+Peer Metadata Retrieval
+Discovery Filtering
+Discovery Lifecycle
+```
+
+### 34.4 Discovery Component
+
+A dedicated component should encapsulate platform discovery.
+
+Conceptually:
+
+```text
+PeerDiscovery
+```
+
+### 34.5 Discovery Abstraction
+
+The P2P architecture must isolate Android/platform discovery APIs from the synchronization engine.
+
+```text
+PeerDiscovery
+      ↓
+Platform Discovery API
+```
+
+### 34.6 Discovery Technologies
+
+The actual discovery mechanism should follow the selected Android/P2P architecture.
+
+Possible technologies may include:
+
+```text
+Bluetooth
+Wi-Fi Direct
+Local Network Discovery
+Nearby Connections
+```
+
+Only the technology selected for V1 should be implemented.
+
+### 34.7 Discovery Start
+
+Discovery may be initiated by:
+
+```text
+User Action
+P2P Sync Request
+Offline Sync Workflow
+Application Flow
+```
+
+according to V1 requirements.
+
+### 34.8 Discovery Stop
+
+Discovery must stop when:
+
+```text
+Peer Found
+Timeout Reached
+User Cancels
+Application Lifecycle Requires Stop
+```
+
+### 34.9 Discovery Timeout
+
+Discovery should use a bounded timeout.
+
+It must not scan indefinitely.
+
+### 34.10 Discovery Result
+
+A discovered peer may provide:
+
+```text
+Peer ID
+Device Name
+Protocol Version
+Capabilities
+Availability
+```
+
+Only non-sensitive metadata should be exposed before authentication.
+
+### 34.11 Peer ID
+
+The Peer ID must correspond to the Device Identity used by the P2P synchronization architecture.
+
+### 34.12 Discovery Metadata Trust
+
+Discovery metadata must be considered untrusted until peer authentication succeeds.
+
+### 34.13 Discovery Filtering
+
+Candidate peers should be filtered based on:
+
+```text
+Supported Protocol
+Known Group Context
+Device State
+Availability
+```
+
+where information is safely available.
+
+### 34.14 Unknown Peer
+
+Unknown peers may be shown as candidates but must not automatically receive synchronization data.
+
+### 34.15 Trusted Peer
+
+A peer becomes trusted only after:
+
+```text
+Identity Verification
++
+Authentication
++
+Authorization
+```
+
+### 34.16 Peer Verification
+
+After discovery:
+
+```text
+Candidate Peer
+      ↓
+Connect
+      ↓
+Authenticate
+      ↓
+Verify Identity
+```
+
+### 34.17 Peer Authorization
+
+After authentication:
+
+```text
+Peer Identity
+      ↓
+Authorization Check
+      ↓
+Allowed Context
+```
+
+### 34.18 Discovery and Group Context
+
+Discovery should not expose Group data merely because a peer is nearby.
+
+Group synchronization authorization must occur after peer verification.
+
+### 34.19 Discovery Advertisement
+
+If the Device advertises itself:
+
+```text
+Device
+      ↓
+Advertisement
+```
+
+the advertisement must expose only the minimum required metadata.
+
+### 34.20 Advertisement Security
+
+The advertisement must not expose:
+
+```text
+Financial Data
+Expense Details
+Settlement Details
+Authentication Tokens
+Sensitive User Data
+```
+
+### 34.21 Advertisement Identity
+
+The advertisement may contain a discoverable identifier that can be mapped to the Device Identity after secure verification.
+
+### 34.22 Discovery Authentication
+
+Discovery itself may not provide full authentication.
+
+Authentication must occur through the secure P2P connection.
+
+### 34.23 Discovery Spoofing
+
+A malicious Device may advertise a fake Peer ID.
+
+Therefore:
+
+```text
+Discovered Peer ID
+      ↓
+Cryptographic / Protocol Verification
+```
+
+must be performed before trust.
+
+### 34.24 Discovery Replay
+
+Discovery metadata must not be sufficient to authorize synchronization.
+
+### 34.25 Discovery Duplicate Results
+
+The Discovery layer should de-duplicate repeated discovery events.
+
+```text
+Same Peer
+   ↓
+One Candidate
+```
+
+### 34.26 Peer Lifecycle
+
+A discovered peer may transition through:
+
+```text
+DISCOVERED
+   ↓
+VERIFYING
+   ↓
+TRUSTED
+```
+
+or:
+
+```text
+DISCOVERED
+   ↓
+REJECTED
+```
+
+### 34.27 Discovery Failure
+
+Discovery failure should be represented separately from:
+
+```text
+Authentication Failure
+Authorization Failure
+Synchronization Failure
+```
+
+### 34.28 Discovery Retry
+
+Discovery may be retried after:
+
+```text
+Timeout
+Temporary Platform Failure
+No Peer Found
+```
+
+using bounded retries.
+
+### 34.29 Discovery Backoff
+
+Repeated discovery attempts should use controlled scheduling.
+
+### 34.30 Discovery Cancellation
+
+Discovery must support safe cancellation.
+
+Cancellation must release platform resources.
+
+### 34.31 Lifecycle Handling
+
+Discovery must respect Android lifecycle state.
+
+```text
+Screen / Feature Active
+      ↓
+Discovery
+
+Feature Inactive
+      ↓
+Stop / Release Discovery
+```
+
+### 34.32 Battery Considerations
+
+Discovery must minimize:
+
+```text
+Continuous Scanning
+High-Power Operations
+Unnecessary Advertising
+```
+
+### 34.33 Background Discovery
+
+Background discovery should only be used if explicitly supported and permitted by the Android architecture and V1 requirements.
+
+### 34.34 Permission Handling
+
+Discovery must handle required Android permissions according to the selected platform technology.
+
+Permission denial must not crash the application.
+
+### 34.35 Permission Failure
+
+If discovery permissions are unavailable:
+
+```text
+Discovery
+      ↓
+Permission Required / Unavailable
+      ↓
+User Feedback
+```
+
+### 34.36 Discovery UI
+
+The UI may display:
+
+```text
+Searching
+Peers Found
+No Peers Found
+Permission Required
+Discovery Failed
+```
+
+### 34.37 Discovery UI Responsibility
+
+The UI should not directly interact with low-level discovery APIs.
+
+```text
+UI
+ ↓
+ViewModel
+ ↓
+PeerDiscovery
+```
+
+### 34.38 Peer Selection
+
+If multiple peers are discovered:
+
+```text
+Peer A
+Peer B
+Peer C
+```
+
+the User or PeerManager may select the appropriate peer according to the P2P workflow.
+
+### 34.39 Automatic Peer Selection
+
+If automatic selection is supported, it must use deterministic rules.
+
+Possible criteria:
+
+```text
+Trusted Peer
+Correct Group
+Protocol Compatibility
+Availability
+Connection Quality
+```
+
+### 34.40 Discovery and Trust Store
+
+Previously trusted peers may be recognized from the secure trust store.
+
+However:
+
+```text
+Known Peer
+      ≠
+Currently Authorized Peer
+```
+
+Current authorization must still be verified.
+
+### 34.41 Peer Revocation
+
+If a peer has been revoked:
+
+```text
+Discovered
+      ↓
+Revoked Peer
+      ↓
+Reject
+```
+
+### 34.42 Discovery and Device Identity
+
+The local Device Identity must never be confused with a temporary discovery/session identifier.
+
+### 34.43 Session Identifier
+
+A P2P connection may have:
+
+```text
+Peer ID
++
+Session ID
+```
+
+where:
+
+```text
+Peer ID = Device Identity
+Session ID = One Connection
+```
+
+### 34.44 Discovery Transport Independence
+
+The discovery implementation must remain replaceable without changing:
+
+```text
+Sync Engine
+SyncOperation
+Conflict Detection
+Conflict Resolution
+```
+
+### 34.45 Discovery Logging
+
+Logs may contain:
+
+```text
+Peer ID
+Discovery Start
+Discovery End
+Candidate Count
+Connection Result
+```
+
+Sensitive information must not be logged.
+
+### 34.46 Discovery Metrics
+
+Useful metrics include:
+
+```text
+Discovery Attempts
+Peers Found
+Successful Connections
+Discovery Time
+Permission Failures
+No-Peer Results
+```
+
+### 34.47 Discovery Testing
+
+Discovery implementation must include:
+
+```text
+Discovery Start
+Discovery Stop
+Peer Found
+Duplicate Peer
+No Peer
+Timeout
+Permission Failure
+Revoked Peer
+Lifecycle Stop
+```
+
+### 34.48 Discovery Security Tests
+
+Test:
+
+```text
+Fake Peer
+Spoofed Identity
+Unknown Peer
+Revoked Peer
+Unauthorized Peer
+```
+
+### 34.49 Discovery Lifecycle Tests
+
+Test:
+
+```text
+Start Discovery
+Pause / Stop
+Resume
+Application Restart
+```
+
+### 34.50 Discovery Performance Tests
+
+Test:
+
+```text
+Many Nearby Devices
+Repeated Discovery
+Large Candidate Set
+```
+
+### 34.51 Discovery Completion Criteria
+
+P2P Discovery Implementation is complete when:
+
+```text
+Discovery Abstraction Implemented
+Platform Integration Implemented
+Scanning Implemented
+Advertising Implemented Where Required
+Candidate Filtering Implemented
+Peer Deduplication Implemented
+Timeout Implemented
+Cancellation Implemented
+Permission Handling Implemented
+Identity Verification Integrated
+Trust Verification Integrated
+Revocation Handling Implemented
+Lifecycle Handling Implemented
+Security Integrated
+Metrics / Logging Implemented
+Tests Passing
+```
+
+### 34.52 P2P Discovery Invariants
+
+The following rules are mandatory:
+
+- Discovery only identifies candidate peers.
+- Discovery does not establish trust.
+- Discovered peers must be authenticated before synchronization.
+- Discovered peers must be authorized before receiving protected data.
+- Discovery metadata must be treated as untrusted.
+- Discovery advertisements must not expose sensitive financial data.
+- Authentication tokens must not be exposed through discovery.
+- Fake or spoofed peer identities must not become trusted automatically.
+- Unknown peers must not receive protected synchronization data.
+- Revoked peers must be rejected.
+- Duplicate discovery events must not create duplicate peer sessions.
+- Discovery must use bounded scanning.
+- Discovery must stop when its lifecycle ends.
+- Discovery must release platform resources.
+- Required Android permissions must be handled safely.
+- Permission denial must not crash the application.
+- Discovery must minimize unnecessary battery consumption.
+- Discovery implementation must remain independent from synchronization logic.
+- Discovery must be covered by automated tests.
+
 ## 35. P2P Connection and Handshake
+
+### 35.1 Purpose
+
+This section defines the implementation of P2P connection establishment and handshake in SplitSync V1.
+
+The handshake establishes:
+
+```text
+Peer Identity
+Protocol Compatibility
+Trust
+Authentication
+Authorization Context
+Secure Session
+```
+
+before synchronization begins.
+
+### 35.2 Connection Principle
+
+Discovery identifies a candidate peer.
+
+The handshake establishes whether that peer can participate in synchronization.
+
+```text
+Discovered Peer
+      ↓
+Connect
+      ↓
+Handshake
+      ↓
+Authenticate
+      ↓
+Authorize
+      ↓
+Secure Session
+      ↓
+P2P Synchronization
+```
+
+### 35.3 Connection Components
+
+The implementation should contain logical components such as:
+
+```text
+PeerConnection
+PeerAuthenticator
+HandshakeService
+PeerSession
+PeerTrustManager
+```
+
+### 35.4 Connection Lifecycle
+
+A P2P connection may transition through:
+
+```text
+DISCONNECTED
+   ↓
+CONNECTING
+   ↓
+HANDSHAKING
+   ↓
+CONNECTED
+   ↓
+SYNCING
+   ↓
+DISCONNECTED
+```
+
+Failure may transition to:
+
+```text
+CONNECTING
+   ↓
+FAILED
+```
+
+### 35.5 Connection Initiation
+
+The connection initiator must have a discovered or otherwise authorized peer candidate.
+
+```text
+Peer Candidate
+      ↓
+Connection Request
+```
+
+### 35.6 Connection Acceptance
+
+The receiving Device must accept the connection only when the underlying transport and platform security requirements are satisfied.
+
+### 35.7 Handshake Start
+
+After transport connection:
+
+```text
+Transport Connected
+      ↓
+HANDSHAKING
+```
+
+No synchronization operation should be exchanged before successful handshake completion.
+
+### 35.8 Handshake Information
+
+The handshake should exchange the minimum information required to establish a trusted synchronization session.
+
+Conceptually:
+
+```text
+Device Identity
+Protocol Version
+Capabilities
+Authentication Material
+Synchronization Context
+```
+
+### 35.9 Protocol Version
+
+Both peers must establish a mutually supported synchronization protocol version.
+
+```text
+Peer A Version
++
+Peer B Version
+      ↓
+Compatible?
+```
+
+### 35.10 Protocol Mismatch
+
+If no compatible protocol version exists:
+
+```text
+Version Mismatch
+      ↓
+Reject Connection
+```
+
+The connection must not proceed to synchronization.
+
+### 35.11 Capability Negotiation
+
+Peers may negotiate:
+
+```text
+Supported Entity Types
+Batch Size
+Compression
+Conflict Protocol
+Synchronization Features
+```
+
+Only capabilities supported by both peers may be used.
+
+### 35.12 Peer Identity
+
+Each peer must present its Device Identity during the handshake.
+
+### 35.13 Identity Verification
+
+The receiving peer must verify that the presented identity corresponds to the authenticated peer.
+
+```text
+Presented Identity
+      ↓
+Verification
+      ↓
+Valid?
+```
+
+### 35.14 Peer Authentication
+
+P2P authentication must establish that:
+
+```text
+Peer A is Peer A
+Peer B is Peer B
+```
+
+according to the Security Architecture.
+
+### 35.15 Mutual Authentication
+
+Where required by the security model:
+
+```text
+Device A authenticates Device B
+Device B authenticates Device A
+```
+
+must complete before synchronization.
+
+### 35.16 Trust Verification
+
+A successfully authenticated Device must still be checked against the applicable trust/authorization policy.
+
+```text
+Authenticated
+      ↓
+Trusted / Authorized?
+```
+
+### 35.17 Revoked Peer
+
+A revoked peer must be rejected.
+
+```text
+Peer Revoked
+      ↓
+Handshake Rejected
+```
+
+### 35.18 Group Context
+
+The handshake must establish or verify the synchronization context.
+
+```text
+Peer Identity
++
+Group Context
+      ↓
+Synchronization Allowed?
+```
+
+### 35.19 Group Authorization
+
+A peer must not synchronize data for a Group unless the peer is authorized for that Group.
+
+### 35.20 Secure Session
+
+After successful authentication:
+
+```text
+Authenticated Peer
+      ↓
+Secure Session
+```
+
+must be established according to the Security Architecture.
+
+### 35.21 Session Identity
+
+Each active connection may have a Session ID.
+
+```text
+Peer ID
++
+Session ID
+```
+
+must remain separate concepts.
+
+### 35.22 Session Lifetime
+
+A session exists only for the active P2P connection.
+
+Closing the connection must invalidate the session.
+
+### 35.23 Handshake Completion
+
+Handshake succeeds only when:
+
+```text
+Identity Verified
+Authentication Successful
+Authorization Successful
+Protocol Compatible
+Capabilities Negotiated
+Secure Channel Established
+```
+
+### 35.24 Synchronization Gate
+
+Synchronization must only begin after successful handshake completion.
+
+```text
+Handshake SUCCESS
+      ↓
+P2P Sync
+```
+
+### 35.25 Handshake Failure
+
+Any required handshake step failure must prevent synchronization.
+
+```text
+Handshake Failure
+      ↓
+Close / Reject Connection
+```
+
+### 35.26 Authentication Failure
+
+Authentication failure must not expose synchronization data.
+
+### 35.27 Authorization Failure
+
+Authorization failure must not expose Group data or SyncOperations.
+
+### 35.28 Invalid Identity
+
+An invalid identity must cause the connection to be rejected.
+
+### 35.29 Unsupported Protocol
+
+Unsupported protocol versions must cause safe connection termination.
+
+### 35.30 Invalid Capability
+
+Invalid or unsupported capability information must not be trusted.
+
+### 35.31 Handshake Timeout
+
+Handshake must have a bounded timeout.
+
+```text
+HANDSHAKING
+      ↓
+Timeout
+      ↓
+FAILED
+```
+
+### 35.32 Connection Timeout
+
+Connection establishment must also use a bounded timeout.
+
+### 35.33 Connection Retry
+
+Temporary connection failures may be retried using the Retry and Recovery implementation.
+
+### 35.34 Connection Backoff
+
+Repeated connection failures must use controlled backoff.
+
+### 35.35 Connection Loss
+
+If the connection is lost after handshake:
+
+```text
+CONNECTED
+      ↓
+DISCONNECTED
+```
+
+Local synchronization state must remain intact.
+
+### 35.36 Reconnection
+
+A disconnected peer must establish a new secure session before synchronization resumes.
+
+```text
+Disconnected
+      ↓
+Reconnect
+      ↓
+New Handshake
+      ↓
+Synchronize
+```
+
+### 35.37 Session Reuse
+
+A previously established session must not be reused after its security/session lifetime has expired.
+
+### 35.38 Replay Protection
+
+Handshake messages must be protected against replay according to the Security Architecture.
+
+### 35.39 Challenge / Response
+
+If the authentication protocol uses challenge/response:
+
+```text
+Challenge
+      ↓
+Response
+      ↓
+Verification
+```
+
+must complete before the session is trusted.
+
+### 35.40 Cryptographic Verification
+
+Where cryptographic identity verification is used, cryptographic verification must be completed before protected synchronization data is exchanged.
+
+### 35.41 Handshake Data Minimization
+
+Only information necessary for:
+
+```text
+Authentication
+Authorization
+Protocol Negotiation
+Synchronization
+```
+
+should be exchanged.
+
+### 35.42 Financial Data Protection
+
+Handshake messages must never contain unnecessary:
+
+```text
+Expense Details
+Settlement Details
+Balance Details
+```
+
+### 35.43 Handshake Logging
+
+Handshake logs may contain:
+
+```text
+Session ID
+Peer ID
+Protocol Version
+Handshake Result
+Failure Category
+```
+
+Sensitive authentication material must never be logged.
+
+### 35.44 Handshake Metrics
+
+Useful metrics include:
+
+```text
+Handshake Attempts
+Successful Handshakes
+Failed Handshakes
+Authentication Failures
+Authorization Failures
+Version Mismatches
+Handshake Duration
+```
+
+### 35.45 Connection Testing
+
+Test:
+
+```text
+Successful Connection
+Authentication Failure
+Authorization Failure
+Invalid Identity
+Protocol Mismatch
+Timeout
+Revoked Peer
+Connection Loss
+Reconnect
+```
+
+### 35.46 Security Testing
+
+Test:
+
+```text
+Fake Peer
+Identity Spoofing
+Replay
+Invalid Credentials
+Invalid Session
+Revoked Device
+```
+
+### 35.47 Connection Completion Criteria
+
+P2P Connection and Handshake Implementation is complete when:
+
+```text
+Connection Lifecycle Implemented
+Handshake Protocol Implemented
+Peer Identity Verification Implemented
+Authentication Implemented
+Authorization Implemented
+Protocol Negotiation Implemented
+Capability Negotiation Implemented
+Secure Session Implemented
+Timeout Implemented
+Connection Recovery Implemented
+Replay Protection Implemented
+Revocation Handling Implemented
+Logging / Metrics Implemented
+Tests Passing
+```
+
+### 35.48 Connection and Handshake Invariants
+
+The following rules are mandatory:
+
+- Discovery does not establish a trusted connection.
+- Synchronization must not begin before handshake completion.
+- Peer identity must be verified.
+- Peer authentication must succeed before protected data exchange.
+- Peer authorization must succeed before synchronization.
+- Revoked peers must be rejected.
+- Protocol incompatibility must prevent synchronization.
+- Only mutually supported capabilities may be used.
+- Handshake must establish a secure session.
+- Handshake must use bounded timeouts.
+- Failed handshakes must not expose synchronization data.
+- Session identity must remain separate from Device Identity.
+- Reconnection must establish a new valid session.
+- Handshake must provide replay protection.
+- Authentication material must never be logged.
+- P2P connection and handshake behavior must be covered by automated tests.
+
 
 ## 36. P2P Synchronization Implementation
 
+### 36.1 Purpose
+
+This section defines the complete P2P synchronization execution after a successful connection and handshake.
+
+```text
+Secure P2P Session
+      ↓
+P2P Sync Engine
+      ↓
+Push / Pull
+      ↓
+Local State Convergence
+```
+
+### 36.2 P2P Sync Principle
+
+P2P synchronization must reuse the common synchronization concepts already implemented for Backend synchronization.
+
+```text
+SyncOperation
+SyncState
+Conflict Detection
+Conflict Resolution
+Idempotency
+Versioning
+```
+
+### 36.3 P2P Sync Entry Point
+
+After handshake:
+
+```text
+PeerSession
+      ↓
+PeerSyncService
+      ↓
+SyncEngine
+```
+
+### 36.4 P2P Sync Context
+
+The synchronization context must identify:
+
+```text
+Local Device
+Remote Peer
+Group / Scope
+Protocol Version
+Sync State
+```
+
+### 36.5 P2P Sync State
+
+P2P synchronization state must be maintained separately where the protocol requires peer-specific state.
+
+### 36.6 P2P Synchronization Cycle
+
+Conceptually:
+
+```text
+Handshake
+   ↓
+Load P2P Sync State
+   ↓
+Exchange Sync Metadata
+   ↓
+Push Local Operations
+   ↓
+Pull Peer Operations
+   ↓
+Apply Changes
+   ↓
+Update P2P Sync State
+   ↓
+Complete
+```
+
+### 36.7 Sync Metadata Exchange
+
+Peers may exchange:
+
+```text
+Cursor
+Last Known Position
+Pending Operation Metadata
+Protocol Information
+```
+
+according to the P2P protocol.
+
+### 36.8 Push Phase
+
+```text
+Local Pending Operations
+      ↓
+P2P Transport
+      ↓
+Peer
+```
+
+### 36.9 Pull Phase
+
+```text
+Peer Changes
+      ↓
+P2P Transport
+      ↓
+Local Pull Processor
+```
+
+### 36.10 P2P Operation Validation
+
+Every received operation must pass:
+
+```text
+Structural Validation
+Peer Authentication
+Authorization
+Duplicate Check
+Version Check
+Domain Validation
+```
+
+### 36.11 P2P Operation Application
+
+Valid operations must be applied using the same Domain/application rules used by Backend synchronization.
+
+### 36.12 P2P Transaction Boundary
+
+Remote P2P changes must be persisted atomically where multiple records are affected.
+
+### 36.13 P2P Cursor Update
+
+The P2P cursor must only advance after corresponding operations are safely persisted.
+
+### 36.14 P2P Duplicate Handling
+
+Duplicate Operation IDs must not produce duplicate financial effects.
+
+### 36.15 P2P Conflict Detection
+
+Conflicting operations must be sent through the common Conflict Detection implementation.
+
+### 36.16 P2P Conflict Resolution
+
+Conflict resolution must use the common Conflict Resolution implementation.
+
+### 36.17 P2P Retry
+
+Temporary P2P failures must use the common Retry and Recovery implementation.
+
+### 36.18 P2P Connection Loss During Sync
+
+If connection loss occurs:
+
+```text
+Synchronization Interrupted
+      ↓
+Persist Completed Work
+      ↓
+Preserve Remaining Operations
+      ↓
+Reconnect Later
+```
+
+### 36.19 P2P Partial Synchronization
+
+A partially completed synchronization must leave each successfully applied operation in its correct state.
+
+### 36.20 P2P Recovery
+
+After reconnection:
+
+```text
+New Handshake
+      ↓
+Load Persisted State
+      ↓
+Continue Synchronization
+```
+
+### 36.21 P2P Queue
+
+Pending operations must remain in the local persistent queue until safely synchronized.
+
+### 36.22 P2P Batch Size
+
+P2P batches must be bounded.
+
+### 36.23 P2P Large Queue
+
+Large queues must be synchronized incrementally.
+
+### 36.24 P2P Ordering
+
+Operation dependencies must be respected.
+
+### 36.25 P2P Idempotency
+
+Repeated synchronization attempts must remain safe.
+
+### 36.26 P2P Financial State
+
+P2P synchronization must preserve:
+
+```text
+Expense Amount
+Expense Splits
+Settlement Amount
+Payer
+Receiver
+Balance
+```
+
+### 36.27 P2P Membership State
+
+Membership changes must update local authorization state.
+
+### 36.28 P2P Tombstones
+
+Deletion state must follow the common tombstone strategy.
+
+### 36.29 P2P Backend Reconciliation
+
+After Backend connectivity returns:
+
+```text
+P2P Changes
+      ↓
+Local Sync Queue
+      ↓
+Backend Synchronization
+      ↓
+Conflict Detection
+      ↓
+Converged State
+```
+
+### 36.30 P2P and Backend Authority
+
+P2P synchronization must not bypass the Backend's synchronization rules when changes are later submitted to the Backend.
+
+### 36.31 P2P Convergence
+
+After valid operations are exchanged and conflicts resolved:
+
+```text
+Device A
+   ↕
+Device B
+   ↕
+Backend
+```
+
+must converge according to the defined synchronization model.
+
+### 36.32 P2P Security
+
+All synchronization must occur through the authenticated secure P2P session.
+
+### 36.33 P2P Authorization Scope
+
+Only data authorized for the current peer/session/context may be exchanged.
+
+### 36.34 P2P Session Expiration
+
+When the secure session expires:
+
+```text
+Stop Synchronization
+      ↓
+Re-handshake
+```
+
+### 36.35 P2P Sync Cancellation
+
+Synchronization must support safe cancellation.
+
+### 36.36 P2P Sync Completion
+
+P2P synchronization is complete when:
+
+```text
+Required Push Complete
++
+Required Pull Complete
++
+Local State Consistent
++
+Sync State Persisted
+```
+
+### 36.37 P2P Sync Testing
+
+Test:
+
+```text
+Successful Sync
+No Changes
+Push Only
+Pull Only
+Push + Pull
+Duplicate Operations
+Conflict
+Connection Loss
+Reconnect
+Large Queue
+Backend Reconciliation
+```
+
+### 36.38 P2P Sync Completion Criteria
+
+P2P Synchronization Implementation is complete when:
+
+```text
+P2P Sync Coordinator Implemented
+Push Integrated
+Pull Integrated
+P2P Sync State Implemented
+Operation Validation Integrated
+Idempotency Integrated
+Conflict Detection Integrated
+Conflict Resolution Integrated
+Retry / Recovery Integrated
+Cursor Handling Implemented
+Batching Implemented
+Connection Recovery Implemented
+Backend Reconciliation Implemented
+Security Integrated
+Tests Passing
+```
+
+### 36.39 P2P Synchronization Invariants
+
+The following rules are mandatory:
+
+- P2P synchronization must only execute over an authenticated and authorized session.
+- P2P must use the common SyncOperation model.
+- P2P must use the common validation rules.
+- P2P must use the common conflict rules.
+- P2P must use the common retry rules.
+- Duplicate operations must not create duplicate business effects.
+- P2P cursor advancement must occur only after successful persistence.
+- Connection loss must not lose completed local work.
+- Pending operations must remain durable.
+- Partial synchronization must be safely recoverable.
+- Operation dependencies must be respected.
+- Financial state must remain correct.
+- P2P synchronization must reconcile with Backend synchronization.
+- P2P synchronization must be covered by automated tests.
+
+
 ## 37. Transaction Implementation
+
+### 37.1 Purpose
+
+This section defines transaction implementation across the Android and Backend layers.
+
+Transactions must preserve consistency of Domain and synchronization state.
+
+### 37.2 Transaction Principle
+
+A transaction must ensure:
+
+```text
+All Required Changes
+      ↓
+Commit Together
+```
+
+or:
+
+```text
+Any Required Failure
+      ↓
+Rollback
+```
+
+### 37.3 Transaction Boundary
+
+Transaction boundaries must follow Domain consistency requirements rather than arbitrary method boundaries.
+
+### 37.4 Local Transaction
+
+Android transactions use the local database transaction mechanism.
+
+### 37.5 Backend Transaction
+
+Backend transactions use the selected persistence transaction mechanism.
+
+### 37.6 Expense Transaction
+
+Expense creation must atomically persist:
+
+```text
+Expense
++
+ExpenseSplits
++
+SyncOperation
+```
+
+where synchronization is required.
+
+### 37.7 Settlement Transaction
+
+Settlement creation must atomically persist:
+
+```text
+Settlement
++
+SyncOperation
+```
+
+where synchronization is required.
+
+### 37.8 Group Transaction
+
+Group creation may require:
+
+```text
+Group
++
+Initial Membership
++
+SyncOperation
+```
+
+to commit together.
+
+### 37.9 Membership Transaction
+
+Membership mutations must preserve required Group authorization state.
+
+### 37.10 Remote Operation Transaction
+
+Incoming synchronization operations must atomically persist:
+
+```text
+Domain State
++
+Synchronization Metadata
+```
+
+where required.
+
+### 37.11 Cursor Transaction
+
+Pull processing should atomically coordinate:
+
+```text
+Remote Changes
++
+Cursor
+```
+
+where supported by the database/protocol.
+
+### 37.12 Conflict Transaction
+
+Conflict creation may require:
+
+```text
+Conflict
++
+Operation State
++
+SyncState
+```
+
+to remain consistent.
+
+### 37.13 Resolution Transaction
+
+Conflict resolution may require:
+
+```text
+Resolved Domain State
++
+Conflict State
++
+New SyncOperation
+```
+
+to commit together.
+
+### 37.14 Transaction Rollback
+
+Any failure that invalidates the transaction must cause rollback.
+
+### 37.15 Partial Commit Prevention
+
+The application must prevent states such as:
+
+```text
+Expense Saved
+ExpenseSplits Missing
+```
+
+or:
+
+```text
+Expense Saved
+SyncOperation Missing
+```
+
+when both are required.
+
+### 37.16 Transaction Isolation
+
+Transaction isolation must follow the capabilities of the selected database and the consistency requirements of the Domain.
+
+### 37.17 Concurrent Transactions
+
+Concurrent mutations must not result in lost updates or invalid financial state.
+
+### 37.18 Optimistic Concurrency
+
+Where versioning is used:
+
+```text
+Expected Version
+      ↓
+Current Version
+      ↓
+Match?
+```
+
+must be checked before commit.
+
+### 37.19 Transaction Failure
+
+A failed transaction must return an appropriate application error without falsely reporting success.
+
+### 37.20 Transaction Retry
+
+Only safe transient transaction failures may be retried.
+
+### 37.21 Transaction Logging
+
+Transaction logs should identify:
+
+```text
+Transaction Type
+Entity Type
+Entity ID
+Result
+```
+
+without exposing unnecessary sensitive data.
+
+### 37.22 Transaction Testing
+
+Test:
+
+```text
+Successful Commit
+Rollback
+Constraint Failure
+Concurrent Update
+Crash
+Retry
+Nested/Composed Operations
+```
+
+### 37.23 Transaction Completion Criteria
+
+Transaction Implementation is complete when:
+
+```text
+Local Transactions Implemented
+Backend Transactions Implemented
+Expense Transactions Implemented
+Settlement Transactions Implemented
+Group Transactions Implemented
+Membership Transactions Implemented
+Sync Transactions Implemented
+Cursor Transactions Implemented
+Conflict Transactions Implemented
+Resolution Transactions Implemented
+Concurrency Handling Implemented
+Rollback Verified
+Tests Passing
+```
+
+### 37.24 Transaction Invariants
+
+The following rules are mandatory:
+
+- Required related Domain state must commit atomically.
+- Required SyncOperations must commit atomically with local mutations.
+- Partial financial state must never be committed.
+- Cursor updates must not commit independently from required remote state application.
+- Conflict state must remain consistent with operation state.
+- Resolution state and required SyncOperation state must remain consistent.
+- Concurrent transactions must not produce invalid financial state.
+- Transaction retries must be safe.
+- Failed transactions must not report success.
+- Transaction behavior must be covered by automated tests.
+
 
 ## 38. Error Handling Implementation
 
+### 38.1 Purpose
+
+This section defines the implementation of application, synchronization, API, database, and P2P error handling.
+
+### 38.2 Error Handling Principle
+
+Errors must be:
+
+```text
+Detected
+Classified
+Handled
+Logged Appropriately
+Exposed Safely
+Recoverable Where Possible
+```
+
+### 38.3 Error Categories
+
+The implementation should distinguish:
+
+```text
+Validation Error
+Authentication Error
+Authorization Error
+Network Error
+Timeout Error
+Database Error
+Synchronization Error
+Conflict Error
+P2P Error
+Configuration Error
+Unexpected Error
+```
+
+### 38.4 Domain Error
+
+Domain validation failures should return structured Domain errors.
+
+Examples:
+
+```text
+Invalid Amount
+Invalid Split
+Invalid Membership
+Invalid Settlement
+```
+
+### 38.5 Application Error
+
+Application services should translate lower-level errors into application-level outcomes where required.
+
+### 38.6 Repository Error
+
+Repositories should not expose infrastructure-specific exceptions directly to Presentation unless explicitly required.
+
+### 38.7 API Error
+
+Backend APIs should return structured error responses.
+
+Conceptually:
+
+```text
+Error Code
+Message
+Details
+Request ID
+```
+
+### 38.8 Error Codes
+
+Errors should use stable machine-readable codes.
+
+Example:
+
+```text
+INVALID_REQUEST
+UNAUTHORIZED
+FORBIDDEN
+NOT_FOUND
+CONFLICT
+VALIDATION_FAILED
+TEMPORARY_FAILURE
+```
+
+### 38.9 User Message
+
+User-facing messages must be safe and understandable.
+
+Internal exception details must not be exposed directly.
+
+### 38.10 Error Mapping
+
+```text
+Infrastructure Error
+      ↓
+Repository Error
+      ↓
+Application Error
+      ↓
+Presentation State
+```
+
+### 38.11 Network Error
+
+Network failures should result in:
+
+```text
+Preserve Local State
+Queue / Retain Operation
+Retry Later
+```
+
+where applicable.
+
+### 38.12 Timeout Error
+
+Timeouts must be treated as potentially ambiguous for synchronization operations.
+
+### 38.13 Authentication Error
+
+Authentication errors should trigger the Authentication recovery flow where possible.
+
+### 38.14 Authorization Error
+
+Authorization errors must not be treated as retryable network failures.
+
+### 38.15 Conflict Error
+
+Conflict errors must be routed to Conflict Detection/Resolution.
+
+### 38.16 Database Error
+
+Database failures must not result in partial financial state.
+
+### 38.17 P2P Error
+
+P2P errors should distinguish:
+
+```text
+Discovery
+Connection
+Handshake
+Authentication
+Authorization
+Transport
+Synchronization
+```
+
+### 38.18 Configuration Error
+
+Missing or invalid required configuration must fail safely.
+
+### 38.19 Unexpected Error
+
+Unexpected errors must be captured by the application's global error handling mechanism without exposing internal details to the User.
+
+### 38.20 Error Recovery
+
+Recovery behavior must be defined per error category.
+
+```text
+Retryable → Retry
+Conflict → Resolve
+Authentication → Re-authenticate
+Authorization → Stop
+Validation → Correct Input
+Permanent → Fail Safely
+```
+
+### 38.21 Error Propagation
+
+Errors should propagate through controlled abstractions.
+
+### 38.22 Exception Boundary
+
+Exceptions should be caught at appropriate infrastructure/application boundaries.
+
+The implementation must avoid broad exception swallowing.
+
+### 38.23 Error Logging
+
+Errors should log enough information for diagnosis without exposing:
+
+```text
+Passwords
+Tokens
+Cryptographic Keys
+Sensitive Financial Payloads
+Personal Data
+```
+
+### 38.24 Error Correlation
+
+Where applicable, errors should include:
+
+```text
+Request ID
+Sync ID
+Operation ID
+Session ID
+```
+
+for tracing.
+
+### 38.25 Error Metrics
+
+Track:
+
+```text
+Error Count
+Error Type
+Retry Count
+Conflict Count
+Authentication Failures
+Authorization Failures
+```
+
+### 38.26 Error UI State
+
+Presentation should expose controlled states such as:
+
+```text
+Loading
+Success
+Validation Error
+Offline
+Sync Pending
+Sync Failed
+Authentication Required
+Permission Denied
+Conflict
+Unexpected Error
+```
+
+### 38.27 Error Recovery UI
+
+Where User action is required:
+
+```text
+Error
+ ↓
+Action
+ ↓
+Retry / Re-authenticate / Resolve
+```
+
+### 38.28 Error Testing
+
+Test:
+
+```text
+Validation Failure
+Network Failure
+Timeout
+Authentication Failure
+Authorization Failure
+Database Failure
+Conflict
+P2P Failure
+Unexpected Exception
+```
+
+### 38.29 Error Completion Criteria
+
+Error Handling Implementation is complete when:
+
+```text
+Error Categories Implemented
+Error Mapping Implemented
+API Error Model Implemented
+Repository Error Mapping Implemented
+Retry Integration Implemented
+Conflict Integration Implemented
+Authentication Recovery Integrated
+Authorization Handling Integrated
+Safe UI Error States Implemented
+Logging Implemented
+Metrics Implemented
+Tests Passing
+```
+
+### 38.30 Error Handling Invariants
+
+The following rules are mandatory:
+
+- Errors must be classified before recovery decisions are made.
+- Validation errors must not be treated as retryable network errors.
+- Authorization failures must not be blindly retried.
+- Authentication failures must follow authentication recovery.
+- Conflicts must use the Conflict architecture.
+- Network failures must not discard committed local state.
+- Database failures must not leave partial financial state.
+- Timeout recovery must remain idempotent.
+- User-facing errors must not expose sensitive internal details.
+- Logs must not contain authentication secrets or cryptographic keys.
+- Unexpected exceptions must not crash the application without controlled handling.
+- Error handling must be covered by automated tests.
+
+
 ## 39. Logging Implementation
+
+### 39.1 Purpose
+
+This section defines the implementation of application and synchronization logging in SplitSync V1.
+
+Logging exists primarily for:
+
+```text
+Debugging
+Operational Diagnosis
+Synchronization Troubleshooting
+Failure Analysis
+```
+
+### 39.2 Logging Principle
+
+Logs must provide useful diagnostic information while minimizing sensitive data exposure.
+
+### 39.3 Log Levels
+
+The implementation may use:
+
+```text
+DEBUG
+INFO
+WARN
+ERROR
+```
+
+### 39.4 DEBUG
+
+DEBUG should be used for development-level diagnostics.
+
+It should not be enabled indiscriminately in production.
+
+### 39.5 INFO
+
+INFO should represent important application/system events.
+
+Examples:
+
+```text
+Application Started
+Sync Started
+Sync Completed
+Peer Connected
+```
+
+### 39.6 WARN
+
+WARN should represent recoverable or unusual conditions.
+
+Examples:
+
+```text
+Retry Scheduled
+Stale Sync Operation
+Unexpected Peer Disconnect
+```
+
+### 39.7 ERROR
+
+ERROR should represent failures requiring investigation.
+
+Examples:
+
+```text
+Database Failure
+Synchronization Failure
+Unexpected Exception
+```
+
+### 39.8 Structured Logging
+
+Logs should use structured fields where possible.
+
+Conceptually:
+
+```text
+timestamp
+level
+component
+event
+requestId
+syncId
+operationId
+errorCode
+```
+
+### 39.9 Correlation IDs
+
+The implementation should use correlation identifiers for tracing.
+
+Possible identifiers:
+
+```text
+Request ID
+Sync ID
+Operation ID
+Session ID
+Batch ID
+```
+
+### 39.10 Operation Logging
+
+Synchronization logs may include:
+
+```text
+Operation ID
+Entity Type
+Operation Type
+Result
+```
+
+### 39.11 Sync Logging
+
+Sync logs may include:
+
+```text
+Sync ID
+Direction
+Batch Size
+Success
+Failure
+Duration
+```
+
+### 39.12 P2P Logging
+
+P2P logs may include:
+
+```text
+Peer ID
+Session ID
+Connection State
+Handshake Result
+Sync Result
+```
+
+### 39.13 Security Logging
+
+Security-relevant events may include:
+
+```text
+Authentication Failure
+Authorization Failure
+Peer Rejection
+Device Revocation
+```
+
+### 39.14 Sensitive Data
+
+The logging implementation must never intentionally log:
+
+```text
+Passwords
+Authentication Tokens
+Private Keys
+Encryption Keys
+Raw Credentials
+```
+
+### 39.15 Financial Data
+
+Logs should not contain complete financial payloads unless explicitly required for a controlled diagnostic purpose.
+
+Prefer:
+
+```text
+Expense ID
+Operation ID
+```
+
+over:
+
+```text
+Full Expense Payload
+```
+
+### 39.16 Personal Data
+
+Personal data should be minimized in logs.
+
+### 39.17 Exception Logging
+
+Exceptions should include:
+
+```text
+Error Type
+Error Code
+Stack Trace
+Correlation ID
+```
+
+where appropriate.
+
+### 39.18 Stack Traces
+
+Stack traces may be captured for internal diagnostics but must not be exposed directly to Users.
+
+### 39.19 Production Logging
+
+Production logging should use appropriate log levels and avoid verbose sensitive diagnostics.
+
+### 39.20 Development Logging
+
+Development environments may enable additional diagnostic logging.
+
+### 39.21 Environment Configuration
+
+Logging levels should be configurable per environment.
+
+### 39.22 Log Retention
+
+Log retention must follow the application's operational and security requirements.
+
+### 39.23 Log Rotation
+
+Long-running systems should use log rotation or bounded storage.
+
+### 39.24 Android Logging
+
+Android logging must use the logging abstraction selected by the project.
+
+Application code should not scatter direct platform logging calls throughout the Domain layer.
+
+### 39.25 Backend Logging
+
+Backend logging should use the server-side logging framework selected by the project.
+
+### 39.26 Logging Abstraction
+
+Application components should depend on a logging abstraction where practical.
+
+Conceptually:
+
+```text
+Logger
+```
+
+### 39.27 Domain Logging
+
+The Domain layer should remain minimally dependent on infrastructure logging.
+
+### 39.28 Repository Logging
+
+Repositories may log infrastructure failures with appropriate context.
+
+### 39.29 Sync Logging
+
+Synchronization components should log:
+
+```text
+Start
+Batch
+Result
+Retry
+Conflict
+Completion
+```
+
+at appropriate levels.
+
+### 39.30 Logging and Performance
+
+Logging must not significantly degrade synchronization or application performance.
+
+### 39.31 Logging Failure
+
+Failure of logging infrastructure must not cause the financial transaction or synchronization operation itself to fail unless explicitly required.
+
+### 39.32 Logging Metrics
+
+Logging systems may expose:
+
+```text
+Log Volume
+Error Volume
+Critical Events
+```
+
+for operational monitoring.
+
+### 39.33 Logging Testing
+
+Test:
+
+```text
+Correct Log Level
+Required Context
+Sensitive Data Redaction
+Exception Logging
+Environment Configuration
+```
+
+### 39.34 Logging Completion Criteria
+
+Logging Implementation is complete when:
+
+```text
+Logging Abstraction Implemented
+Log Levels Implemented
+Structured Logging Implemented
+Correlation IDs Implemented
+Sensitive Data Protection Implemented
+Android Logging Integrated
+Backend Logging Integrated
+Sync Logging Integrated
+P2P Logging Integrated
+Environment Configuration Implemented
+Retention / Rotation Defined
+Tests Passing
+```
+
+### 39.35 Logging Invariants
+
+The following rules are mandatory:
+
+- Logs must support operational diagnosis.
+- Logs must not contain passwords.
+- Logs must not contain authentication tokens.
+- Logs must not contain private or encryption keys.
+- Logs must minimize personal data.
+- Logs must minimize financial payload exposure.
+- Correlation IDs should be used for synchronization tracing.
+- Logging failures must not corrupt Domain state.
+- Production logging must use appropriate verbosity.
+- Sensitive security events must be logged without exposing secrets.
+- Logging behavior must be covered by automated tests.
+
 
 ## 40. Configuration Implementation
 
+### 40.1 Purpose
+
+This section defines the implementation of application configuration in SplitSync V1.
+
+Configuration controls environment-specific and operational values without embedding them directly into business logic.
+
+### 40.2 Configuration Principle
+
+Configuration must be:
+
+```text
+Centralized
+Typed
+Validated
+Environment-Aware
+Secure
+```
+
+### 40.3 Configuration Categories
+
+Configuration may include:
+
+```text
+Backend URL
+API Settings
+Sync Settings
+Retry Settings
+P2P Settings
+Logging Settings
+Feature Flags
+Database Settings
+```
+
+### 40.4 Configuration Separation
+
+Business rules must not depend directly on environment configuration.
+
+```text
+Configuration
+      ↓
+Infrastructure
+      ↓
+Application
+```
+
+### 40.5 Android Configuration
+
+Android configuration should support:
+
+```text
+Development
+Testing
+Production
+```
+
+through the selected build configuration strategy.
+
+### 40.6 Backend Configuration
+
+Backend configuration should support separate environment-specific values.
+
+### 40.7 Environment Variables
+
+Backend secrets and environment-specific values should be supplied through secure environment configuration.
+
+### 40.8 Secret Management
+
+Secrets must not be committed to source control.
+
+Examples:
+
+```text
+API Secrets
+Private Keys
+Database Credentials
+Signing Secrets
+```
+
+### 40.9 Android Secret Handling
+
+Sensitive server-side secrets must never be embedded in the Android application as if they were confidential.
+
+### 40.10 Configuration Object
+
+Application configuration should be represented by typed configuration objects where practical.
+
+Conceptually:
+
+```text
+AppConfig
+SyncConfig
+P2PConfig
+LoggingConfig
+```
+
+### 40.11 Configuration Validation
+
+Configuration must be validated during application/service startup.
+
+### 40.12 Invalid Configuration
+
+Invalid required configuration must fail fast and clearly.
+
+```text
+Invalid Configuration
+      ↓
+Startup Failure
+```
+
+rather than allowing unpredictable runtime behavior.
+
+### 40.13 Default Values
+
+Safe defaults may be provided for non-sensitive operational values.
+
+### 40.14 Required Values
+
+Required values must not silently fall back to unsafe defaults.
+
+### 40.15 Sync Configuration
+
+Synchronization configuration may include:
+
+```text
+Batch Size
+Retry Limit
+Retry Delay
+Backoff Limit
+Sync Interval
+```
+
+### 40.16 P2P Configuration
+
+P2P configuration may include:
+
+```text
+Discovery Timeout
+Connection Timeout
+Handshake Timeout
+Maximum Batch Size
+Session Timeout
+```
+
+### 40.17 Logging Configuration
+
+Logging configuration may include:
+
+```text
+Log Level
+Environment
+Retention
+Diagnostic Mode
+```
+
+### 40.18 API Configuration
+
+API configuration may include:
+
+```text
+Base URL
+Connection Timeout
+Read Timeout
+Write Timeout
+```
+
+### 40.19 Database Configuration
+
+Database configuration may include:
+
+```text
+Database Name
+Migration Strategy
+Debug Configuration
+```
+
+Sensitive database credentials must be securely managed on the Backend.
+
+### 40.20 Feature Flags
+
+Feature flags may be used for controlled activation of optional features.
+
+Examples:
+
+```text
+P2P Enabled
+Experimental Sync Feature
+Diagnostic Logging
+```
+
+### 40.21 Feature Flag Principle
+
+Feature flags must not be used to bypass Domain validation or Security controls.
+
+### 40.22 Configuration Immutability
+
+Configuration should be treated as immutable during normal application execution where practical.
+
+### 40.23 Configuration Reload
+
+Dynamic configuration reload should only be supported where explicitly required.
+
+### 40.24 Configuration and Security
+
+Security-sensitive configuration must be protected from unauthorized modification.
+
+### 40.25 Configuration and Build Types
+
+Android build types/flavors may provide environment-specific configuration.
+
+Conceptually:
+
+```text
+debug
+release
+```
+
+or:
+
+```text
+dev
+staging
+production
+```
+
+according to the Build Configuration strategy.
+
+### 40.26 Configuration and Testing
+
+Tests must be able to supply deterministic configuration.
+
+### 40.27 Test Configuration
+
+Test environments should use isolated:
+
+```text
+Database
+Backend URL
+Credentials
+Sync Settings
+```
+
+### 40.28 Configuration Validation Tests
+
+Test:
+
+```text
+Valid Configuration
+Missing Required Value
+Invalid URL
+Invalid Timeout
+Invalid Batch Size
+Invalid Retry Limit
+```
+
+### 40.29 Configuration Security Tests
+
+Test that:
+
+```text
+Secrets Are Not Logged
+Secrets Are Not Committed
+Invalid Secrets Fail Safely
+```
+
+### 40.30 Configuration Logging
+
+Configuration logs must never print secret values.
+
+Safe example:
+
+```text
+Backend URL configured
+```
+
+Unsafe example:
+
+```text
+API Secret = ...
+```
+
+### 40.31 Configuration Error Handling
+
+Configuration failures should be reported clearly to developers/operators without exposing secret values.
+
+### 40.32 Configuration Documentation
+
+Every configuration property must document:
+
+```text
+Name
+Purpose
+Type
+Required / Optional
+Default
+Environment
+Security Classification
+```
+
+where applicable.
+
+### 40.33 Configuration Ownership
+
+Configuration should have clear ownership by component.
+
+Example:
+
+```text
+SyncConfig → Sync Layer
+P2PConfig → P2P Layer
+LoggingConfig → Logging Layer
+```
+
+### 40.34 Configuration Dependency Injection
+
+Configuration should be injected into components rather than read directly from global state wherever practical.
+
+### 40.35 Configuration and Domain
+
+Domain logic should receive business-relevant configuration through explicit abstractions rather than reading environment variables directly.
+
+### 40.36 Configuration Migration
+
+Changes to configuration structure must be documented and validated across environments.
+
+### 40.37 Configuration Completion Criteria
+
+Configuration Implementation is complete when:
+
+```text
+Configuration Model Implemented
+Typed Configuration Implemented
+Environment Configuration Implemented
+Validation Implemented
+Secret Handling Implemented
+Android Configuration Integrated
+Backend Configuration Integrated
+Sync Configuration Integrated
+P2P Configuration Integrated
+Logging Configuration Integrated
+Feature Flags Integrated Where Required
+Testing Configuration Implemented
+Documentation Completed
+Tests Passing
+```
+
+### 40.38 Configuration Invariants
+
+The following rules are mandatory:
+
+- Configuration must remain separate from Domain business logic.
+- Required configuration must be validated at startup.
+- Invalid required configuration must fail safely.
+- Secrets must never be committed to source control.
+- Secrets must not be logged.
+- Server-side secrets must not be embedded in Android.
+- Configuration should be typed and validated.
+- Environment-specific configuration must remain separate.
+- Test configuration must remain isolated from production configuration.
+- Feature flags must not bypass Domain or Security rules.
+- Configuration should be injected rather than accessed through uncontrolled global state.
+- Configuration changes must be documented.
+- Configuration implementation must be covered by automated tests.
+
 ## 41. API Versioning Implementation
+
+### 41.1 Purpose
+
+This section defines the implementation of API versioning in SplitSync V1.
+
+API versioning must allow the Backend and Android application to evolve without unexpectedly breaking existing clients.
+
+### 41.2 Versioning Principle
+
+API contracts must have an explicit version.
+
+Conceptually:
+
+```text
+Android Client
+      ↓
+API Version
+      ↓
+Backend API
+```
+
+### 41.3 API Version
+
+The initial API version is:
+
+```text
+v1
+```
+
+### 41.4 Version Scope
+
+Versioning applies to:
+
+```text
+REST Endpoints
+Request Models
+Response Models
+Synchronization Payloads
+Error Models
+```
+
+where applicable.
+
+### 41.5 URL Versioning
+
+The API may expose the version through the URL.
+
+Conceptually:
+
+```text
+/api/v1/...
+```
+
+The exact endpoint structure must follow the API Architecture.
+
+### 41.6 Request Version
+
+Every request must be interpreted according to the API version used by the client.
+
+### 41.7 Response Version
+
+Responses must conform to the contract of the requested API version.
+
+### 41.8 DTO Versioning
+
+API DTOs should remain separate from Domain entities.
+
+```text
+API DTO
+   ↓
+Mapper
+   ↓
+Domain Model
+```
+
+### 41.9 Domain Independence
+
+API versioning must not require version-specific logic to be embedded throughout the Domain layer.
+
+### 41.10 Backward Compatibility
+
+Non-breaking API changes may be introduced within the same major API version.
+
+Examples:
+
+```text
+Optional Response Field
+Additional Optional Metadata
+```
+
+### 41.11 Breaking Changes
+
+Breaking changes require a new API version.
+
+Examples:
+
+```text
+Changed Required Field
+Changed Meaning of Existing Field
+Removed Field
+Changed Response Structure
+Changed Authentication Contract
+```
+
+### 41.12 Version Migration
+
+When a new API version is introduced:
+
+```text
+v1
+ ↓
+v2
+```
+
+the existing v1 contract should remain available for the supported compatibility period.
+
+### 41.13 Client Version
+
+The Android application must explicitly target the supported API version.
+
+### 41.14 Backend Version Support
+
+The Backend must explicitly define which API versions it supports.
+
+### 41.15 Unsupported Version
+
+If a client requests an unsupported version:
+
+```text
+Unsupported Version
+      ↓
+Structured API Error
+```
+
+### 41.16 Version Negotiation
+
+Where protocol negotiation is required, the supported version should be determined before exchanging version-specific payloads.
+
+### 41.17 Sync Protocol Version
+
+Synchronization protocol versioning must remain distinct from general REST API versioning where required.
+
+```text
+API Version
+      ≠
+Sync Protocol Version
+```
+
+### 41.18 P2P Protocol Version
+
+P2P peers must negotiate a compatible synchronization protocol version during the handshake.
+
+### 41.19 Payload Version
+
+Synchronization payloads must be interpreted according to their defined protocol/schema version.
+
+### 41.20 Unknown Version
+
+Unknown or unsupported payload versions must be rejected safely.
+
+### 41.21 API Deprecation
+
+Deprecated API versions must have a defined deprecation period.
+
+### 41.22 Deprecation Communication
+
+Deprecated versions should provide appropriate documentation and migration guidance.
+
+### 41.23 Version Documentation
+
+Each API version must document:
+
+```text
+Endpoints
+Request Models
+Response Models
+Error Models
+Authentication
+Authorization
+Synchronization Contract
+```
+
+### 41.24 API Version Testing
+
+Tests must verify:
+
+```text
+Supported Version
+Unsupported Version
+Backward Compatibility
+Breaking Change
+DTO Compatibility
+Error Compatibility
+```
+
+### 41.25 API Version Completion Criteria
+
+API Versioning Implementation is complete when:
+
+```text
+v1 API Contract Implemented
+Version Routing Implemented
+DTO Versioning Implemented
+Unsupported Version Handling Implemented
+Sync Protocol Versioning Integrated
+P2P Version Negotiation Integrated
+Deprecation Strategy Defined
+Compatibility Tests Implemented
+Documentation Completed
+Tests Passing
+```
+
+### 41.26 API Versioning Invariants
+
+The following rules are mandatory:
+
+- API contracts must have explicit versions.
+- V1 must remain stable once released.
+- Breaking changes must require a new API version.
+- API DTOs must remain separate from Domain entities.
+- Unsupported API versions must fail safely.
+- Sync protocol versioning must remain explicit.
+- P2P peers must negotiate compatible protocol versions.
+- Unknown synchronization payload versions must not be silently processed.
+- API version behavior must be covered by automated tests.
+
 
 ## 42. Database Migration Implementation
 
+### 42.1 Purpose
+
+This section defines the implementation of database schema migrations for Android and Backend databases.
+
+### 42.2 Migration Principle
+
+Database schema changes must be explicit, versioned, deterministic, and testable.
+
+```text
+Schema V1
+   ↓
+Migration
+   ↓
+Schema V2
+```
+
+### 42.3 Android Database Version
+
+The Android local database must maintain an explicit schema version.
+
+### 42.4 Backend Database Version
+
+The Backend database must use the migration mechanism selected by the Backend architecture.
+
+### 42.5 Migration Ownership
+
+Database migrations belong to the Data/Infrastructure layer.
+
+### 42.6 Migration Types
+
+Migrations may include:
+
+```text
+Create Table
+Add Column
+Remove Column
+Rename Column
+Add Index
+Remove Index
+Change Constraint
+Data Transformation
+```
+
+### 42.7 Additive Migration
+
+Prefer additive schema changes where possible.
+
+```text
+Existing Schema
+      +
+New Optional Field
+```
+
+### 42.8 Destructive Migration
+
+Destructive changes require explicit migration logic and verification.
+
+### 42.9 Data Preservation
+
+Migrations must preserve existing financial data unless a documented data transformation explicitly requires otherwise.
+
+### 42.10 Expense Data
+
+Migrations must preserve:
+
+```text
+Expense
+ExpenseSplits
+```
+
+consistency.
+
+### 42.11 Settlement Data
+
+Migrations must preserve Settlement records and their financial meaning.
+
+### 42.12 Group Data
+
+Migrations must preserve:
+
+```text
+Groups
+Memberships
+```
+
+consistency.
+
+### 42.13 SyncOperation Migration
+
+SyncOperation schema changes must preserve pending operations.
+
+```text
+Pending Operation
+      ↓
+Migration
+      ↓
+Still Synchronizable
+```
+
+### 42.14 SyncState Migration
+
+SyncState migration must preserve:
+
+```text
+Cursor
+Status
+Retry Metadata
+Synchronization Context
+```
+
+where applicable.
+
+### 42.15 Conflict Migration
+
+Conflict records must remain resolvable after migration.
+
+### 42.16 Migration Transaction
+
+Schema/data migrations must use transactional mechanisms where supported.
+
+### 42.17 Migration Failure
+
+If a migration fails:
+
+```text
+Migration Failure
+      ↓
+Do Not Start With Invalid Schema
+```
+
+### 42.18 Migration Ordering
+
+Migrations must execute in deterministic version order.
+
+```text
+V1 → V2 → V3
+```
+
+### 42.19 Migration Idempotency
+
+Migration tooling must ensure a migration is not incorrectly applied multiple times.
+
+### 42.20 Android Room Migration
+
+Android Room migrations should explicitly define:
+
+```text
+From Version
+To Version
+Schema Changes
+Data Changes
+```
+
+### 42.21 Backend Migration
+
+Backend migrations should be stored and executed through the selected migration framework.
+
+### 42.22 Schema Validation
+
+The application must validate the resulting schema where supported.
+
+### 42.23 Migration Testing
+
+Every migration must have automated tests.
+
+### 42.24 Migration Test Flow
+
+```text
+Old Schema
+      ↓
+Run Migration
+      ↓
+New Schema
+      ↓
+Verify Data
+      ↓
+Verify Constraints
+```
+
+### 42.25 Existing Data Testing
+
+Tests must use representative existing data, especially:
+
+```text
+Expenses
+Splits
+Settlements
+Groups
+Memberships
+SyncOperations
+SyncState
+Conflicts
+```
+
+### 42.26 Migration Failure Testing
+
+Test:
+
+```text
+Invalid Schema
+Migration Failure
+Interrupted Migration
+Restart
+Recovery
+```
+
+### 42.27 Production Migration
+
+Production migrations must be reviewed before deployment.
+
+### 42.28 Backup
+
+Where Backend operational architecture supports it, database backups must be available before risky migrations.
+
+### 42.29 Rollback Strategy
+
+Every migration must define whether rollback is:
+
+```text
+Supported
+Not Supported
+Handled Through Forward Migration
+```
+
+### 42.30 Migration and Application Version
+
+Android application versions must be compatible with the local database schema they expect.
+
+### 42.31 Migration and API Version
+
+Database schema migration must not silently change the public API contract.
+
+### 42.32 Migration Completion Criteria
+
+Database Migration Implementation is complete when:
+
+```text
+Android Schema Versioning Implemented
+Backend Migration Framework Implemented
+Migration Scripts Implemented
+Data Preservation Verified
+SyncOperation Migration Verified
+SyncState Migration Verified
+Conflict Migration Verified
+Migration Tests Implemented
+Failure Handling Implemented
+Production Migration Procedure Defined
+Documentation Completed
+Tests Passing
+```
+
+### 42.33 Database Migration Invariants
+
+The following rules are mandatory:
+
+- Every schema change must have an explicit migration.
+- Migrations must execute in deterministic order.
+- Existing financial data must be preserved.
+- Expense and ExpenseSplits consistency must be preserved.
+- Group and Membership consistency must be preserved.
+- Pending SyncOperations must remain synchronizable after migration.
+- SyncState cursor/state must not be lost.
+- Conflict records must remain valid after migration.
+- Migration failure must not leave the application operating against an invalid schema.
+- Every migration must have automated tests.
+- Destructive migrations require explicit review.
+
+
 ## 43. Android Background Processing
+
+### 43.1 Purpose
+
+This section defines the implementation of Android background processing required by SplitSync V1.
+
+Background processing is primarily required for:
+
+```text
+Synchronization
+Retry
+Recovery
+Periodic Work
+```
+
+### 43.2 Background Processing Principle
+
+Background work must respect Android lifecycle and execution restrictions.
+
+### 43.3 Background Worker
+
+The synchronization implementation should use the Android background mechanism selected by the architecture.
+
+Conceptually:
+
+```text
+Android Scheduler
+      ↓
+SyncWorker
+      ↓
+SyncEngine
+```
+
+### 43.4 Worker Responsibility
+
+The Worker should coordinate execution but must not contain the complete synchronization algorithm.
+
+```text
+SyncWorker
+      ↓
+SyncEngine
+```
+
+### 43.5 Worker Input
+
+The Worker may receive:
+
+```text
+Sync Context
+Trigger Reason
+Retry Metadata
+```
+
+where required.
+
+### 43.6 Network Constraint
+
+Synchronization work should require appropriate network availability when Backend/P2P transport requires it.
+
+### 43.7 Offline Work
+
+Local offline mutations must not depend on background execution.
+
+```text
+User Mutation
+      ↓
+Local Transaction
+      ↓
+Pending SyncOperation
+```
+
+### 43.8 Background Sync
+
+Background synchronization processes pending operations.
+
+```text
+Pending Operations
+      ↓
+SyncWorker
+      ↓
+SyncEngine
+```
+
+### 43.9 Periodic Synchronization
+
+Periodic synchronization may be scheduled according to Android platform constraints and the project's Sync Strategy.
+
+### 43.10 Network Recovery
+
+Network recovery may trigger synchronization scheduling.
+
+### 43.11 Application Start
+
+Application startup may schedule synchronization when appropriate.
+
+### 43.12 User-Initiated Sync
+
+A User may trigger a synchronization request.
+
+The UI should request work rather than directly executing long-running synchronization.
+
+### 43.13 Work Constraints
+
+Background work may use constraints such as:
+
+```text
+Network Available
+Battery Conditions
+Device State
+```
+
+only where justified by the feature requirements.
+
+### 43.14 Worker Idempotency
+
+A Worker may be executed more than once.
+
+Therefore:
+
+```text
+Worker Execution
+      ↓
+SyncEngine
+      ↓
+Idempotent Synchronization
+```
+
+must remain safe.
+
+### 43.15 Duplicate Worker Execution
+
+Multiple scheduled executions must not corrupt:
+
+```text
+SyncState
+SyncOperation
+Cursor
+```
+
+### 43.16 Synchronization Lock
+
+The Sync Engine must coordinate concurrent synchronization attempts.
+
+### 43.17 Worker Retry
+
+Worker-level retry must integrate with the Sync Retry and Recovery strategy.
+
+### 43.18 Worker Failure
+
+Transient failures should request retry according to Android background execution rules.
+
+Permanent failures should not cause endless Worker retries.
+
+### 43.19 Worker Backoff
+
+Worker retry backoff should use the platform's supported scheduling mechanism together with the application's retry policy.
+
+### 43.20 Authentication
+
+If authentication is required:
+
+```text
+Worker
+ ↓
+SyncEngine
+ ↓
+Authentication
+```
+
+must follow the Authentication implementation.
+
+### 43.21 Authorization
+
+Background synchronization must apply the same authorization rules as foreground synchronization.
+
+### 43.22 Device Revocation
+
+A revoked Device must not continue protected background synchronization.
+
+### 43.23 Worker Cancellation
+
+Worker cancellation must not corrupt local transactions.
+
+### 43.24 Process Death
+
+If Android terminates the process:
+
+```text
+Process Death
+      ↓
+Persisted State
+      ↓
+Future Worker
+      ↓
+Recovery
+```
+
+must remain safe.
+
+### 43.25 Worker Crash Recovery
+
+Stale SyncOperations and SyncState must be recovered according to the Retry and Recovery implementation.
+
+### 43.26 Battery Efficiency
+
+Background processing must avoid unnecessary:
+
+```text
+Network Requests
+CPU Usage
+Wakeups
+Peer Discovery
+```
+
+### 43.27 P2P Background Processing
+
+P2P background behavior must follow Android platform restrictions and the selected P2P architecture.
+
+Continuous background discovery should not be assumed unless explicitly supported.
+
+### 43.28 Background P2P
+
+If background P2P synchronization is supported, it must use the approved platform mechanism and security model.
+
+### 43.29 Foreground Requirements
+
+If a synchronization task requires foreground execution under Android platform rules, the appropriate foreground execution mechanism must be used.
+
+### 43.30 Worker Observability
+
+Background work should provide operational status through:
+
+```text
+SyncState
+Logs
+Metrics
+```
+
+### 43.31 Worker Testing
+
+Test:
+
+```text
+Worker Start
+Worker Retry
+Worker Cancellation
+Process Death
+Network Recovery
+Duplicate Execution
+Authentication Failure
+Authorization Failure
+```
+
+### 43.32 Background Processing Completion Criteria
+
+Android Background Processing is complete when:
+
+```text
+SyncWorker Implemented
+Background Scheduling Implemented
+Network Constraints Implemented
+Retry Integrated
+Backoff Integrated
+Concurrency Control Integrated
+Process Death Recovery Implemented
+Authentication Integrated
+Authorization Integrated
+P2P Constraints Integrated
+Battery Considerations Addressed
+Worker Tests Passing
+```
+
+### 43.33 Background Processing Invariants
+
+The following rules are mandatory:
+
+- Background workers must delegate synchronization logic to SyncEngine.
+- Background execution must respect Android lifecycle restrictions.
+- Worker execution must be idempotent.
+- Duplicate worker execution must not corrupt synchronization state.
+- Pending operations must remain durable.
+- Process death must not lose synchronization state.
+- Worker retry must use controlled retry/backoff.
+- Permanent failures must not cause endless retries.
+- Background synchronization must use the same Authentication and Authorization rules.
+- Revoked Devices must not perform protected background synchronization.
+- Background processing must minimize unnecessary battery/network usage.
+- Background processing must be covered by automated tests.
+
 
 ## 44. Testing Implementation
 
+### 44.1 Purpose
+
+This section defines the overall implementation of the testing strategy for SplitSync V1.
+
+Testing must verify:
+
+```text
+Domain Correctness
+Data Consistency
+API Correctness
+Offline Behavior
+Synchronization
+Security
+P2P
+Recovery
+```
+
+### 44.2 Testing Principle
+
+Tests must exist at multiple levels.
+
+```text
+Unit
+ ↓
+Integration
+ ↓
+System
+ ↓
+UI
+```
+
+### 44.3 Test Pyramid
+
+The project should prefer:
+
+```text
+Many Unit Tests
+      ↓
+Integration Tests
+      ↓
+Fewer End-to-End Tests
+```
+
+### 44.4 Test Modules
+
+The project should separate tests logically.
+
+Conceptually:
+
+```text
+Domain Tests
+Data Tests
+Application Tests
+Backend Tests
+Sync Tests
+P2P Tests
+UI Tests
+```
+
+### 44.5 Test Environment
+
+Testing must use isolated environments.
+
+```text
+Test Database
+Test Configuration
+Test Backend
+Test Credentials
+```
+
+### 44.6 Deterministic Tests
+
+Tests should avoid unnecessary dependencies on:
+
+```text
+Real Network
+Real Time
+Random Values
+External Services
+```
+
+### 44.7 Test Data
+
+Test data should use controlled fixtures/builders.
+
+### 44.8 Test Fixtures
+
+Reusable fixtures should represent:
+
+```text
+User
+Device
+Group
+Membership
+Expense
+ExpenseSplit
+Settlement
+SyncOperation
+SyncState
+Conflict
+```
+
+### 44.9 Test Builders
+
+Test builders may simplify creation of valid Domain objects.
+
+### 44.10 Test Isolation
+
+Each test should start from a predictable state.
+
+### 44.11 Test Cleanup
+
+Test databases and test resources must be cleaned/reset appropriately.
+
+### 44.12 Test Naming
+
+Test names should clearly describe:
+
+```text
+Given
+When
+Then
+```
+
+or an equivalent project convention.
+
+### 44.13 Assertion Principle
+
+Tests should verify business outcomes rather than implementation details wherever possible.
+
+### 44.14 Domain Testing
+
+Domain tests must verify:
+
+```text
+Validation
+Business Rules
+Balance Calculation
+Split Calculation
+Settlement Rules
+```
+
+### 44.15 Repository Testing
+
+Repository tests must verify:
+
+```text
+Read
+Create
+Update
+Delete
+Transactions
+Mapping
+```
+
+### 44.16 Database Testing
+
+Database tests must verify:
+
+```text
+Schema
+Constraints
+Indexes
+Queries
+Migrations
+Transactions
+```
+
+### 44.17 Application Service Testing
+
+Application tests must verify:
+
+```text
+Use Cases
+Authorization
+Domain Coordination
+Transaction Boundaries
+```
+
+### 44.18 API Testing
+
+API tests must verify:
+
+```text
+Request
+Authentication
+Authorization
+Validation
+Response
+Errors
+Versioning
+```
+
+### 44.19 Synchronization Testing
+
+Synchronization tests must verify:
+
+```text
+Push
+Pull
+Sync State
+Retry
+Conflict
+Idempotency
+Cursor
+```
+
+### 44.20 Offline Testing
+
+Offline tests must verify:
+
+```text
+Offline Read
+Offline Mutation
+Pending Operation
+Restart
+Network Recovery
+```
+
+### 44.21 P2P Testing
+
+P2P tests must verify:
+
+```text
+Discovery
+Handshake
+Authentication
+Authorization
+Push
+Pull
+Conflict
+Connection Loss
+Recovery
+```
+
+### 44.22 Security Testing
+
+Security tests must verify:
+
+```text
+Authentication
+Authorization
+Device Identity
+Replay Protection
+Peer Trust
+Secret Handling
+```
+
+### 44.23 Error Testing
+
+Every major error category must have tests.
+
+```text
+Validation
+Network
+Timeout
+Authentication
+Authorization
+Database
+Conflict
+P2P
+```
+
+### 44.24 Transaction Testing
+
+Transaction tests must verify:
+
+```text
+Commit
+Rollback
+Atomicity
+Concurrency
+```
+
+### 44.25 Migration Testing
+
+Every database migration must be tested from the previous supported schema version.
+
+### 44.26 Background Testing
+
+Background execution must be tested for:
+
+```text
+Scheduling
+Retry
+Cancellation
+Process Death
+Network Recovery
+```
+
+### 44.27 Test Doubles
+
+Where appropriate, use:
+
+```text
+Fake
+Stub
+Mock
+Test Database
+Test Transport
+```
+
+without over-mocking Domain behavior.
+
+### 44.28 Fake Sync Transport
+
+Synchronization tests should be able to use an in-memory/fake transport.
+
+```text
+SyncEngine
+      ↓
+FakeTransport
+```
+
+### 44.29 Fake P2P Transport
+
+P2P synchronization tests should be able to simulate peers without requiring physical Devices for every test.
+
+### 44.30 Fake Network
+
+Network failure scenarios should be deterministic.
+
+### 44.31 Time Control
+
+Retry/backoff tests should use controllable test time rather than waiting for real delays.
+
+### 44.32 Randomness Control
+
+Identifiers and random security test values should be controllable where deterministic testing requires it.
+
+### 44.33 Integration Environment
+
+Integration tests may use:
+
+```text
+Real Database
+Real Backend
+Test Transport
+```
+
+within an isolated environment.
+
+### 44.34 End-to-End Testing
+
+Critical workflows should be tested end-to-end.
+
+Examples:
+
+```text
+Create Expense
+Offline Sync
+Backend Sync
+P2P Sync
+Conflict Resolution
+Settlement
+```
+
+### 44.35 Test Execution
+
+The project should define separate test commands/tasks for:
+
+```text
+Unit
+Integration
+Android Instrumentation
+Backend
+P2P
+End-to-End
+```
+
+### 44.36 Continuous Integration
+
+CI should execute the required automated test suites before merging/releasing.
+
+### 44.37 Test Failure Policy
+
+A required test failure must block the relevant build/release stage.
+
+### 44.38 Test Coverage
+
+Coverage should be used as a quality indicator rather than the sole measure of correctness.
+
+### 44.39 Critical Coverage
+
+Higher confidence is required for:
+
+```text
+Financial Calculations
+Transactions
+Synchronization
+Conflict Handling
+Authentication
+Authorization
+Security
+```
+
+### 44.40 Regression Testing
+
+Every defect fixed in the implementation should receive an appropriate regression test.
+
+### 44.41 Test Documentation
+
+Complex synchronization and conflict tests should document the scenario and expected outcome.
+
+### 44.42 Test Completion Criteria
+
+Testing Implementation is complete when:
+
+```text
+Test Structure Implemented
+Test Fixtures Implemented
+Unit Tests Implemented
+Integration Tests Implemented
+Database Tests Implemented
+API Tests Implemented
+Offline Tests Implemented
+Sync Tests Implemented
+P2P Tests Implemented
+Security Tests Implemented
+Migration Tests Implemented
+Background Tests Implemented
+CI Integration Implemented
+Regression Strategy Implemented
+```
+
+### 44.43 Testing Invariants
+
+The following rules are mandatory:
+
+- Tests must cover critical Domain rules.
+- Financial calculations must have deterministic automated tests.
+- Transaction boundaries must be tested.
+- Offline mutations must be tested.
+- SyncOperation idempotency must be tested.
+- Push and Pull must be tested independently and together.
+- Cursor safety must be tested.
+- Retry and recovery must be tested.
+- Conflict detection and resolution must be tested.
+- Authentication and Authorization must be tested.
+- P2P handshake and synchronization must be tested.
+- Database migrations must be tested.
+- Background process recovery must be tested.
+- Regression tests must be added for fixed defects.
+- Required CI tests must pass before release.
+
+
 ## 45. Unit Testing
+
+### 45.1 Purpose
+
+This section defines the implementation of Unit Testing for SplitSync V1.
+
+Unit tests verify isolated behavior of:
+
+```text
+Domain
+Application Services
+Repositories
+Synchronization Components
+Utilities
+Validators
+Calculators
+```
+
+### 45.2 Unit Testing Principle
+
+Unit tests should be:
+
+```text
+Fast
+Deterministic
+Isolated
+Repeatable
+```
+
+### 45.3 Domain Unit Tests
+
+Domain unit tests must not require:
+
+```text
+Android Framework
+Database
+Network
+Backend
+P2P Transport
+```
+
+unless a specific unit under test requires an abstraction.
+
+### 45.4 Value Object Tests
+
+Test:
+
+```text
+Valid Construction
+Invalid Construction
+Equality
+Normalization
+```
+
+for applicable Value Objects.
+
+### 45.5 Expense Tests
+
+Test:
+
+```text
+Valid Expense
+Invalid Amount
+Invalid Currency
+Invalid Group
+Invalid Creator
+```
+
+### 45.6 Expense Split Tests
+
+Test:
+
+```text
+Valid Split
+Invalid Split
+Total Split Validation
+Participant Validation
+Rounding Rules
+```
+
+### 45.7 Settlement Tests
+
+Test:
+
+```text
+Valid Settlement
+Invalid Amount
+Invalid Payer
+Invalid Receiver
+Invalid Group
+```
+
+### 45.8 Balance Calculator Tests
+
+Test:
+
+```text
+No Expenses
+Single Expense
+Multiple Expenses
+Settlements
+Partial Settlement
+Fully Settled
+Multiple Participants
+```
+
+### 45.9 Balance Invariants
+
+Verify:
+
+```text
+Total Debits
+=
+Total Credits
+```
+
+according to the defined balance model.
+
+### 45.10 Group Tests
+
+Test:
+
+```text
+Group Creation
+Group Validation
+Group State
+```
+
+### 45.11 Membership Tests
+
+Test:
+
+```text
+Add Member
+Remove Member
+Role Validation
+Membership State
+Authorization Rules
+```
+
+### 45.12 Domain Validation Tests
+
+Every Domain invariant should have at least one positive and negative test where applicable.
+
+### 45.13 Application Service Tests
+
+Application services should be tested with controlled dependencies.
+
+```text
+Application Service
+      ↓
+Fake Repository
+Fake Clock
+Fake Sync Repository
+```
+
+### 45.14 Expense Use Case Tests
+
+Test:
+
+```text
+Create Expense
+Update Expense
+Delete Expense
+Validation Failure
+Authorization Failure
+```
+
+### 45.15 Settlement Use Case Tests
+
+Test:
+
+```text
+Create Settlement
+Validation Failure
+Authorization Failure
+```
+
+### 45.16 Group Use Case Tests
+
+Test:
+
+```text
+Create Group
+Update Group
+Membership Change
+Authorization
+```
+
+### 45.17 Repository Unit Tests
+
+Where repositories contain non-trivial mapping or logic, test:
+
+```text
+Entity Mapping
+DTO Mapping
+Error Mapping
+Query Construction
+```
+
+### 45.18 SyncOperation Tests
+
+Test:
+
+```text
+Operation Creation
+Operation ID
+Payload
+State
+Version
+Entity Reference
+```
+
+### 45.19 SyncState Tests
+
+Test:
+
+```text
+State Transition
+Cursor
+Retry Count
+Failure State
+Recovery
+```
+
+### 45.20 Conflict Detector Tests
+
+Test:
+
+```text
+No Conflict
+Version Conflict
+Create Conflict
+Update Conflict
+Delete Conflict
+Duplicate Operation
+```
+
+### 45.21 Conflict Resolver Tests
+
+Test:
+
+```text
+Valid Resolution
+Invalid Resolution
+Resolution Validation
+Resolution State
+Idempotency
+```
+
+### 45.22 Retry Tests
+
+Test:
+
+```text
+Retryable Failure
+Permanent Failure
+Retry Limit
+Backoff Calculation
+Timeout Recovery
+```
+
+### 45.23 Push Processor Tests
+
+Test:
+
+```text
+Pending Selection
+Ordering
+Batching
+Serialization
+Response Handling
+Partial Success
+```
+
+### 45.24 Pull Processor Tests
+
+Test:
+
+```text
+Cursor
+Batch Processing
+Duplicate Detection
+Remote Apply
+Cursor Advancement
+```
+
+### 45.25 Sync Engine Tests
+
+Test:
+
+```text
+Push
+Pull
+Push + Pull
+Retry
+Conflict
+State Update
+Recovery
+```
+
+### 45.26 P2P Tests
+
+Unit tests should cover:
+
+```text
+Peer Selection
+Protocol Negotiation
+Capability Negotiation
+Handshake Decisions
+Peer State
+```
+
+### 45.27 Discovery Tests
+
+Test:
+
+```text
+Peer Found
+Duplicate Peer
+No Peer
+Timeout
+Filtering
+Revoked Peer
+```
+
+### 45.28 Authentication Tests
+
+Test:
+
+```text
+Valid Credentials
+Invalid Credentials
+Expired Authentication
+Refresh
+Authentication Failure
+```
+
+### 45.29 Authorization Tests
+
+Test:
+
+```text
+Authorized User
+Unauthorized User
+Group Access
+Membership Change
+Device Revocation
+```
+
+### 45.30 Error Mapping Tests
+
+Test mapping between:
+
+```text
+Infrastructure Error
+Application Error
+Presentation Error
+```
+
+### 45.31 Configuration Tests
+
+Test:
+
+```text
+Valid Configuration
+Missing Configuration
+Invalid Configuration
+Default Configuration
+Environment Configuration
+```
+
+### 45.32 Logging Tests
+
+Test:
+
+```text
+Log Level
+Correlation ID
+Sensitive Data Redaction
+Exception Context
+```
+
+### 45.33 Unit Test Isolation
+
+Unit tests must not depend on:
+
+```text
+Real Backend
+Real Database
+Real P2P Device
+Real Network
+```
+
+### 45.34 Test Doubles
+
+Use appropriate:
+
+```text
+Fake
+Stub
+Mock
+Spy
+```
+
+based on the behavior being tested.
+
+### 45.35 Mocking Principle
+
+Do not mock Domain objects unnecessarily.
+
+Prefer real Domain objects for Domain unit tests.
+
+### 45.36 Test Data Builders
+
+Use reusable builders for complex test objects.
+
+### 45.37 Assertion Quality
+
+Assertions must verify meaningful outcomes.
+
+Avoid tests that only verify:
+
+```text
+Method Was Called
+```
+
+without verifying the resulting business behavior.
+
+### 45.38 Exception Tests
+
+Tests should verify:
+
+```text
+Exception Type
+Error Code
+Domain State
+Persistence State
+```
+
+where applicable.
+
+### 45.39 Parameterized Tests
+
+Parameterized tests should be used for repeated rule variations.
+
+Example:
+
+```text
+Amount
+Split Count
+Participant Count
+Rounding
+```
+
+### 45.40 Property-Based Testing
+
+Property-based testing may be used for calculations and invariants where useful.
+
+### 45.41 Unit Test Naming
+
+Unit tests should use a consistent naming convention.
+
+Example:
+
+```text
+createExpense_whenAmountIsZero_shouldReject
+```
+
+### 45.42 Unit Test Organization
+
+Tests should mirror the production package structure where practical.
+
+```text
+src/test/...
+```
+
+### 45.43 Fast Execution
+
+Unit tests should remain fast enough to run frequently during development.
+
+### 45.44 Unit Test Coverage
+
+Critical units should have strong behavioral coverage.
+
+Especially:
+
+```text
+BalanceCalculator
+SplitCalculator
+Validators
+ConflictDetector
+ConflictResolver
+SyncEngine
+RetryPolicy
+```
+
+### 45.45 Regression Unit Tests
+
+Every discovered logic defect should result in a regression unit test where applicable.
+
+### 45.46 Unit Testing Completion Criteria
+
+Unit Testing is complete when:
+
+```text
+Domain Unit Tests Implemented
+Value Object Tests Implemented
+Validation Tests Implemented
+Calculation Tests Implemented
+Application Service Tests Implemented
+SyncOperation Tests Implemented
+SyncState Tests Implemented
+Conflict Tests Implemented
+Retry Tests Implemented
+Push Tests Implemented
+Pull Tests Implemented
+P2P Tests Implemented
+Authentication Tests Implemented
+Authorization Tests Implemented
+Configuration Tests Implemented
+Logging Tests Implemented
+Regression Tests Implemented
+CI Execution Configured
+```
+
+### 45.47 Unit Testing Invariants
+
+The following rules are mandatory:
+
+- Unit tests must be deterministic.
+- Domain unit tests must remain independent of infrastructure.
+- Financial calculations must have comprehensive unit coverage.
+- Domain validation must be tested for valid and invalid cases.
+- SyncOperation creation must be tested.
+- SyncState transitions must be tested.
+- Conflict detection must be tested.
+- Conflict resolution must be tested.
+- Retry policies must be tested.
+- Push and Pull processors must be tested.
+- Authentication and Authorization logic must be tested.
+- P2P handshake decisions must be tested.
+- Sensitive-data logging behavior must be tested.
+- Regression tests must be added for fixed logic defects.
+- Unit tests must remain fast and suitable for frequent execution.
 
 ## 46. Integration Testing
 
+### 46.1 Purpose
+
+This section defines the implementation of Integration Testing for SplitSync V1.
+
+Integration tests verify that multiple application components work correctly together.
+
+```text
+Component A
+     +
+Component B
+     +
+Infrastructure
+     ↓
+Integration Test
+```
+
+### 46.2 Integration Testing Principle
+
+Integration tests should verify actual interaction between components while keeping external dependencies controlled where appropriate.
+
+### 46.3 Integration Test Scope
+
+Integration testing should cover:
+
+```text
+Domain ↔ Application
+Application ↔ Repository
+Repository ↔ Database
+Application ↔ API
+Sync Engine ↔ Repository
+Sync Engine ↔ Transport
+P2P ↔ Sync Engine
+```
+
+### 46.4 Android Integration Tests
+
+Android integration tests should verify:
+
+```text
+Room
+Repository
+Application Services
+ViewModel
+Sync Components
+```
+
+where applicable.
+
+### 46.5 Database Integration Tests
+
+Database integration tests must verify:
+
+```text
+Entity Persistence
+Queries
+Relationships
+Constraints
+Transactions
+Migrations
+```
+
+### 46.6 Room Integration Tests
+
+Room tests should use a test database rather than the production database.
+
+### 46.7 Repository Integration Tests
+
+Repository tests must verify:
+
+```text
+Domain Model
+      ↓
+Repository
+      ↓
+Room
+      ↓
+Database
+```
+
+### 46.8 Transaction Integration Tests
+
+Test complete transactions such as:
+
+```text
+Create Expense
+      ↓
+Expense
++
+ExpenseSplits
++
+SyncOperation
+```
+
+### 46.9 Backend Integration Tests
+
+Backend integration tests should verify:
+
+```text
+Controller
+ ↓
+Application Service
+ ↓
+Repository
+ ↓
+Database
+```
+
+### 46.10 API Integration Tests
+
+API integration tests must verify:
+
+```text
+Request
+ ↓
+Authentication
+ ↓
+Authorization
+ ↓
+Validation
+ ↓
+Application Service
+ ↓
+Response
+```
+
+### 46.11 Sync Integration Tests
+
+Test:
+
+```text
+Local Database
+      ↕
+Sync Engine
+      ↕
+Sync Transport
+```
+
+### 46.12 Push Integration Tests
+
+Test:
+
+```text
+Pending SyncOperation
+      ↓
+Push Processor
+      ↓
+Transport
+      ↓
+Remote Response
+      ↓
+Local State Update
+```
+
+### 46.13 Pull Integration Tests
+
+Test:
+
+```text
+Remote Changes
+      ↓
+Pull Processor
+      ↓
+Conflict Detection
+      ↓
+Repository
+      ↓
+Local Database
+```
+
+### 46.14 SyncState Integration
+
+Verify that:
+
+```text
+SyncOperation
++
+SyncState
++
+Database
+```
+
+remain consistent.
+
+### 46.15 Conflict Integration
+
+Verify:
+
+```text
+Remote Operation
+      ↓
+Conflict Detector
+      ↓
+Conflict Repository
+      ↓
+Conflict State
+```
+
+### 46.16 Authentication Integration
+
+Test:
+
+```text
+Authentication
+      ↓
+Token / Session
+      ↓
+Authenticated API Request
+```
+
+### 46.17 Authorization Integration
+
+Test:
+
+```text
+User
++
+Membership
++
+Resource
+      ↓
+Authorization Decision
+```
+
+### 46.18 P2P Integration
+
+Test:
+
+```text
+Peer Connection
+      ↓
+Handshake
+      ↓
+P2P Sync
+      ↓
+Local Database
+```
+
+### 46.19 Error Integration
+
+Test failures across component boundaries:
+
+```text
+Database Failure
+Network Failure
+Authentication Failure
+Authorization Failure
+Transport Failure
+```
+
+### 46.20 Integration Test Isolation
+
+Each integration test should use isolated state where practical.
+
+### 46.21 Test Database
+
+Test databases must not contain production data.
+
+### 46.22 Test Backend
+
+Backend integration tests should use an isolated test environment.
+
+### 46.23 Test Transport
+
+Synchronization integration tests may use:
+
+```text
+Fake Transport
+Test Transport
+In-Memory Transport
+```
+
+where appropriate.
+
+### 46.24 Integration Test Data
+
+Test data should represent realistic Domain scenarios.
+
+### 46.25 Integration Test Cleanup
+
+Test resources must be cleaned after each test or test suite according to the isolation strategy.
+
+### 46.26 Integration Test Completion Criteria
+
+Integration Testing is complete when:
+
+```text
+Database Integration Tests Implemented
+Repository Integration Tests Implemented
+Application Integration Tests Implemented
+API Integration Tests Implemented
+Sync Integration Tests Implemented
+Conflict Integration Tests Implemented
+Authentication Integration Tests Implemented
+Authorization Integration Tests Implemented
+P2P Integration Tests Implemented
+Failure Integration Tests Implemented
+CI Execution Configured
+Tests Passing
+```
+
+### 46.27 Integration Testing Invariants
+
+The following rules are mandatory:
+
+- Integration tests must verify real component boundaries.
+- Test environments must remain isolated from production.
+- Database integration tests must verify transactions and constraints.
+- Repository integration tests must verify persistence behavior.
+- Synchronization integration tests must verify Push and Pull behavior.
+- SyncState and SyncOperation consistency must be tested.
+- Conflict persistence must be tested.
+- Authentication and Authorization boundaries must be tested.
+- P2P component integration must be tested.
+- Integration tests must cover important failure paths.
+
+
 ## 47. Synchronization Testing
+
+### 47.1 Purpose
+
+This section defines the implementation of Synchronization Testing for SplitSync V1.
+
+Synchronization testing verifies that local and remote state remains correct across:
+
+```text
+Online
+Offline
+Backend Sync
+P2P Sync
+Retry
+Conflict
+Recovery
+```
+
+### 47.2 Synchronization Testing Principle
+
+Synchronization tests must validate both:
+
+```text
+Correctness
++
+Convergence
+```
+
+### 47.3 Sync Test Components
+
+Tests should cover:
+
+```text
+SyncOperation
+SyncState
+Push
+Pull
+Sync Engine
+Cursor
+Retry
+Conflict
+```
+
+### 47.4 Local Mutation Test
+
+Test:
+
+```text
+Create Expense
+      ↓
+Local Database
+      ↓
+SyncOperation = PENDING
+```
+
+### 47.5 Push Test
+
+Test:
+
+```text
+PENDING
+ ↓
+Push
+ ↓
+Remote Accepted
+ ↓
+SYNCED
+```
+
+### 47.6 Pull Test
+
+Test:
+
+```text
+Remote Change
+ ↓
+Pull
+ ↓
+Local Database
+```
+
+### 47.7 Push and Pull Test
+
+Test:
+
+```text
+Local Changes
++
+Remote Changes
+      ↓
+Sync
+      ↓
+Consistent Local State
+```
+
+### 47.8 Cursor Test
+
+Verify:
+
+```text
+Cursor N
+ ↓
+Process Changes
+ ↓
+Cursor M
+```
+
+and ensure the cursor advances only after successful persistence.
+
+### 47.9 Cursor Failure Test
+
+Test:
+
+```text
+Apply Changes
+ ↓
+Persistence Failure
+ ↓
+Cursor Unchanged
+```
+
+### 47.10 Duplicate Operation Test
+
+Send the same Operation ID multiple times.
+
+Expected:
+
+```text
+One Business Effect
+```
+
+### 47.11 Retry Test
+
+Test:
+
+```text
+Network Failure
+ ↓
+Retry
+ ↓
+Success
+```
+
+### 47.12 Retry Limit Test
+
+Verify that permanent failures do not retry indefinitely.
+
+### 47.13 Timeout Test
+
+Test:
+
+```text
+Request
+ ↓
+Timeout
+ ↓
+Retry Same Operation ID
+```
+
+### 47.14 Crash Recovery Test
+
+Test:
+
+```text
+Sync Running
+ ↓
+Process Terminated
+ ↓
+Restart
+ ↓
+Recover
+ ↓
+Continue Sync
+```
+
+### 47.15 Offline Mutation Test
+
+Test:
+
+```text
+Offline
+ ↓
+Create Expense
+ ↓
+Local Commit
+ ↓
+Pending SyncOperation
+```
+
+### 47.16 Network Recovery Test
+
+Test:
+
+```text
+Offline
+ ↓
+Pending Operations
+ ↓
+Network Available
+ ↓
+Synchronization
+```
+
+### 47.17 Multiple Device Test
+
+Test:
+
+```text
+Device A
+   ↕
+Backend
+   ↕
+Device B
+```
+
+and verify state propagation.
+
+### 47.18 Concurrent Mutation Test
+
+Test:
+
+```text
+Device A → Update
+Device B → Update
+       ↓
+Synchronization
+       ↓
+Conflict / Convergence
+```
+
+### 47.19 Sync Conflict Test
+
+Verify that incompatible changes enter Conflict handling rather than silent overwrite.
+
+### 47.20 Sync Ordering Test
+
+Verify that dependent operations are processed in valid order.
+
+### 47.21 Batch Test
+
+Test:
+
+```text
+Small Batch
+Large Batch
+Multiple Batches
+Empty Batch
+```
+
+### 47.22 Partial Batch Test
+
+Verify safe recovery when only part of a batch can be processed.
+
+### 47.23 Tombstone Test
+
+Test:
+
+```text
+Delete
+ ↓
+Tombstone
+ ↓
+Synchronization
+ ↓
+Remote Delete
+```
+
+### 47.24 Membership Sync Test
+
+Test:
+
+```text
+Membership Change
+ ↓
+Sync
+ ↓
+Local Authorization State
+```
+
+### 47.25 Expense Sync Test
+
+Test:
+
+```text
+Expense
++
+ExpenseSplits
+ ↓
+Sync
+ ↓
+Consistent Remote State
+```
+
+### 47.26 Settlement Sync Test
+
+Test:
+
+```text
+Settlement
+ ↓
+Sync
+ ↓
+Correct Balance
+```
+
+### 47.27 Balance Convergence Test
+
+After valid synchronization:
+
+```text
+Device A Balance
+=
+Device B Balance
+```
+
+for the same converged Domain state.
+
+### 47.28 Backend and P2P Convergence Test
+
+Test:
+
+```text
+Device A
+   ↕ P2P
+Device B
+   ↕ Backend
+Backend
+```
+
+and verify eventual convergence according to the synchronization model.
+
+### 47.29 Sync Authentication Test
+
+Verify that unauthenticated synchronization is rejected.
+
+### 47.30 Sync Authorization Test
+
+Verify that unauthorized synchronization data cannot be retrieved or applied.
+
+### 47.31 Device Revocation Test
+
+Test:
+
+```text
+Active Device
+ ↓
+Revoked
+ ↓
+Sync Attempt
+ ↓
+Rejected
+```
+
+### 47.32 Sync Performance Test
+
+Test:
+
+```text
+Small Dataset
+Medium Dataset
+Large Dataset
+Large Pending Queue
+```
+
+### 47.33 Sync Recovery Test
+
+Verify recovery after:
+
+```text
+Network Loss
+Process Death
+Worker Cancellation
+Database Failure
+Peer Disconnect
+```
+
+### 47.34 Sync Property Tests
+
+Where useful, verify properties such as:
+
+```text
+Duplicate Delivery → Same Final Effect
+Retry → Same Final Effect
+Successful Convergence → Same Domain State
+```
+
+### 47.35 Synchronization Completion Criteria
+
+Synchronization Testing is complete when:
+
+```text
+Offline Tests Passing
+Push Tests Passing
+Pull Tests Passing
+Cursor Tests Passing
+Retry Tests Passing
+Recovery Tests Passing
+Conflict Tests Passing
+Multi-Device Tests Passing
+Financial Convergence Tests Passing
+Authentication Tests Passing
+Authorization Tests Passing
+P2P Reconciliation Tests Passing
+Performance Tests Passing
+```
+
+### 47.36 Synchronization Testing Invariants
+
+The following rules are mandatory:
+
+- Synchronization must be tested in both online and offline conditions.
+- Duplicate operations must be tested.
+- Cursor safety must be tested.
+- Retry behavior must be tested.
+- Crash recovery must be tested.
+- Conflict behavior must be tested.
+- Financial state convergence must be tested.
+- Membership synchronization must be tested.
+- Backend and P2P synchronization must be tested together where applicable.
+- Authentication and Authorization must be tested.
+- Permanent failures must not produce infinite retries.
+- Synchronization tests must verify actual resulting state rather than only method calls.
+
 
 ## 48. Conflict Testing
 
+### 48.1 Purpose
+
+This section defines the implementation of Conflict Testing for SplitSync V1.
+
+Conflict testing verifies that concurrent or incompatible changes are detected, persisted, and resolved correctly.
+
+### 48.2 Conflict Testing Principle
+
+Conflict tests must prove:
+
+```text
+No Silent Overwrite
++
+Deterministic Detection
++
+Safe Resolution
+```
+
+### 48.3 Conflict Test Categories
+
+Test:
+
+```text
+Create Conflict
+Update Conflict
+Delete Conflict
+Version Conflict
+Membership Conflict
+Expense Conflict
+Settlement Conflict
+```
+
+### 48.4 Version Conflict Test
+
+Test:
+
+```text
+Local Version = 5
+Remote Base Version = 4
+      ↓
+Conflict
+```
+
+### 48.5 Concurrent Update Test
+
+Test:
+
+```text
+Device A → V5
+Device B → V5
+      ↓
+Both Modify
+      ↓
+Conflict Detection
+```
+
+### 48.6 Create Conflict Test
+
+Test two operations attempting to create the same logical entity.
+
+### 48.7 Update Conflict Test
+
+Test updates based on stale versions.
+
+### 48.8 Delete Conflict Test
+
+Test:
+
+```text
+Device A → Update
+Device B → Delete
+      ↓
+Synchronization
+```
+
+and verify the defined conflict behavior.
+
+### 48.9 Tombstone Conflict Test
+
+Test mutation against an entity already deleted/tombstoned.
+
+### 48.10 Expense Conflict Test
+
+Test conflicting Expense updates.
+
+Verify:
+
+```text
+Amount
+Payer
+Participants
+ExpenseSplits
+```
+
+remain correct.
+
+### 48.11 Settlement Conflict Test
+
+Test conflicting Settlement operations.
+
+Verify:
+
+```text
+Payer
+Receiver
+Amount
+Balance
+```
+
+remain correct.
+
+### 48.12 Membership Conflict Test
+
+Test simultaneous membership changes.
+
+Verify:
+
+```text
+Membership
+Role
+Authorization
+```
+
+remain consistent.
+
+### 48.13 Group Conflict Test
+
+Test concurrent Group modifications.
+
+### 48.14 Duplicate Operation Test
+
+A duplicate operation must not be treated as a new conflict unnecessarily.
+
+### 48.15 Invalid Operation Test
+
+Verify that Domain-invalid operations are classified as validation failures rather than incorrectly classified as conflicts.
+
+### 48.16 Authorization Test
+
+Verify that unauthorized operations are rejected as authorization failures rather than conflicts.
+
+### 48.17 Conflict Persistence Test
+
+Verify that detected conflicts are persisted durably.
+
+### 48.18 Conflict State Test
+
+Verify:
+
+```text
+OPEN
+ ↓
+RESOLVING
+ ↓
+RESOLVED
+```
+
+according to the supported lifecycle.
+
+### 48.19 Conflict Resolution Test
+
+Test a valid resolution and verify the resulting Domain state.
+
+### 48.20 Invalid Resolution Test
+
+Test:
+
+```text
+Conflict
+ ↓
+Invalid Resolution
+ ↓
+Conflict Remains Open
+```
+
+### 48.21 Financial Resolution Test
+
+Verify that resolving a financial conflict preserves:
+
+```text
+Expense Amount
+ExpenseSplits
+Settlement Amount
+Balance
+```
+
+### 48.22 Manual Resolution Test
+
+Where manual resolution is supported:
+
+```text
+Conflict
+ ↓
+User Decision
+ ↓
+Resolution
+ ↓
+New SyncOperation
+```
+
+### 48.23 Resolution Authorization Test
+
+Verify that only authorized Users can resolve conflicts.
+
+### 48.24 Stale Resolution Test
+
+Test:
+
+```text
+Conflict Open
+ ↓
+Remote State Changes
+ ↓
+User Attempts Resolution
+ ↓
+Revalidation
+ ↓
+New Conflict / Rejection
+```
+
+### 48.25 Resolution Idempotency Test
+
+Apply the same resolution operation repeatedly.
+
+Expected:
+
+```text
+One Final Business Effect
+```
+
+### 48.26 Conflict Recovery Test
+
+Test application termination while a conflict is:
+
+```text
+OPEN
+RESOLVING
+```
+
+### 48.27 Conflict Convergence Test
+
+After successful resolution:
+
+```text
+Device A
+   ↕
+Device B
+   ↕
+Backend
+```
+
+must converge to the same valid state according to the synchronization protocol.
+
+### 48.28 Conflict Logging Test
+
+Verify that diagnostic logs contain sufficient conflict context without exposing sensitive payloads.
+
+### 48.29 Conflict Security Test
+
+Test:
+
+```text
+Unauthorized Resolution
+Tampered Conflict Data
+Invalid Operation
+Revoked Device
+```
+
+### 48.30 Conflict Completion Criteria
+
+Conflict Testing is complete when:
+
+```text
+Version Conflict Tests Passing
+Create Conflict Tests Passing
+Update Conflict Tests Passing
+Delete Conflict Tests Passing
+Expense Conflict Tests Passing
+Settlement Conflict Tests Passing
+Membership Conflict Tests Passing
+Conflict Persistence Tests Passing
+Resolution Tests Passing
+Invalid Resolution Tests Passing
+Authorization Tests Passing
+Recovery Tests Passing
+Idempotency Tests Passing
+Convergence Tests Passing
+Security Tests Passing
+```
+
+### 48.31 Conflict Testing Invariants
+
+The following rules are mandatory:
+
+- Conflicting updates must be detected.
+- Newer state must not be silently overwritten.
+- Duplicate operations must not create duplicate conflicts.
+- Validation failures must remain distinct from conflicts.
+- Authorization failures must remain distinct from conflicts.
+- Financial conflicts must preserve financial correctness.
+- Conflicts must be persisted.
+- Resolution must be validated.
+- Resolution must be authorized.
+- Resolution must be idempotent.
+- Stale resolutions must be revalidated.
+- Conflict testing must verify final Domain state.
+- Resolved conflicts must converge across synchronization participants.
+
+
 ## 49. P2P Testing
+
+### 49.1 Purpose
+
+This section defines the implementation of P2P Testing for SplitSync V1.
+
+P2P tests verify:
+
+```text
+Discovery
+Connection
+Handshake
+Authentication
+Authorization
+Synchronization
+Recovery
+Security
+```
+
+### 49.2 P2P Testing Principle
+
+P2P testing must validate both:
+
+```text
+Transport Correctness
++
+Synchronization Correctness
+```
+
+### 49.3 P2P Test Levels
+
+Tests should exist at:
+
+```text
+Unit
+Integration
+Device
+End-to-End
+```
+
+where applicable.
+
+### 49.4 Discovery Test
+
+Test:
+
+```text
+Device A Advertising
+      ↓
+Device B Discovery
+      ↓
+Peer Candidate
+```
+
+### 49.5 Discovery Timeout Test
+
+Verify that discovery stops after the configured timeout.
+
+### 49.6 Duplicate Discovery Test
+
+Verify that repeated discovery events for the same peer do not create duplicate sessions.
+
+### 49.7 Unknown Peer Test
+
+Verify that an unknown peer cannot synchronize protected data without successful trust/authentication.
+
+### 49.8 Peer Authentication Test
+
+Test:
+
+```text
+Valid Peer
+ ↓
+Authentication Success
+```
+
+and:
+
+```text
+Invalid Peer
+ ↓
+Authentication Failure
+```
+
+### 49.9 Mutual Authentication Test
+
+Verify both sides authenticate each other where required.
+
+### 49.10 Authorization Test
+
+Verify:
+
+```text
+Authenticated Peer
+      ↓
+Authorized Group
+      ↓
+Synchronization Allowed
+```
+
+and unauthorized contexts are rejected.
+
+### 49.11 Revoked Peer Test
+
+Test:
+
+```text
+Trusted Peer
+ ↓
+Revoked
+ ↓
+Reconnect
+ ↓
+Rejected
+```
+
+### 49.12 Handshake Test
+
+Verify:
+
+```text
+Connection
+ ↓
+Handshake
+ ↓
+Protocol Negotiation
+ ↓
+Authentication
+ ↓
+Authorization
+ ↓
+Secure Session
+```
+
+### 49.13 Protocol Mismatch Test
+
+Test:
+
+```text
+Peer A = V1
+Peer B = Unsupported Version
+      ↓
+Handshake Rejected
+```
+
+### 49.14 Capability Negotiation Test
+
+Verify that only mutually supported capabilities are enabled.
+
+### 49.15 Secure Session Test
+
+Verify that synchronization cannot begin before the secure session is established.
+
+### 49.16 P2P Push Test
+
+Test:
+
+```text
+Device A
+ ↓
+Pending Operation
+ ↓
+P2P Push
+ ↓
+Device B
+```
+
+### 49.17 P2P Pull Test
+
+Test:
+
+```text
+Device B
+ ↓
+Remote Operation
+ ↓
+P2P Pull
+ ↓
+Device A
+```
+
+### 49.18 Duplicate Operation Test
+
+Send the same Operation ID multiple times.
+
+Expected:
+
+```text
+One Business Effect
+```
+
+### 49.19 P2P Conflict Test
+
+Test concurrent changes:
+
+```text
+Device A → Change
+Device B → Change
+      ↓
+P2P Sync
+      ↓
+Conflict
+```
+
+### 49.20 P2P Conflict Resolution Test
+
+Verify that the common Conflict Resolution mechanism works through P2P.
+
+### 49.21 Connection Loss Test
+
+Test:
+
+```text
+Connected
+ ↓
+Syncing
+ ↓
+Connection Lost
+```
+
+and verify local state remains safe.
+
+### 49.22 Reconnection Test
+
+Test:
+
+```text
+Connection Lost
+ ↓
+Reconnect
+ ↓
+Handshake
+ ↓
+Resume Sync
+```
+
+### 49.23 Partial Transfer Test
+
+Terminate the connection during an operation/batch transfer.
+
+Verify:
+
+```text
+Partial Data
+      ↓
+Not Applied
+```
+
+### 49.24 P2P Retry Test
+
+Test temporary connection failures and controlled retry.
+
+### 49.25 P2P Backoff Test
+
+Verify increasing retry delays.
+
+### 49.26 P2P Cursor Test
+
+If P2P cursors are used:
+
+```text
+Cursor N
+ ↓
+Pull
+ ↓
+Persist
+ ↓
+Cursor M
+```
+
+must be verified.
+
+### 49.27 P2P SyncState Test
+
+Verify peer-specific SyncState persistence and recovery.
+
+### 49.28 P2P Financial Test
+
+Synchronize:
+
+```text
+Expense
+ExpenseSplits
+Settlement
+```
+
+and verify financial correctness.
+
+### 49.29 P2P Membership Test
+
+Synchronize membership changes and verify authorization state.
+
+### 49.30 P2P Backend Reconciliation Test
+
+Test:
+
+```text
+Device A
+   ↕ P2P
+Device B
+   ↓
+Backend
+```
+
+and verify that P2P-created changes reconcile correctly with Backend synchronization.
+
+### 49.31 P2P Offline Test
+
+Test P2P synchronization while Backend connectivity is unavailable.
+
+### 49.32 P2P Security Test
+
+Test:
+
+```text
+Spoofed Peer
+Replay
+Revoked Peer
+Unauthorized Group
+Invalid Identity
+Invalid Session
+```
+
+### 49.33 P2P Battery/Resource Test
+
+Where practical, verify that discovery and synchronization do not perform unnecessary continuous work.
+
+### 49.34 P2P Device Test
+
+Physical-device tests should verify the selected Android P2P transport and platform behavior.
+
+### 49.35 P2P Simulation Test
+
+A simulated/fake transport should be used for most automated synchronization tests.
+
+### 49.36 P2P Completion Criteria
+
+P2P Testing is complete when:
+
+```text
+Discovery Tests Passing
+Connection Tests Passing
+Handshake Tests Passing
+Authentication Tests Passing
+Authorization Tests Passing
+Protocol Negotiation Tests Passing
+Secure Session Tests Passing
+Push Tests Passing
+Pull Tests Passing
+Conflict Tests Passing
+Retry Tests Passing
+Recovery Tests Passing
+Security Tests Passing
+Offline Tests Passing
+Backend Reconciliation Tests Passing
+Physical Device Tests Passing Where Required
+```
+
+### 49.37 P2P Testing Invariants
+
+The following rules are mandatory:
+
+- Discovery must be tested separately from trust.
+- Unknown peers must not synchronize protected data.
+- Authentication must be tested.
+- Authorization must be tested.
+- Revoked peers must be rejected.
+- Protocol mismatch must prevent synchronization.
+- Secure session establishment must be tested.
+- Duplicate operations must remain idempotent.
+- Partial transfers must not create partial Domain state.
+- Connection loss must preserve local synchronization state.
+- Reconnection must perform the required handshake.
+- P2P conflicts must use the common conflict model.
+- P2P financial synchronization must preserve balances.
+- P2P changes must reconcile with Backend synchronization.
+- P2P security behavior must be tested on appropriate physical devices.
+
 
 ## 50. End-to-End Testing
 
+### 50.1 Purpose
+
+This section defines the implementation of End-to-End Testing for SplitSync V1.
+
+End-to-End tests validate complete user/business workflows across the major system boundaries.
+
+```text
+Android
+   ↓
+Application
+   ↓
+Database
+   ↓
+Backend / P2P
+   ↓
+Remote State
+```
+
+### 50.2 E2E Testing Principle
+
+E2E tests must validate actual business outcomes rather than individual method behavior.
+
+### 50.3 E2E Environment
+
+E2E testing should use an isolated environment containing:
+
+```text
+Android Application
+Test Backend
+Test Database
+Test User Accounts
+Test Devices
+```
+
+### 50.4 E2E User Scenario
+
+A complete workflow may be:
+
+```text
+Login
+ ↓
+Create Group
+ ↓
+Add Members
+ ↓
+Create Expense
+ ↓
+Split Expense
+ ↓
+Synchronize
+ ↓
+View Balances
+ ↓
+Create Settlement
+ ↓
+Synchronize
+ ↓
+Verify Final Balance
+```
+
+### 50.5 Group Creation E2E
+
+Test:
+
+```text
+User Login
+ ↓
+Create Group
+ ↓
+Group Persisted
+ ↓
+Group Visible
+```
+
+### 50.6 Membership E2E
+
+Test:
+
+```text
+Create Group
+ ↓
+Add Member
+ ↓
+Member Sync
+ ↓
+Remote Member State
+```
+
+### 50.7 Expense E2E
+
+Test:
+
+```text
+Create Expense
+ ↓
+Create Splits
+ ↓
+Persist Locally
+ ↓
+Synchronize
+ ↓
+Remote Expense
+```
+
+### 50.8 Settlement E2E
+
+Test:
+
+```text
+Create Settlement
+ ↓
+Synchronize
+ ↓
+Remote Settlement
+ ↓
+Updated Balance
+```
+
+### 50.9 Offline Expense E2E
+
+Test:
+
+```text
+Network Unavailable
+ ↓
+Create Expense
+ ↓
+Local Success
+ ↓
+Pending Sync
+ ↓
+Network Restored
+ ↓
+Synchronization
+ ↓
+Remote Expense
+```
+
+### 50.10 Offline Settlement E2E
+
+Test:
+
+```text
+Offline
+ ↓
+Create Settlement
+ ↓
+Pending Sync
+ ↓
+Reconnect
+ ↓
+Sync
+ ↓
+Remote Settlement
+```
+
+### 50.11 Multi-Device E2E
+
+Test:
+
+```text
+Device A
+ ↓
+Create Expense
+ ↓
+Backend Sync
+ ↓
+Device B Pull
+ ↓
+Expense Visible
+```
+
+### 50.12 P2P E2E
+
+Test:
+
+```text
+Device A
+ ↓
+Create Expense
+ ↓
+Backend Unavailable
+ ↓
+P2P Discovery
+ ↓
+Handshake
+ ↓
+P2P Sync
+ ↓
+Device B
+```
+
+### 50.13 P2P Offline E2E
+
+Test:
+
+```text
+Backend Offline
++
+Device A Offline
++
+Device B Available
+      ↓
+P2P Synchronization
+      ↓
+Converged Local State
+```
+
+### 50.14 Backend Reconciliation E2E
+
+Test:
+
+```text
+P2P Sync
+ ↓
+Backend Returns
+ ↓
+Backend Push
+ ↓
+Backend Pull
+ ↓
+Reconciliation
+```
+
+### 50.15 Conflict E2E
+
+Test:
+
+```text
+Device A → Update Expense
+Device B → Update Same Expense
+        ↓
+Synchronization
+        ↓
+Conflict
+        ↓
+Resolution
+        ↓
+Converged State
+```
+
+### 50.16 Financial Conflict E2E
+
+Verify that a conflict involving:
+
+```text
+Expense Amount
+Expense Splits
+Settlement
+```
+
+does not corrupt the final balance.
+
+### 50.17 Authorization E2E
+
+Test:
+
+```text
+Unauthorized User
+ ↓
+Protected Group
+ ↓
+Operation Rejected
+```
+
+### 50.18 Device Revocation E2E
+
+Test:
+
+```text
+Device Active
+ ↓
+Device Revoked
+ ↓
+Sync Attempt
+ ↓
+Rejected
+```
+
+### 50.19 Authentication Expiration E2E
+
+Test:
+
+```text
+Authenticated User
+ ↓
+Session Expires
+ ↓
+Sync
+ ↓
+Re-authentication
+ ↓
+Sync Continues
+```
+
+### 50.20 Application Restart E2E
+
+Test:
+
+```text
+Offline Mutation
+ ↓
+Application Terminated
+ ↓
+Application Restart
+ ↓
+Pending Operation Recovered
+ ↓
+Synchronization
+```
+
+### 50.21 Device Restart E2E
+
+Test:
+
+```text
+Pending Sync
+ ↓
+Device Restart
+ ↓
+Recovery
+ ↓
+Synchronization
+```
+
+### 50.22 Background Sync E2E
+
+Test:
+
+```text
+Pending Operation
+ ↓
+Background Worker
+ ↓
+Synchronization
+ ↓
+Updated SyncState
+```
+
+### 50.23 Retry E2E
+
+Test:
+
+```text
+Sync Attempt
+ ↓
+Network Failure
+ ↓
+Retry
+ ↓
+Success
+```
+
+### 50.24 Timeout E2E
+
+Test:
+
+```text
+Sync Request
+ ↓
+Timeout
+ ↓
+Retry
+ ↓
+No Duplicate Effect
+```
+
+### 50.25 Migration E2E
+
+Test:
+
+```text
+Existing Application Data
+ ↓
+Application Upgrade
+ ↓
+Database Migration
+ ↓
+Existing Data Available
+ ↓
+Synchronization Continues
+```
+
+### 50.26 E2E Balance Verification
+
+After each major financial workflow, verify:
+
+```text
+Expense State
++
+Settlement State
++
+Balance State
+```
+
+are consistent.
+
+### 50.27 E2E Data Verification
+
+E2E tests should verify both:
+
+```text
+UI State
++
+Persisted State
+```
+
+where appropriate.
+
+### 50.28 E2E Synchronization Verification
+
+Verify:
+
+```text
+Local State
+=
+Expected Remote State
+```
+
+after synchronization completes.
+
+### 50.29 E2E Convergence Verification
+
+For multi-device scenarios:
+
+```text
+Device A Final State
+=
+Device B Final State
+```
+
+for the same synchronized Domain scope.
+
+### 50.30 E2E Error Verification
+
+Verify that failures result in appropriate User-visible behavior without exposing internal implementation details.
+
+### 50.31 E2E Test Data Isolation
+
+Each E2E scenario should use isolated test Users/Groups/data.
+
+### 50.32 E2E Cleanup
+
+After each scenario:
+
+```text
+Test Data
+ ↓
+Cleanup
+```
+
+must prevent cross-test contamination.
+
+### 50.33 E2E Test Stability
+
+E2E tests should avoid unnecessary timing assumptions.
+
+Use explicit synchronization conditions rather than arbitrary sleep durations wherever possible.
+
+### 50.34 E2E Test Execution
+
+Critical E2E scenarios should execute in CI where practical.
+
+Physical P2P scenarios may execute in dedicated device test environments.
+
+### 50.35 E2E Regression Suite
+
+The following workflows should form the core regression suite:
+
+```text
+Create Group
+Add Member
+Create Expense
+Create Settlement
+Offline Expense
+Offline Settlement
+Backend Sync
+P2P Sync
+Conflict Resolution
+Authentication Recovery
+Device Revocation
+Application Restart
+Database Migration
+```
+
+### 50.36 E2E Completion Criteria
+
+End-to-End Testing is complete when:
+
+```text
+Core User Workflows Passing
+Offline Workflows Passing
+Backend Sync Passing
+P2P Sync Passing
+Conflict Workflow Passing
+Financial Verification Passing
+Authentication Workflow Passing
+Authorization Workflow Passing
+Recovery Workflow Passing
+Migration Workflow Passing
+Background Sync Passing
+Regression Suite Passing
+```
+
+### 50.37 End-to-End Testing Invariants
+
+The following rules are mandatory:
+
+- E2E tests must validate complete business workflows.
+- Critical financial workflows must verify final balances.
+- Offline mutations must be verified after reconnection.
+- Backend synchronization must be verified across multiple Devices.
+- P2P synchronization must be verified where supported.
+- Conflict workflows must verify both resolution and final convergence.
+- Authentication and Authorization workflows must be tested end-to-end.
+- Device revocation must be tested end-to-end.
+- Application/process restart must not lose pending synchronization work.
+- Database migrations must preserve existing application data.
+- Background synchronization must be tested through the actual scheduling path where practical.
+- E2E test data must remain isolated.
+- Critical E2E scenarios must be part of the regression suite.
+
 ## 51. Security Testing
+
+### 51.1 Purpose
+
+This section defines the implementation of Security Testing for SplitSync V1.
+
+Security testing must verify:
+
+```text
+Authentication
+Authorization
+Device Identity
+Data Protection
+Transport Security
+P2P Security
+Secret Management
+Replay Protection
+```
+
+### 51.2 Security Testing Principle
+
+Security tests must verify that unauthorized actions fail safely and authorized actions remain functional.
+
+### 51.3 Authentication Testing
+
+Test:
+
+```text
+Valid Credentials
+Invalid Credentials
+Expired Credentials
+Missing Credentials
+Refresh
+Logout
+```
+
+### 51.4 Authorization Testing
+
+Test:
+
+```text
+Authorized User
+Unauthorized User
+Unauthorized Group
+Unauthorized Membership
+Unauthorized Operation
+```
+
+### 51.5 Resource Authorization
+
+Verify that a User cannot access resources outside the authorized Group/context.
+
+### 51.6 Device Identity Testing
+
+Test:
+
+```text
+Valid Device
+Unknown Device
+Invalid Device Identity
+Revoked Device
+```
+
+### 51.7 Device Revocation Testing
+
+Verify:
+
+```text
+Active Device
+      ↓
+Revoked
+      ↓
+API Request
+      ↓
+Rejected
+```
+
+and:
+
+```text
+Active Device
+      ↓
+Revoked
+      ↓
+P2P Connection
+      ↓
+Rejected
+```
+
+### 51.8 API Security Testing
+
+Test:
+
+```text
+Missing Authentication
+Invalid Authentication
+Insufficient Authorization
+Malformed Request
+Invalid Resource
+Unsupported Version
+```
+
+### 51.9 API Input Validation
+
+Test malicious and invalid inputs against:
+
+```text
+Amounts
+IDs
+Strings
+Dates
+Enum Values
+Pagination
+Synchronization Payloads
+```
+
+### 51.10 Injection Testing
+
+Verify protection against applicable injection classes, including:
+
+```text
+SQL Injection
+Command Injection
+JSON Manipulation
+Query Manipulation
+```
+
+### 51.11 Database Security Testing
+
+Verify:
+
+```text
+Parameterized Queries
+Access Controls
+Schema Constraints
+Credential Protection
+```
+
+### 51.12 Transport Security Testing
+
+Verify Backend communication uses secure transport.
+
+```text
+Android
+   ↓ HTTPS
+Backend
+```
+
+### 51.13 P2P Transport Security
+
+Verify P2P communication provides the security guarantees defined by the Security Architecture.
+
+### 51.14 P2P Identity Testing
+
+Test:
+
+```text
+Valid Peer
+Fake Peer
+Spoofed Peer
+Unknown Peer
+Revoked Peer
+```
+
+### 51.15 P2P Handshake Security
+
+Verify that synchronization cannot begin before:
+
+```text
+Identity Verification
+Authentication
+Authorization
+Secure Session
+```
+
+### 51.16 Replay Testing
+
+Test replay of:
+
+```text
+Authentication Messages
+SyncOperations
+P2P Messages
+Previously Processed Requests
+```
+
+Expected:
+
+```text
+Replay Rejected
+```
+
+or safely treated as an already-processed operation.
+
+### 51.17 SyncOperation Security
+
+Verify that a User/Device cannot forge an operation that it is not authorized to create.
+
+### 51.18 Sync Payload Tampering
+
+Modify synchronization payloads during testing and verify integrity validation rejects tampered data.
+
+### 51.19 Conflict Security
+
+Verify that a malicious or unauthorized operation cannot use conflict handling to bypass authorization or Domain validation.
+
+### 51.20 Financial Security Testing
+
+Verify unauthorized Users cannot modify:
+
+```text
+Expense Amount
+ExpenseSplits
+Settlement Amount
+Balance-Relevant Data
+```
+
+### 51.21 Membership Security Testing
+
+Verify unauthorized Users cannot:
+
+```text
+Add Members
+Remove Members
+Change Roles
+Access Restricted Groups
+```
+
+### 51.22 Secret Management Testing
+
+Verify:
+
+```text
+Secrets Not In Source Control
+Secrets Not In Logs
+Secrets Not In APK
+Secrets Not In API Responses
+```
+
+where applicable.
+
+### 51.23 Logging Security Testing
+
+Search test logs for:
+
+```text
+Passwords
+Tokens
+Private Keys
+Encryption Keys
+Sensitive Financial Payloads
+```
+
+and verify they are not exposed.
+
+### 51.24 Error Security Testing
+
+Verify errors do not expose:
+
+```text
+Stack Traces
+Database Details
+Internal Paths
+Credentials
+Security Configuration
+```
+
+to Users.
+
+### 51.25 Session Security Testing
+
+Test:
+
+```text
+Session Expiration
+Invalid Session
+Logout
+Session Reuse
+Expired P2P Session
+```
+
+### 51.26 Authentication Brute-Force Protection
+
+Where applicable, test that repeated authentication failures are handled according to the Security Architecture.
+
+### 51.27 Rate Limiting Testing
+
+Where API rate limiting is implemented, test:
+
+```text
+Normal Request Rate
+Excessive Request Rate
+Recovery After Limit
+```
+
+### 51.28 Authorization Regression Testing
+
+Every new protected endpoint or operation must have an authorization test.
+
+### 51.29 Dependency Security Testing
+
+Project dependencies should be checked for known vulnerabilities through the selected dependency/security tooling.
+
+### 51.30 Android Security Testing
+
+Test:
+
+```text
+Secure Storage
+Application Permissions
+Exported Components
+Backup Configuration
+Network Security Configuration
+```
+
+where applicable to the implementation.
+
+### 51.31 Backend Security Testing
+
+Test:
+
+```text
+Authentication
+Authorization
+Input Validation
+Database Access
+Secret Handling
+API Exposure
+```
+
+### 51.32 Security Regression Testing
+
+Every discovered security defect must result in a regression test where practical.
+
+### 51.33 Security Test Environment
+
+Security tests must use isolated test credentials and test data.
+
+Production credentials must never be used for security testing.
+
+### 51.34 Security Testing Completion Criteria
+
+Security Testing is complete when:
+
+```text
+Authentication Tests Passing
+Authorization Tests Passing
+Device Identity Tests Passing
+Device Revocation Tests Passing
+API Security Tests Passing
+Input Validation Tests Passing
+Transport Security Tests Passing
+P2P Security Tests Passing
+Replay Tests Passing
+Sync Security Tests Passing
+Secret Handling Tests Passing
+Logging Security Tests Passing
+Error Security Tests Passing
+Dependency Security Checks Passing
+Security Regression Tests Passing
+```
+
+### 51.35 Security Testing Invariants
+
+The following rules are mandatory:
+
+- Authentication must be tested for valid and invalid credentials.
+- Authorization must be tested independently from authentication.
+- Resource-level authorization must be tested.
+- Revoked Devices must be rejected.
+- Unauthorized financial mutations must be rejected.
+- P2P peer identity must be verified.
+- P2P synchronization must require authentication and authorization.
+- Replay attacks must be tested.
+- Tampered synchronization payloads must be rejected.
+- Secrets must not appear in logs or source control.
+- User-facing errors must not expose internal security details.
+- Security defects must receive regression tests.
+- Production credentials must never be used in security tests.
+
 
 ## 52. Performance Testing
 
+### 52.1 Purpose
+
+This section defines the implementation of Performance Testing for SplitSync V1.
+
+Performance testing must verify that the application remains responsive and synchronization remains efficient under expected workloads.
+
+### 52.2 Performance Testing Principle
+
+Performance testing must measure:
+
+```text
+Latency
+Throughput
+Memory
+CPU
+Database Performance
+Network Usage
+Battery Impact
+Synchronization Time
+```
+
+### 52.3 Performance Test Categories
+
+Test:
+
+```text
+Android
+Backend
+Database
+API
+Synchronization
+P2P
+```
+
+### 52.4 Android UI Performance
+
+Measure important UI operations such as:
+
+```text
+Group List
+Expense List
+Expense Details
+Balance Screen
+Settlement Screen
+```
+
+### 52.5 Database Performance
+
+Measure:
+
+```text
+Insert
+Update
+Query
+Join
+Aggregation
+Transaction
+```
+
+### 52.6 Expense Query Performance
+
+Test queries over:
+
+```text
+Small Dataset
+Medium Dataset
+Large Dataset
+```
+
+### 52.7 Balance Calculation Performance
+
+Measure balance calculation with increasing:
+
+```text
+Groups
+Members
+Expenses
+Settlements
+```
+
+### 52.8 Repository Performance
+
+Measure repository operations under realistic data volumes.
+
+### 52.9 API Latency
+
+Measure:
+
+```text
+Request
+ ↓
+Backend
+ ↓
+Response
+```
+
+under normal and loaded conditions.
+
+### 52.10 API Throughput
+
+Measure supported request throughput for important endpoints.
+
+### 52.11 Synchronization Performance
+
+Measure:
+
+```text
+Push Duration
+Pull Duration
+Full Sync Duration
+Incremental Sync Duration
+```
+
+### 52.12 Batch Performance
+
+Test different synchronization batch sizes.
+
+```text
+Small Batch
+Medium Batch
+Large Batch
+```
+
+### 52.13 Large Sync Queue
+
+Measure synchronization of a large number of pending operations.
+
+### 52.14 Pull Performance
+
+Measure processing of large remote change sets.
+
+### 52.15 Cursor Performance
+
+Verify incremental synchronization does not repeatedly process already synchronized data.
+
+### 52.16 Conflict Performance
+
+Measure conflict detection under concurrent operation workloads.
+
+### 52.17 P2P Performance
+
+Measure:
+
+```text
+Discovery Time
+Handshake Time
+Connection Time
+Transfer Rate
+Sync Duration
+```
+
+### 52.18 P2P Large Transfer
+
+Test P2P synchronization with large operation queues.
+
+### 52.19 Memory Testing
+
+Measure memory usage during:
+
+```text
+Large Expense List
+Large Sync Batch
+P2P Transfer
+Initial Synchronization
+```
+
+### 52.20 Memory Safety
+
+Verify synchronization does not load an entire large dataset into memory unnecessarily.
+
+### 52.21 CPU Testing
+
+Measure CPU usage during:
+
+```text
+Balance Calculation
+Database Operations
+Serialization
+Synchronization
+P2P Transfer
+```
+
+### 52.22 Battery Testing
+
+Where practical, measure battery impact of:
+
+```text
+Background Sync
+Retry
+P2P Discovery
+P2P Synchronization
+```
+
+### 52.23 Network Usage
+
+Measure network data consumption for:
+
+```text
+Push
+Pull
+Full Sync
+Incremental Sync
+P2P
+```
+
+### 52.24 Offline Performance
+
+Verify local operations remain responsive without network connectivity.
+
+### 52.25 Startup Performance
+
+Measure:
+
+```text
+Application Start
+Database Initialization
+Sync State Loading
+```
+
+### 52.26 Background Worker Performance
+
+Measure:
+
+```text
+Worker Start
+Sync Execution
+Worker Completion
+```
+
+### 52.27 Backend Load Testing
+
+The Backend should be tested under expected concurrent User/device workloads.
+
+### 52.28 Database Load Testing
+
+Measure database behavior under concurrent:
+
+```text
+Reads
+Writes
+Transactions
+Synchronization Operations
+```
+
+### 52.29 Stress Testing
+
+Increase workload beyond expected normal usage to identify failure thresholds.
+
+### 52.30 Endurance Testing
+
+Run synchronization and application workflows over extended periods to detect:
+
+```text
+Memory Leaks
+Queue Growth
+Resource Leaks
+Performance Degradation
+```
+
+### 52.31 Performance Baselines
+
+The project should define baseline measurements for critical operations.
+
+Examples:
+
+```text
+Expense Creation
+Balance Calculation
+Incremental Sync
+Initial Sync
+P2P Sync
+```
+
+### 52.32 Performance Regression
+
+Performance-sensitive tests should be repeated after major architectural or database changes.
+
+### 52.33 Performance Monitoring
+
+Production performance should be observable through appropriate metrics without collecting unnecessary sensitive data.
+
+### 52.34 Performance Test Environment
+
+Performance testing should use a controlled environment with documented:
+
+```text
+Device
+Android Version
+Backend Configuration
+Database Size
+Network Conditions
+Dataset Size
+```
+
+### 52.35 Performance Completion Criteria
+
+Performance Testing is complete when:
+
+```text
+Android Performance Tests Passing
+Database Performance Tests Passing
+API Performance Tests Passing
+Sync Performance Tests Passing
+P2P Performance Tests Passing
+Memory Tests Passing
+CPU Tests Passing
+Network Usage Measured
+Battery Impact Evaluated
+Load Tests Passing
+Stress Tests Completed
+Performance Baselines Documented
+```
+
+### 52.36 Performance Testing Invariants
+
+The following rules are mandatory:
+
+- Performance must be measured using representative data.
+- Large synchronization datasets must be tested.
+- Synchronization must use bounded memory.
+- Incremental Pull must not repeatedly process unnecessary historical data.
+- Database queries must be tested at realistic scale.
+- Critical financial calculations must remain responsive.
+- Background synchronization must avoid unnecessary resource consumption.
+- P2P synchronization must be tested with realistic operation queues.
+- Performance regressions must be identified after significant architectural changes.
+
+
 ## 53. CI/CD Implementation
+
+### 53.1 Purpose
+
+This section defines the implementation of Continuous Integration and Continuous Delivery for SplitSync V1.
+
+CI/CD automates:
+
+```text
+Build
+Test
+Validate
+Package
+Deploy
+```
+
+### 53.2 CI/CD Principle
+
+Every change should pass automated validation before it becomes releasable.
+
+```text
+Commit
+ ↓
+Build
+ ↓
+Static Checks
+ ↓
+Unit Tests
+ ↓
+Integration Tests
+ ↓
+Package
+ ↓
+Deploy
+```
+
+### 53.3 CI Pipeline
+
+The CI pipeline should contain stages such as:
+
+```text
+Checkout
+Dependency Resolution
+Compile
+Static Analysis
+Unit Tests
+Integration Tests
+Build Artifacts
+Security Checks
+```
+
+### 53.4 Android CI
+
+Android CI should execute:
+
+```text
+Compile
+Lint
+Unit Tests
+Instrumentation Tests
+Build APK/AAB
+```
+
+according to the release workflow.
+
+### 53.5 Backend CI
+
+Backend CI should execute:
+
+```text
+Compile
+Static Analysis
+Unit Tests
+Integration Tests
+API Tests
+Build Artifact
+```
+
+### 53.6 Database Migration CI
+
+CI must verify database migrations.
+
+```text
+Previous Schema
+      ↓
+Migration
+      ↓
+Current Schema
+      ↓
+Migration Tests
+```
+
+### 53.7 Synchronization CI
+
+Synchronization tests should execute automatically.
+
+### 53.8 P2P CI
+
+P2P unit/integration tests should execute in CI.
+
+Physical-device P2P tests may execute in a dedicated device pipeline.
+
+### 53.9 Security CI
+
+CI should execute automated security checks such as:
+
+```text
+Dependency Vulnerability Checks
+Secret Detection
+Static Security Analysis
+```
+
+where supported.
+
+### 53.10 Code Quality
+
+CI should enforce the selected:
+
+```text
+Formatting
+Lint
+Static Analysis
+Quality Rules
+```
+
+### 53.11 Test Failure
+
+Required test failures must fail the pipeline.
+
+### 53.12 Build Failure
+
+Compilation or packaging failures must fail the pipeline.
+
+### 53.13 Artifact Generation
+
+Successful builds should produce versioned artifacts.
+
+Examples:
+
+```text
+Android APK
+Android AAB
+Backend Artifact
+```
+
+### 53.14 Artifact Naming
+
+Artifacts should include enough information to identify:
+
+```text
+Application
+Version
+Build
+Environment
+```
+
+### 53.15 Build Metadata
+
+Build artifacts should expose a build/version identifier for diagnostics.
+
+### 53.16 Branch Validation
+
+Pull requests should run the required validation pipeline before merge.
+
+### 53.17 Main Branch
+
+The main branch should remain buildable and testable.
+
+### 53.18 Release Branch
+
+If release branches are used, they should follow the project's branching strategy.
+
+### 53.19 Versioning
+
+CI/CD must integrate:
+
+```text
+Application Version
+API Version
+Database Version
+Build Number
+```
+
+where applicable.
+
+### 53.20 Environment Separation
+
+CI/CD environments must remain separate:
+
+```text
+Development
+Test
+Production
+```
+
+### 53.21 Secrets in CI
+
+Secrets must be supplied through secure CI secret management.
+
+They must not be committed to the repository.
+
+### 53.22 Deployment Approval
+
+Production deployment should require the approval mechanism defined by the project.
+
+### 53.23 Deployment Rollback
+
+Deployment procedures must define rollback or recovery procedures.
+
+### 53.24 Database Deployment
+
+Backend deployments involving schema changes must execute the approved migration procedure.
+
+### 53.25 Deployment Ordering
+
+Where required:
+
+```text
+Database Migration
+      ↓
+Backend Deployment
+      ↓
+Client Compatibility
+```
+
+must follow the compatibility strategy.
+
+### 53.26 API Compatibility
+
+Deployments must not introduce an API change that breaks currently supported clients.
+
+### 53.27 Release Validation
+
+Before release:
+
+```text
+Build
+Tests
+Security Checks
+Migration Checks
+Performance Checks
+```
+
+must meet the release criteria.
+
+### 53.28 CI Logs
+
+CI logs must not expose:
+
+```text
+Secrets
+Credentials
+Private Keys
+Tokens
+```
+
+### 53.29 CI Artifact Security
+
+Build artifacts and deployment credentials must be protected.
+
+### 53.30 CI Monitoring
+
+Pipeline failures should be observable and traceable.
+
+### 53.31 CI/CD Completion Criteria
+
+CI/CD Implementation is complete when:
+
+```text
+Android CI Implemented
+Backend CI Implemented
+Unit Tests Integrated
+Integration Tests Integrated
+Migration Tests Integrated
+Sync Tests Integrated
+P2P Tests Integrated
+Security Checks Integrated
+Static Analysis Integrated
+Artifact Generation Implemented
+Environment Separation Implemented
+Secret Management Implemented
+Deployment Pipeline Implemented
+Rollback Procedure Defined
+```
+
+### 53.32 CI/CD Invariants
+
+The following rules are mandatory:
+
+- Required tests must run automatically.
+- Required test failures must block the relevant pipeline stage.
+- Build failures must block deployment.
+- Security checks must run before release.
+- Secrets must not be committed to source control.
+- CI logs must not expose secrets.
+- Development, Test, and Production environments must remain separated.
+- Database migrations must be validated before deployment.
+- API compatibility must be preserved for supported clients.
+- Production deployment must follow an explicit approval/release process.
+
 
 ## 54. Development Deployment
 
+### 54.1 Purpose
+
+This section defines the deployment process for the Development environment.
+
+### 54.2 Development Environment
+
+Development deployment is intended for:
+
+```text
+Active Development
+Feature Testing
+Developer Integration
+Debugging
+```
+
+### 54.3 Development Components
+
+The environment may contain:
+
+```text
+Android Development Build
+Development Backend
+Development Database
+Development Configuration
+```
+
+### 54.4 Development Backend
+
+The Backend must use Development-specific configuration.
+
+### 54.5 Development Database
+
+Development database data must remain isolated from Test and Production data.
+
+### 54.6 Android Development Build
+
+The Android application should use the Development configuration.
+
+### 54.7 Development API
+
+The Android development build must target the Development API endpoint.
+
+### 54.8 Development Secrets
+
+Development secrets must be managed separately from production secrets.
+
+### 54.9 Development Deployment Flow
+
+```text
+Developer Change
+      ↓
+CI Validation
+      ↓
+Build
+      ↓
+Deploy Development Backend
+      ↓
+Run Migrations
+      ↓
+Deploy / Install Android Build
+      ↓
+Smoke Test
+```
+
+### 54.10 Development Database Migration
+
+Development deployments may automatically execute approved migrations.
+
+### 54.11 Development Data
+
+Development data may be reset/recreated when required.
+
+### 54.12 Development Logging
+
+Development may enable more verbose diagnostic logging than Production.
+
+### 54.13 Development P2P
+
+P2P development testing should use designated Development Devices/peer identities.
+
+### 54.14 Development Testing
+
+After deployment, execute smoke tests:
+
+```text
+Application Start
+Login
+Group Creation
+Expense Creation
+Sync
+Settlement
+```
+
+### 54.15 Development Failure
+
+If deployment fails:
+
+```text
+Deployment Failure
+      ↓
+Fix / Rollback
+      ↓
+Re-run Validation
+```
+
+### 54.16 Development Rollback
+
+Development rollback may be simpler than Production but must not leave the database in an incompatible state.
+
+### 54.17 Development Completion Criteria
+
+Development Deployment is complete when:
+
+```text
+Development Backend Deployed
+Development Database Available
+Migrations Applied
+Android Development Build Available
+Configuration Applied
+Smoke Tests Passing
+P2P Development Environment Available
+Logging Available
+```
+
+### 54.18 Development Deployment Invariants
+
+The following rules are mandatory:
+
+- Development must remain isolated from Production.
+- Development must not use Production credentials.
+- Development must not use Production financial data.
+- Development API configuration must point to Development infrastructure.
+- Development database migrations must be validated.
+- Development builds must not accidentally target Production services.
+- Development P2P identities must be separated from Production identities.
+
+
 ## 55. Test Deployment
+
+### 55.1 Purpose
+
+This section defines the deployment process for the Test environment.
+
+The Test environment is used for:
+
+```text
+Integration Testing
+System Testing
+E2E Testing
+Security Testing
+Performance Testing
+Release Validation
+```
+
+### 55.2 Test Environment
+
+The Test environment should contain:
+
+```text
+Test Android Build
+Test Backend
+Test Database
+Test Configuration
+Test Accounts
+```
+
+### 55.3 Test Data Isolation
+
+Test data must remain isolated from Development and Production.
+
+### 55.4 Test Backend
+
+The Backend must use Test-specific configuration.
+
+### 55.5 Test Database
+
+The Test database must contain only controlled test data.
+
+### 55.6 Test Android Build
+
+The Android Test build must target the Test API endpoint.
+
+### 55.7 Test Secrets
+
+Test credentials and secrets must be separate from Development and Production credentials.
+
+### 55.8 Test Deployment Flow
+
+```text
+Validated Build
+      ↓
+Deploy Test Backend
+      ↓
+Run Database Migrations
+      ↓
+Deploy Test Android Build
+      ↓
+Run Integration Tests
+      ↓
+Run E2E Tests
+      ↓
+Release Validation
+```
+
+### 55.9 Test Migration
+
+All database migrations must execute through the same migration mechanism intended for release environments.
+
+### 55.10 Test Configuration
+
+Test configuration should use deterministic:
+
+```text
+Backend URL
+Database
+Authentication
+Sync Settings
+P2P Settings
+```
+
+### 55.11 Test Accounts
+
+Dedicated test accounts should be used for:
+
+```text
+User
+Admin
+Group Member
+Unauthorized User
+Test Device
+Test Peer
+```
+
+where required.
+
+### 55.12 Test P2P Environment
+
+The Test environment should provide controlled P2P peers/devices where P2P E2E testing is required.
+
+### 55.13 Test Security
+
+Test deployment must support:
+
+```text
+Authentication Tests
+Authorization Tests
+Device Revocation Tests
+P2P Security Tests
+```
+
+without exposing production credentials.
+
+### 55.14 Test Performance
+
+Performance tests should execute against a controlled Test environment with documented resources and dataset size.
+
+### 55.15 Test Logging
+
+Test logging may be more verbose than Production but must still follow sensitive-data protection rules.
+
+### 55.16 Test Smoke Tests
+
+After deployment:
+
+```text
+Application Start
+Authentication
+Group Creation
+Expense Creation
+Settlement
+Backend Sync
+P2P Sync
+```
+
+should be validated where applicable.
+
+### 55.17 Test Regression Suite
+
+The required regression suite should execute after deployment.
+
+### 55.18 Test Failure
+
+If Test deployment or validation fails:
+
+```text
+Deployment / Test Failure
+      ↓
+Block Release
+      ↓
+Fix
+      ↓
+Redeploy
+```
+
+### 55.19 Test Rollback
+
+Test deployment must support rollback or redeployment to a known-good state.
+
+### 55.20 Test Release Candidate
+
+A build that passes the required Test environment validation may be promoted as a release candidate.
+
+```text
+Test Passed
+      ↓
+Release Candidate
+```
+
+### 55.21 Test Environment Promotion
+
+Promotion must use the validated artifact rather than rebuilding an unverified artifact for the next environment.
+
+### 55.22 Test Completion Criteria
+
+Test Deployment is complete when:
+
+```text
+Test Backend Deployed
+Test Database Available
+Migrations Applied
+Test Android Build Deployed
+Test Configuration Applied
+Integration Tests Passing
+E2E Tests Passing
+Security Tests Passing
+Required Performance Tests Passing
+P2P Tests Passing
+Regression Suite Passing
+Release Candidate Validated
+```
+
+### 55.23 Test Deployment Invariants
+
+The following rules are mandatory:
+
+- Test infrastructure must remain isolated from Production.
+- Test credentials must never be Production credentials.
+- Test data must not contain uncontrolled Production financial data.
+- Test Android builds must target Test infrastructure.
+- Database migrations must be executed and validated.
+- The same validated artifact must be promoted where possible.
+- Required integration, E2E, security, and synchronization tests must pass before release promotion.
+- P2P Test Devices/identities must remain isolated from Production peers.
+- Test failures must block release promotion.
+- Test deployment must support recovery to a known-good state.
 
 ## 56. Staging Deployment
 
