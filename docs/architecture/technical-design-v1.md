@@ -51217,3 +51217,2113 @@ The following rules are mandatory for V1:
 - Critical requirements should be traceable to tests.
 - Testing must preserve the local-first architecture.
 - Testing must preserve the offline-first behavior of SplitSync.
+
+## 31. Deployment Architecture
+
+### 31.1 Purpose
+
+This section defines the deployment architecture for SplitSync V1.
+
+The deployment architecture describes how:
+
+```text
+Android Application
+        ↓
+Backend Services
+        ↓
+Database
+        ↓
+Supporting Infrastructure
+```
+
+are built, configured, deployed, monitored, and maintained across:
+
+```text
+Development
+Test
+Staging
+Production
+```
+
+### 31.2 Core Principle
+
+SplitSync follows:
+
+```text
+Automated Build
++
+Controlled Deployment
++
+Environment Isolation
++
+Database Migration
++
+Health Validation
++
+Rollback Capability
+```
+
+Deployment must not change the core Domain behavior of the application.
+
+### 31.3 Deployment Components
+
+The deployment architecture consists of:
+
+```text
+Source Code
+    ↓
+CI/CD Pipeline
+    ↓
+Build Artifacts
+    ↓
+Android Application
+    ↓
+Backend Application
+    ↓
+Database Migration
+    ↓
+Infrastructure
+    ↓
+Monitoring
+```
+
+### 31.4 High-Level Deployment Architecture
+
+```text
+                    Source Repository
+                           │
+                           ↓
+                       CI / CD
+                    ┌──────┴──────┐
+                    ↓             ↓
+              Android Build   Backend Build
+                    │             │
+                    ↓             ↓
+              Android Artifact Backend Artifact
+                    │             │
+                    ↓             ↓
+              App Distribution   Deployment
+                                  │
+                                  ↓
+                           Backend Infrastructure
+                                  │
+                         ┌────────┴────────┐
+                         ↓                 ↓
+                    Application        Database
+                    Instances          Cluster / DB
+                         │
+                         ↓
+                    Monitoring
+                    Logging
+                    Metrics
+```
+
+### 31.5 Deployment Environments
+
+Deployment must support:
+
+```text
+Development
+Test
+Staging
+Production
+```
+
+Each environment must remain isolated according to the Environment Strategy.
+
+### 31.6 Development Deployment
+
+Development deployment may be local.
+
+Example:
+
+```text
+Developer Machine
+      ↓
+Android Debug Build
+      ↓
+Local / Development Backend
+      ↓
+Development Database
+```
+
+### 31.7 Test Deployment
+
+Test deployment is primarily used for:
+
+```text
+Automated Integration Testing
+API Testing
+Database Testing
+Synchronization Testing
+```
+
+Conceptually:
+
+```text
+CI/CD
+  ↓
+Test Backend
+  ↓
+Test Database
+```
+
+### 31.8 Staging Deployment
+
+Staging should closely resemble Production.
+
+```text
+Staging Android Build
+        ↓
+Staging Backend
+        ↓
+Staging Database
+        ↓
+Monitoring
+```
+
+### 31.9 Production Deployment
+
+Production deployment consists of:
+
+```text
+Production Android Release
+        ↓
+Production Backend
+        ↓
+Production Database
+        ↓
+Production Monitoring
+```
+
+### 31.10 Environment Isolation
+
+Production must never share:
+
+```text
+Development Database
+Test Database
+Development Secrets
+Test Secrets
+Staging Secrets
+```
+
+### 31.11 Deployment Artifact
+
+Every deployment should be associated with a traceable artifact.
+
+An artifact should be identifiable by:
+
+```text
+Application Version
+Build Version
+Source Commit
+Build Timestamp
+```
+
+### 31.12 Backend Artifact
+
+The Backend should produce a deployable artifact.
+
+For example:
+
+```text
+Spring Boot Application
+        ↓
+JAR / Container Image
+```
+
+The exact packaging mechanism may be finalized during infrastructure implementation.
+
+### 31.13 Android Artifact
+
+Android deployment produces:
+
+```text
+APK
+```
+
+for development/testing where appropriate, and preferably:
+
+```text
+AAB
+```
+
+for Production distribution through supported app distribution channels.
+
+### 31.14 Build Once Principle
+
+Where practical, the Backend should follow:
+
+```text
+Build Once
+      ↓
+Test
+      ↓
+Staging
+      ↓
+Production
+```
+
+Environment-specific configuration should be injected during deployment.
+
+### 31.15 Android Build Variants
+
+Android may use:
+
+```text
+Build Types
++
+Product Flavors
+```
+
+to produce environment-specific builds.
+
+Example:
+
+```text
+devDebug
+testDebug
+stagingRelease
+prodRelease
+```
+
+The exact Gradle configuration is implementation-specific.
+
+### 31.16 Production Android Build
+
+Production Android builds must:
+
+```text
+Use Production Configuration
+Use Production API
+Disable Debug Features
+Use Production Signing
+Use Production Release Settings
+```
+
+### 31.17 Development Android Build
+
+Development builds may:
+
+```text
+Enable Debug Logging
+Use Development API
+Enable Development Diagnostics
+Use Debug Signing
+```
+
+### 31.18 Staging Android Build
+
+Staging builds should:
+
+```text
+Use Staging API
+Use Staging Configuration
+Support Release Validation
+```
+
+### 31.19 Application ID
+
+If multiple variants need to coexist on the same device, separate application IDs may be used.
+
+Example:
+
+```text
+com.splitsync.android.dev
+com.splitsync.android.staging
+com.splitsync.android
+```
+
+### 31.20 Android Signing
+
+Android signing must remain environment-aware.
+
+Development signing must remain separate from Production signing.
+
+### 31.21 Production Signing Key
+
+The Production signing key must be protected and must not be stored directly in source control.
+
+### 31.22 Backend Deployment
+
+The Backend deployment flow is:
+
+```text
+Source Code
+      ↓
+Build
+      ↓
+Unit Tests
+      ↓
+Integration Tests
+      ↓
+Artifact
+      ↓
+Staging
+      ↓
+Production
+```
+
+### 31.23 Backend Runtime
+
+The Backend may run as:
+
+```text
+JVM Process
+```
+
+or:
+
+```text
+Container
+```
+
+depending on infrastructure.
+
+### 31.24 Containerized Deployment
+
+A containerized deployment may use:
+
+```text
+Docker Image
+      ↓
+Container Runtime
+      ↓
+Backend Instance
+```
+
+The exact container orchestration technology is not mandatory for V1.
+
+### 31.25 Backend Instance
+
+A Backend instance contains:
+
+```text
+Application
+Configuration
+Runtime
+Logging
+Health Checks
+```
+
+It must not contain persistent financial data in local filesystem storage.
+
+### 31.26 Stateless Backend
+
+The Backend should preferably remain stateless at the application-instance level.
+
+Persistent state belongs in:
+
+```text
+Database
+```
+
+and other explicitly managed persistent infrastructure.
+
+### 31.27 Stateless Deployment
+
+Because Backend instances are stateless:
+
+```text
+Client
+  ↓
+Load Balancer
+  ↓
+Backend Instance A
+```
+
+or:
+
+```text
+Client
+  ↓
+Load Balancer
+  ↓
+Backend Instance B
+```
+
+should produce equivalent application behavior.
+
+### 31.28 Load Balancer
+
+Production may use:
+
+```text
+Internet
+   ↓
+Load Balancer / Reverse Proxy
+   ↓
+Backend Instances
+```
+
+The exact infrastructure is deployment-dependent.
+
+### 31.29 Reverse Proxy
+
+A reverse proxy may provide:
+
+```text
+TLS Termination
+Routing
+Rate Limiting
+Request Size Limits
+Health Checks
+```
+
+### 31.30 HTTPS
+
+Production API communication must use:
+
+```text
+HTTPS
+```
+
+### 31.31 TLS Termination
+
+TLS may terminate at:
+
+```text
+Load Balancer
+```
+
+or:
+
+```text
+Reverse Proxy
+```
+
+depending on infrastructure.
+
+Internal traffic must still follow the security requirements of the deployment environment.
+
+### 31.32 Backend Network
+
+Conceptually:
+
+```text
+Internet
+   ↓
+HTTPS
+   ↓
+Reverse Proxy
+   ↓
+Backend
+   ↓
+Database
+```
+
+The Database should not be directly exposed to the public Internet.
+
+### 31.33 Database Deployment
+
+Database deployment consists of:
+
+```text
+Database Server
++
+Schema
++
+Migrations
++
+Indexes
++
+Constraints
+```
+
+### 31.34 Database Independence
+
+The Database should be independently managed from Backend instances.
+
+Backend replacement must not delete persistent data.
+
+### 31.35 Database Persistence
+
+Production Database storage must be persistent.
+
+The Database must survive:
+
+```text
+Backend Restart
+Backend Replacement
+Backend Scaling
+Application Deployment
+```
+
+### 31.36 Database Migration
+
+Database schema changes must be managed through versioned migrations.
+
+Conceptually:
+
+```text
+Current Schema
+      ↓
+Migration
+      ↓
+New Schema
+```
+
+### 31.37 Migration Before Deployment
+
+Depending on the migration strategy:
+
+```text
+Migration
+      ↓
+Backend Deployment
+```
+
+or:
+
+```text
+Backward-Compatible Backend
+      ↓
+Migration
+      ↓
+New Backend
+```
+
+may be used.
+
+The selected order must preserve compatibility.
+
+### 31.38 Expand-and-Contract
+
+For potentially breaking schema changes, prefer:
+
+```text
+Expand
+   ↓
+Deploy Compatible Code
+   ↓
+Migrate Data
+   ↓
+Switch Usage
+   ↓
+Contract
+```
+
+### 31.39 Migration Validation
+
+Before Production:
+
+```text
+Migration
+      ↓
+Test
+      ↓
+Staging
+      ↓
+Validation
+      ↓
+Production
+```
+
+### 31.40 Migration Backup
+
+Before critical Production migrations, an appropriate recovery/backup strategy must be confirmed.
+
+### 31.41 Migration Failure
+
+If a migration fails:
+
+```text
+Deployment Halted
+      ↓
+Investigate
+      ↓
+Recovery / Rollback Strategy
+```
+
+must be followed.
+
+### 31.42 Application Rollback
+
+Application rollback may involve:
+
+```text
+Previous Backend Artifact
+```
+
+provided that the Database schema remains compatible.
+
+### 31.43 Database Rollback
+
+Database rollback should not be assumed to be safe.
+
+Destructive rollback should be avoided where possible.
+
+### 31.44 Deployment Compatibility
+
+Before deployment, verify:
+
+```text
+Backend Version
+Database Version
+API Version
+Sync Protocol Version
+P2P Protocol Version
+```
+
+are compatible.
+
+### 31.45 Deployment Sequence
+
+A typical Backend Production deployment may follow:
+
+```text
+Release Approved
+      ↓
+Backup / Recovery Check
+      ↓
+Database Migration
+      ↓
+Backend Deployment
+      ↓
+Health Check
+      ↓
+Smoke Test
+      ↓
+Monitoring
+```
+
+The exact migration/deployment order depends on compatibility requirements.
+
+### 31.46 Zero-Downtime Deployment
+
+Zero-downtime deployment may be used when infrastructure supports it.
+
+Conceptually:
+
+```text
+Backend A = Current
+Backend B = New
+```
+
+Then:
+
+```text
+Traffic
+   ↓
+Backend A
+
+Health Check
+   ↓
+Backend B
+
+Traffic Shift
+   ↓
+Backend B
+```
+
+### 31.47 Rolling Deployment
+
+A Production cluster may use rolling deployment:
+
+```text
+Instance A → New
+Instance B → Current
+Instance C → Current
+
+        ↓
+
+Instance A → New
+Instance B → New
+Instance C → Current
+
+        ↓
+
+All → New
+```
+
+### 31.48 Health Checks
+
+Backend instances should expose health information sufficient for deployment infrastructure.
+
+Health checks should distinguish:
+
+```text
+Application Healthy
+Database Available
+Critical Dependencies Available
+```
+
+### 31.49 Liveness
+
+A liveness check determines whether the application process is functioning.
+
+### 31.50 Readiness
+
+A readiness check determines whether the instance can safely receive traffic.
+
+### 31.51 Startup Health
+
+Startup checks should verify required initialization.
+
+Example:
+
+```text
+Application Started
+      ↓
+Configuration Validated
+      ↓
+Database Available
+      ↓
+Ready
+```
+
+### 31.52 Failed Health Check
+
+If a new Backend instance fails health checks:
+
+```text
+Do Not Receive Traffic
+```
+
+and deployment should not continue blindly.
+
+### 31.53 Deployment Smoke Test
+
+After deployment:
+
+```text
+Health Check
+      ↓
+Authentication
+      ↓
+Read Operation
+      ↓
+Synchronization Check
+```
+
+should be validated according to the release policy.
+
+### 31.54 Safe Production Smoke Test
+
+Production smoke tests should preferably be:
+
+```text
+Read-Only
+Non-Destructive
+Low Volume
+```
+
+### 31.55 Deployment Monitoring
+
+After deployment, monitor:
+
+```text
+API Errors
+Latency
+Database Health
+Synchronization Failures
+Conflict Rate
+Crash Rate
+Resource Usage
+```
+
+### 31.56 Deployment Rollback Trigger
+
+Rollback should be considered when there is:
+
+```text
+Critical Error Increase
+Data Integrity Failure
+Synchronization Failure
+Security Failure
+Database Failure
+```
+
+### 31.57 Rollback Flow
+
+```text
+Deployment
+      ↓
+Monitoring
+      ↓
+Problem Detected
+      ↓
+Stop Rollout
+      ↓
+Rollback / Recovery
+      ↓
+Health Check
+      ↓
+Smoke Test
+      ↓
+Resume
+```
+
+### 31.58 Android Rollback
+
+Android rollback is different from Backend rollback because application distribution is controlled through the Android distribution mechanism.
+
+Therefore:
+
+```text
+Backend
+```
+
+must remain compatible with supported previously released Android clients.
+
+### 31.59 Backend Backward Compatibility
+
+Before a Backend deployment, verify compatibility with supported Android versions.
+
+Example:
+
+```text
+Old Android Client
+        ↓
+New Backend
+```
+
+must continue to work if backward compatibility is required.
+
+### 31.60 Sync Compatibility
+
+The same applies to synchronization.
+
+A Backend deployment must not unexpectedly invalidate supported clients':
+
+```text
+SyncOperations
+SyncState
+Cursors
+Conflicts
+```
+
+### 31.61 P2P Compatibility
+
+Backend deployment must not accidentally change P2P protocol behavior in a way that breaks supported clients.
+
+### 31.62 Android Release Flow
+
+A Production Android release may follow:
+
+```text
+Code
+ ↓
+Build
+ ↓
+Unit Tests
+ ↓
+Instrumentation Tests
+ ↓
+Security Checks
+ ↓
+Staging Validation
+ ↓
+Release Build
+ ↓
+Signing
+ ↓
+Distribution
+ ↓
+Production Rollout
+```
+
+### 31.63 Backend Release Flow
+
+```text
+Code
+ ↓
+Build
+ ↓
+Unit Tests
+ ↓
+Integration Tests
+ ↓
+Security Tests
+ ↓
+Artifact
+ ↓
+Staging
+ ↓
+Validation
+ ↓
+Production
+```
+
+### 31.64 CI/CD
+
+CI/CD should automate:
+
+```text
+Build
+Test
+Package
+Validate
+Deploy
+Monitor
+```
+
+where practical.
+
+### 31.65 Continuous Integration
+
+Every relevant source change should trigger:
+
+```text
+Compilation
+Unit Tests
+Static Analysis
+Relevant Integration Tests
+```
+
+### 31.66 Continuous Delivery
+
+Validated artifacts should be deployable to:
+
+```text
+Test
+Staging
+Production
+```
+
+through controlled pipeline stages.
+
+### 31.67 Continuous Deployment
+
+Automatic Production deployment may be introduced later.
+
+For V1, Production deployment should include appropriate approval and validation controls.
+
+### 31.68 Pipeline Structure
+
+Conceptually:
+
+```text
+Commit
+  ↓
+Build
+  ↓
+Unit Tests
+  ↓
+Integration Tests
+  ↓
+Security Checks
+  ↓
+Artifact
+  ↓
+Test
+  ↓
+Staging
+  ↓
+Release Approval
+  ↓
+Production
+```
+
+### 31.69 Build Failure
+
+If compilation or required tests fail:
+
+```text
+Deployment Stops
+```
+
+### 31.70 Integration Test Failure
+
+If critical integration tests fail:
+
+```text
+Deployment Stops
+```
+
+### 31.71 Security Test Failure
+
+Critical security test failures must block Production deployment.
+
+### 31.72 Migration Test Failure
+
+Migration test failures must block Production deployment.
+
+### 31.73 Artifact Immutability
+
+Once a release artifact has been validated, it should not be modified before Production deployment.
+
+### 31.74 Artifact Traceability
+
+Every Production artifact should be traceable to:
+
+```text
+Git Commit
+Version
+Build
+Pipeline
+Release
+```
+
+### 31.75 Source Control
+
+Deployment must originate from controlled source control.
+
+Direct modification of Production application files should not be the normal deployment mechanism.
+
+### 31.76 Release Tagging
+
+Production releases should preferably use explicit version tags.
+
+Example:
+
+```text
+v1.0.0
+v1.1.0
+v1.2.0
+```
+
+### 31.77 Backend Versioning
+
+Backend releases should expose a safe application version.
+
+Example:
+
+```text
+1.2.0
+```
+
+### 31.78 Android Versioning
+
+Android releases should maintain:
+
+```text
+versionName
+versionCode
+```
+
+according to Android release requirements.
+
+### 31.79 Database Versioning
+
+Database migrations should have explicit version identifiers.
+
+Example:
+
+```text
+V1
+V2
+V3
+```
+
+### 31.80 Deployment Metadata
+
+A deployment record should contain:
+
+```text
+Environment
+Application Version
+Build Version
+Commit
+Deployment Time
+Deployment Result
+```
+
+### 31.81 Configuration Deployment
+
+Environment-specific configuration should be injected separately from the application artifact.
+
+Example:
+
+```text
+Artifact
++
+Environment Configuration
+        ↓
+Deployment
+```
+
+### 31.82 Secrets Deployment
+
+Secrets must be provided through secure secret management.
+
+They must not be committed to source control.
+
+### 31.83 Database Credentials
+
+Database credentials must be supplied through secure configuration.
+
+### 31.84 Authentication Secrets
+
+Authentication secrets must be supplied securely.
+
+### 31.85 TLS Certificates
+
+Production TLS certificates must be managed separately from source code and protected appropriately.
+
+### 31.86 Android Secrets
+
+Secrets that must be present in an Android application must be treated carefully because mobile application binaries cannot be considered a secure secret store.
+
+Sensitive server-side secrets must never be embedded in the Android application.
+
+### 31.87 Deployment Configuration
+
+Deployment configuration may include:
+
+```text
+API URL
+Database URL
+Database Credentials
+Logging Level
+Feature Flags
+Authentication Configuration
+Resource Limits
+```
+
+### 31.88 Configuration Validation
+
+Deployment must validate required configuration before the application becomes ready.
+
+### 31.89 Invalid Configuration
+
+If required configuration is missing:
+
+```text
+Application Startup
+      ↓
+Configuration Validation
+      ↓
+Failure
+```
+
+rather than starting with unsafe defaults.
+
+### 31.90 Safe Defaults
+
+Defaults may be used only where they are safe.
+
+Security-sensitive configuration should not silently fall back to insecure values.
+
+### 31.91 Deployment Infrastructure
+
+Production infrastructure may include:
+
+```text
+DNS
+TLS
+Reverse Proxy
+Load Balancer
+Backend
+Database
+Monitoring
+Logging
+Backup
+```
+
+### 31.92 DNS
+
+Production API access should use a stable domain.
+
+Example:
+
+```text
+api.splitsync.example
+```
+
+The actual domain is deployment-specific.
+
+### 31.93 DNS Environment Separation
+
+Different environments should use distinguishable endpoints.
+
+Example:
+
+```text
+dev-api...
+staging-api...
+api...
+```
+
+### 31.94 Network Segmentation
+
+Where practical:
+
+```text
+Public Network
+      ↓
+Reverse Proxy
+      ↓
+Application Network
+      ↓
+Database Network
+```
+
+### 31.95 Database Exposure
+
+The Production database should not be directly exposed to the public Internet.
+
+### 31.96 Backend-to-Database Access
+
+Only authorized Backend infrastructure should access the Production database.
+
+### 31.97 Administrative Access
+
+Infrastructure administration should use controlled access mechanisms.
+
+Direct public access to server administration interfaces should be minimized.
+
+### 31.98 Firewall Rules
+
+Production infrastructure should restrict:
+
+```text
+Inbound Traffic
+Outbound Traffic
+Database Access
+Administrative Access
+```
+
+according to operational requirements.
+
+### 31.99 Resource Configuration
+
+Production Backend instances should define appropriate:
+
+```text
+CPU
+Memory
+Connection Pool
+Thread Pool
+Request Limits
+```
+
+### 31.100 Database Connection Pool
+
+Backend instances should use controlled database connection pools.
+
+Scaling Backend instances must consider total database connection usage.
+
+### 31.101 Horizontal Scaling
+
+Production may scale Backend instances horizontally:
+
+```text
+1 Instance
+   ↓
+2 Instances
+   ↓
+N Instances
+```
+
+### 31.102 Horizontal Scaling Requirements
+
+Horizontal scaling requires:
+
+```text
+Stateless Backend
+Shared Persistent Database
+Shared Required Infrastructure
+Consistent Configuration
+```
+
+### 31.103 Synchronization Scaling
+
+Synchronization endpoints must remain correct when multiple Backend instances process requests concurrently.
+
+### 31.104 Idempotency Under Scaling
+
+The same SyncOperation may reach different Backend instances.
+
+Therefore:
+
+```text
+Instance A
+   ↓
+Operation O100
+
+Instance B
+   ↓
+Operation O100
+```
+
+must still result in safe idempotent processing.
+
+### 31.105 Database Concurrency
+
+Database constraints and transactions must protect synchronization correctness under multiple Backend instances.
+
+### 31.106 P2P and Backend Scaling
+
+P2P synchronization does not require requests to remain on a particular Backend instance.
+
+P2P data reaching the Backend must be persisted consistently.
+
+### 31.107 Background Jobs
+
+Background synchronization-related jobs may be deployed separately or inside the Backend depending on implementation.
+
+They must remain safe under multiple instances.
+
+### 31.108 Scheduled Jobs
+
+If scheduled jobs are introduced:
+
+```text
+Job
+```
+
+must not accidentally execute multiple times when multiple Backend instances exist.
+
+Distributed locking or another coordination mechanism may be required.
+
+### 31.109 Deployment and Background Workers
+
+Deployment must account for:
+
+```text
+Running Jobs
+Pending Jobs
+Retries
+Synchronization Tasks
+```
+
+### 31.110 Graceful Shutdown
+
+Backend instances should support graceful shutdown.
+
+Conceptually:
+
+```text
+Stop Accepting New Requests
+        ↓
+Finish / Safely Cancel Active Work
+        ↓
+Stop Background Workers
+        ↓
+Close Connections
+        ↓
+Shutdown
+```
+
+### 31.111 Android Graceful Lifecycle
+
+Android synchronization should use platform lifecycle mechanisms to avoid losing pending operations during application termination.
+
+### 31.112 Deployment and Pending SyncOperations
+
+A Backend deployment must not delete or invalidate pending SyncOperations.
+
+### 31.113 Deployment and SyncState
+
+Deployment must preserve:
+
+```text
+SyncState
+Cursor
+Pending Operations
+Conflicts
+```
+
+### 31.114 Deployment and Conflict State
+
+Existing conflicts must survive Backend deployment.
+
+### 31.115 Deployment and Local State
+
+Android application upgrades must preserve required local state.
+
+### 31.116 Android Database Upgrade
+
+Android database migrations must be included in the release process.
+
+Example:
+
+```text
+Old App
+   ↓
+New App
+   ↓
+Local DB Migration
+   ↓
+Validation
+```
+
+### 31.117 Android Migration Failure
+
+If a local migration cannot be completed safely, the application must not silently discard local financial data.
+
+### 31.118 Deployment and Offline Users
+
+Production deployments must account for Users who remain offline for long periods.
+
+Their:
+
+```text
+Old Application
+Pending SyncOperations
+```
+
+may reach the Backend after deployment.
+
+### 31.119 Long Offline Period
+
+The Backend should preserve compatibility according to the supported client/version policy.
+
+### 31.120 Sync Protocol Deployment
+
+Changes to synchronization protocol require additional validation.
+
+Before deployment:
+
+```text
+Protocol Change
+      ↓
+Compatibility Test
+      ↓
+Staging
+      ↓
+Production
+```
+
+### 31.121 P2P Protocol Deployment
+
+P2P protocol changes must account for:
+
+```text
+Old Device
+New Device
+```
+
+interoperability where supported.
+
+### 31.122 API Deployment
+
+API changes must follow the Versioning Strategy.
+
+Non-breaking changes may be deployed within an existing API version.
+
+Breaking changes require an explicit versioning decision.
+
+### 31.123 API Compatibility
+
+Before Production deployment:
+
+```text
+Supported Android Versions
+        +
+New Backend
+```
+
+must be tested.
+
+### 31.124 Database Compatibility
+
+Before Production deployment:
+
+```text
+Current Backend
+        +
+New Database Schema
+```
+
+must be validated.
+
+### 31.125 Deployment Ordering
+
+The deployment order must be selected according to compatibility.
+
+For backward-compatible changes:
+
+```text
+Database Expand
+      ↓
+Backend
+      ↓
+Android
+      ↓
+Database Contract
+```
+
+may be appropriate.
+
+### 31.126 Deployment and Feature Flags
+
+Feature flags may be used to separate:
+
+```text
+Code Deployment
+```
+
+from:
+
+```text
+Feature Activation
+```
+
+### 31.127 Feature Flag Deployment
+
+Example:
+
+```text
+Deploy Feature
+      ↓
+Feature Disabled
+      ↓
+Validate
+      ↓
+Enable Staging
+      ↓
+Validate
+      ↓
+Enable Production
+```
+
+### 31.128 Feature Flag Rollback
+
+A feature may be disabled without rolling back the complete application when the implementation supports it.
+
+### 31.129 Deployment and Monitoring
+
+Monitoring should begin before or immediately after deployment.
+
+### 31.130 Deployment Metrics
+
+Important metrics include:
+
+```text
+Request Rate
+Error Rate
+Latency
+Database Connections
+CPU
+Memory
+Sync Failure Rate
+Conflict Rate
+```
+
+### 31.131 Android Release Metrics
+
+Where available:
+
+```text
+Crash Rate
+ANR Rate
+Version Adoption
+Sync Failure
+Network Failure
+```
+
+### 31.132 Deployment Alerts
+
+Alerts should be configured for critical conditions.
+
+Examples:
+
+```text
+High 5xx Rate
+Database Unavailable
+High Sync Failure Rate
+High Crash Rate
+```
+
+### 31.133 Deployment Logging
+
+Deployment events must be logged according to the Logging Strategy.
+
+Example:
+
+```text
+environment=prod
+version=1.2.0
+deployment=SUCCESS
+```
+
+### 31.134 Deployment Audit
+
+Production deployments should be auditable.
+
+Audit information should include:
+
+```text
+Who
+What
+When
+Which Version
+Which Environment
+Result
+```
+
+### 31.135 Deployment Security
+
+Production deployment access must be restricted.
+
+Only authorized users/processes should be able to deploy to Production.
+
+### 31.136 CI/CD Credentials
+
+CI/CD credentials must be stored securely.
+
+They must not be hard-coded into:
+
+```text
+Source Code
+Build Scripts
+Logs
+```
+
+### 31.137 Least Privilege
+
+Deployment credentials should have only the permissions required for the deployment.
+
+### 31.138 Production Deployment Approval
+
+Production deployment should have an explicit approval mechanism where required.
+
+### 31.139 Emergency Deployment
+
+Emergency deployment may bypass some normal timing constraints but should still include:
+
+```text
+Review
+Testing
+Audit
+Monitoring
+Rollback Plan
+```
+
+### 31.140 Deployment Failure Recovery
+
+If deployment fails:
+
+```text
+Deployment Failed
+      ↓
+Determine Current State
+      ↓
+Restore Known-Good State
+      ↓
+Validate
+      ↓
+Investigate
+```
+
+### 31.141 Partial Deployment
+
+If only some Backend instances are updated:
+
+```text
+Old Instances
++
+New Instances
+```
+
+must remain compatible during the transition.
+
+### 31.142 Partial Deployment and API
+
+API compatibility must be maintained during rolling deployment.
+
+### 31.143 Partial Deployment and Database
+
+Database changes must remain compatible with both old and new Backend instances during the migration window.
+
+### 31.144 Deployment and Data Integrity
+
+Deployment must never intentionally compromise:
+
+```text
+Expense Data
+Expense Splits
+Settlements
+Groups
+Memberships
+SyncOperations
+Conflicts
+```
+
+### 31.145 Deployment and Financial Integrity
+
+Changes affecting financial calculations must have additional testing before Production deployment.
+
+### 31.146 Deployment and Synchronization Integrity
+
+Changes affecting:
+
+```text
+SyncOperation
+SyncState
+Cursor
+Conflict
+```
+
+must have dedicated synchronization tests.
+
+### 31.147 Deployment and P2P Integrity
+
+Changes affecting P2P communication must have dedicated P2P tests.
+
+### 31.148 Deployment and Recovery
+
+Production deployment should have documented recovery procedures for:
+
+```text
+Backend Failure
+Database Failure
+Migration Failure
+Configuration Failure
+Security Failure
+```
+
+### 31.149 Backup Verification
+
+Backups should not only exist; recovery procedures should be tested periodically.
+
+### 31.150 Disaster Recovery
+
+Production infrastructure should support a documented disaster recovery strategy.
+
+This should address:
+
+```text
+Database Loss
+Backend Infrastructure Loss
+Configuration Loss
+```
+
+### 31.151 Recovery Point Objective
+
+The exact RPO should be defined when production infrastructure requirements are finalized.
+
+### 31.152 Recovery Time Objective
+
+The exact RTO should be defined when production operational requirements are finalized.
+
+### 31.153 Deployment Documentation
+
+Every Production deployment should have:
+
+```text
+Release Version
+Change Summary
+Migration Information
+Configuration Changes
+Rollback Plan
+Validation Steps
+```
+
+### 31.154 Deployment Checklist
+
+A Production deployment checklist should include:
+
+```text
+Build Passed
+Unit Tests Passed
+Integration Tests Passed
+Security Checks Passed
+Migration Tested
+Staging Passed
+Configuration Validated
+Backup / Recovery Checked
+Rollback Plan Ready
+Monitoring Ready
+Release Approved
+```
+
+### 31.155 Post-Deployment Checklist
+
+After deployment:
+
+```text
+Health Check
+API Smoke Test
+Database Health
+Authentication
+Synchronization
+Error Rate
+Latency
+Logs
+Alerts
+```
+
+must be checked.
+
+### 31.156 Deployment Completion
+
+A deployment is considered successful only after:
+
+```text
+Application Healthy
++
+Database Healthy
++
+Critical APIs Healthy
++
+Synchronization Healthy
++
+Monitoring Healthy
+```
+
+### 31.157 Deployment Strategy Summary
+
+```text
+Deployment Architecture
+│
+├── Source Control
+│
+├── CI/CD
+│   ├── Build
+│   ├── Unit Tests
+│   ├── Integration Tests
+│   ├── Security Tests
+│   └── Artifact
+│
+├── Android
+│   ├── Debug
+│   ├── Staging
+│   └── Production
+│
+├── Backend
+│   ├── Artifact
+│   ├── Deployment
+│   ├── Health Check
+│   └── Scaling
+│
+├── Database
+│   ├── Schema
+│   ├── Migration
+│   ├── Backup
+│   └── Recovery
+│
+└── Operations
+    ├── Monitoring
+    ├── Logging
+    ├── Alerting
+    ├── Rollback
+    └── Audit
+```
+
+### 31.158 Complete Production Deployment Flow
+
+```text
+Source Code
+      ↓
+Pull Request
+      ↓
+Code Review
+      ↓
+CI Build
+      ↓
+Unit Tests
+      ↓
+Integration Tests
+      ↓
+Security Tests
+      ↓
+Build Artifact
+      ↓
+Test Environment
+      ↓
+Migration Tests
+      ↓
+Staging
+      ↓
+E2E Tests
+      ↓
+Synchronization Tests
+      ↓
+P2P Tests
+      ↓
+Release Approval
+      ↓
+Production Backup / Recovery Check
+      ↓
+Database Migration
+      ↓
+Backend Deployment
+      ↓
+Health Checks
+      ↓
+Smoke Tests
+      ↓
+Monitoring
+      ↓
+Production Validation
+```
+
+### 31.159 Android Production Release Flow
+
+```text
+Source Code
+      ↓
+Build
+      ↓
+Unit Tests
+      ↓
+Instrumentation Tests
+      ↓
+Security Checks
+      ↓
+Staging Build
+      ↓
+E2E Validation
+      ↓
+Production Build
+      ↓
+Production Signing
+      ↓
+Distribution
+      ↓
+Controlled Rollout
+      ↓
+Crash / ANR Monitoring
+```
+
+### 31.160 Backend Production Release Flow
+
+```text
+Source Code
+      ↓
+Build
+      ↓
+Unit Tests
+      ↓
+Integration Tests
+      ↓
+Security Tests
+      ↓
+Container / JAR Artifact
+      ↓
+Staging Deployment
+      ↓
+E2E Validation
+      ↓
+Release Approval
+      ↓
+Production Deployment
+      ↓
+Health Check
+      ↓
+Smoke Test
+      ↓
+Monitoring
+```
+
+### 31.161 Database Deployment Flow
+
+```text
+Schema Change
+      ↓
+Migration Script
+      ↓
+Migration Unit / Integration Test
+      ↓
+Staging Migration
+      ↓
+Data Validation
+      ↓
+Production Backup Check
+      ↓
+Production Migration
+      ↓
+Schema Validation
+      ↓
+Backend Compatibility Check
+```
+
+### 31.162 Rollback Flow
+
+```text
+Production Deployment
+      ↓
+Monitoring
+      ↓
+Critical Problem
+      ↓
+Stop Rollout
+      ↓
+Determine Failure Type
+      ↓
+Application Rollback
+      OR
+Database Recovery
+      OR
+Configuration Rollback
+      ↓
+Health Check
+      ↓
+Smoke Test
+      ↓
+Incident Investigation
+```
+
+### 31.163 Deployment Invariants
+
+The following rules are mandatory for V1:
+
+- Development, Test, Staging, and Production deployments must remain isolated.
+- Production must never use Development or Test databases.
+- Production must never use Development or Test credentials.
+- Production secrets must never be committed to source control.
+- Production deployment must use HTTPS.
+- Production Database must not be publicly exposed.
+- Production Backend must not store persistent financial data only on local instance storage.
+- Backend instances should remain stateless where practical.
+- Persistent application data must reside in managed persistent storage.
+- Every Production deployment must be traceable to a source commit.
+- Every Production deployment must be traceable to a versioned artifact.
+- Production artifacts must not be modified after validation.
+- Required tests must pass before Production deployment.
+- Critical security test failures must block Production deployment.
+- Critical financial integrity failures must block Production deployment.
+- Critical synchronization failures must block Production deployment.
+- Database migrations must be versioned.
+- Database migrations must be tested before Production.
+- Production database migrations must have an appropriate recovery strategy.
+- Destructive database rollback must not be assumed to be safe.
+- Database changes must remain compatible with supported Backend versions during deployment transitions.
+- Backend changes must remain compatible with supported Android clients.
+- API breaking changes must follow the Versioning Strategy.
+- Sync protocol changes must follow compatibility rules.
+- P2P protocol changes must follow compatibility rules.
+- Android upgrades must preserve required local data.
+- Android upgrades must preserve pending SyncOperations.
+- Android upgrades must preserve required SyncState.
+- Backend deployments must preserve SyncOperations.
+- Backend deployments must preserve SyncState.
+- Backend deployments must preserve Conflict state.
+- Duplicate SyncOperations must remain idempotent across multiple Backend instances.
+- Horizontal scaling must not introduce synchronization inconsistencies.
+- Database transactions must preserve financial integrity during concurrent requests.
+- Health checks must be available before an instance receives Production traffic.
+- Failed health checks must prevent unsafe traffic routing.
+- Production deployments must include monitoring.
+- Production deployments must include a rollback or recovery strategy.
+- Production deployments must be auditable.
+- Production deployment access must be restricted.
+- CI/CD credentials must use least privilege.
+- Deployment secrets must be injected securely.
+- Secrets must never appear in deployment logs.
+- Production smoke tests must be safe and preferably non-destructive.
+- Deployment failures must stop unsafe rollout.
+- Partial deployments must remain backward-compatible.
+- Database migrations must support the required deployment sequence.
+- Deployment must not silently delete financial data.
+- Deployment must not silently duplicate Expenses.
+- Deployment must not silently duplicate Settlements.
+- Deployment must not lose pending synchronization operations.
+- Deployment must not invalidate unresolved conflicts.
+- Deployment must not break offline-first behavior.
+- Backend unavailability must not remove the ability to perform supported local offline operations.
+- Deployment must account for long-offline Android clients according to the supported version policy.
+- Production monitoring must include API errors and latency.
+- Production monitoring must include synchronization failures.
+- Production monitoring should include conflict rates.
+- Production Android releases should monitor crash and ANR behavior.
+- Production infrastructure must support appropriate backups.
+- Production recovery procedures must be documented.
+- Backup recovery should be tested periodically.
+- Deployment configuration must be environment-specific.
+- Deployment configuration must be validated before application readiness.
+- Missing security-sensitive configuration must cause safe startup failure.
+- Debug functionality must not accidentally become available in Production.
+- Production signing credentials must remain protected.
+- Android server-side secrets must never be embedded as secure credentials in the application.
+- Production database administration must remain controlled.
+- Production deployments must preserve the Security Architecture.
+- Production deployments must preserve the Logging Strategy.
+- Production deployments must preserve the Testing Strategy.
+- Production deployments must preserve the Configuration Strategy.
+- Production deployments must preserve the Environment Strategy.
+- Production deployments must preserve the offline-first and local-first architecture of SplitSync.
