@@ -35824,18 +35824,2647 @@ The following rules are mandatory:
 
 ## 56. Staging Deployment
 
+### 56.1 Purpose
+
+This section defines the deployment process for the Staging environment.
+
+Staging is the final environment for validating the release candidate against production-like infrastructure and configuration before Production deployment.
+
+### 56.2 Staging Environment
+
+The Staging environment should contain:
+
+```text
+Staging Android Build
+Staging Backend
+Staging Database
+Staging Configuration
+Staging Authentication
+Staging P2P Test Infrastructure
+```
+
+### 56.3 Staging Principle
+
+Staging should be as close to Production as practical while remaining completely isolated from Production.
+
+```text
+Test
+ ↓
+Release Candidate
+ ↓
+Staging
+ ↓
+Production
+```
+
+### 56.4 Artifact Promotion
+
+The validated Test artifact should be promoted to Staging without rebuilding it where practical.
+
+```text
+Test Artifact
+      ↓
+Staging
+```
+
+### 56.5 Staging Backend
+
+The Backend must use Staging-specific configuration.
+
+### 56.6 Staging Database
+
+The Staging database must be isolated from Production.
+
+### 56.7 Staging Data
+
+Staging data should use controlled non-production data.
+
+Production financial data must not be copied into Staging without an explicit approved data-protection process.
+
+### 56.8 Staging Secrets
+
+Staging credentials and secrets must remain separate from Production secrets.
+
+### 56.9 Staging Configuration
+
+Staging should use Production-like configuration for:
+
+```text
+API
+Database
+Authentication
+Synchronization
+Logging
+Security
+```
+
+while using Staging-specific endpoints and credentials.
+
+### 56.10 Staging Deployment Flow
+
+```text
+Validated Release Candidate
+      ↓
+Deploy Backend
+      ↓
+Run Database Migration
+      ↓
+Deploy Android Build
+      ↓
+Run Smoke Tests
+      ↓
+Run Regression Tests
+      ↓
+Run Security Validation
+      ↓
+Run Synchronization Tests
+      ↓
+Release Approval
+```
+
+### 56.11 Database Migration
+
+Staging must execute the same migration mechanism intended for Production.
+
+### 56.12 Migration Verification
+
+After migration:
+
+```text
+Schema
++
+Existing Staging Data
++
+Constraints
++
+Indexes
+```
+
+must be verified.
+
+### 56.13 API Compatibility
+
+Staging must verify compatibility between:
+
+```text
+Android Release Candidate
++
+Backend Release
++
+Database Schema
+```
+
+### 56.14 Synchronization Validation
+
+Staging must validate:
+
+```text
+Push
+Pull
+Offline
+Retry
+Recovery
+Conflict
+P2P
+```
+
+where applicable.
+
+### 56.15 P2P Staging
+
+P2P testing should use dedicated Staging peer identities and Devices.
+
+Production peer identities must not be used.
+
+### 56.16 Security Validation
+
+Staging should execute the required:
+
+```text
+Authentication Tests
+Authorization Tests
+Device Revocation Tests
+P2P Security Tests
+Secret Checks
+```
+
+### 56.17 Performance Validation
+
+Critical performance tests should execute against the Staging environment.
+
+### 56.18 Monitoring Validation
+
+Monitoring and logging must be verified before Production deployment.
+
+### 56.19 Staging Smoke Tests
+
+At minimum:
+
+```text
+Application Start
+Authentication
+Group Creation
+Expense Creation
+Expense Sync
+Settlement
+Balance Calculation
+P2P Sync
+```
+
+where applicable.
+
+### 56.20 Staging Regression
+
+The required regression suite must pass before Production promotion.
+
+### 56.21 Staging Failure
+
+If any release-blocking validation fails:
+
+```text
+Staging Failure
+      ↓
+Block Production Promotion
+      ↓
+Fix
+      ↓
+Rebuild / Revalidate
+      ↓
+Redeploy
+```
+
+### 56.22 Staging Rollback
+
+Staging must support rollback or redeployment to a known-good release.
+
+### 56.23 Production Readiness
+
+The release is Production-ready only when:
+
+```text
+Staging Deployment Successful
++
+Migrations Verified
++
+Regression Passing
++
+Security Passing
++
+Synchronization Passing
++
+Monitoring Verified
+```
+
+### 56.24 Staging Completion Criteria
+
+Staging Deployment is complete when:
+
+```text
+Release Candidate Deployed
+Staging Backend Available
+Staging Database Available
+Migrations Verified
+Android Build Verified
+API Compatibility Verified
+Synchronization Verified
+P2P Verified
+Security Validation Passed
+Performance Validation Passed
+Monitoring Verified
+Regression Suite Passed
+Production Approval Obtained
+```
+
+### 56.25 Staging Deployment Invariants
+
+The following rules are mandatory:
+
+- Staging must remain isolated from Production.
+- Staging credentials must never be Production credentials.
+- Staging P2P identities must remain separate from Production identities.
+- Staging migrations must use the Production migration mechanism.
+- The validated release artifact should be promoted without unnecessary rebuilding.
+- Production promotion must be blocked by release-blocking Staging failures.
+- Staging must validate synchronization behavior before Production deployment.
+- Staging must validate monitoring and observability before Production deployment.
+
+
 ## 57. Production Deployment
+
+### 57.1 Purpose
+
+This section defines the deployment process for the Production environment.
+
+Production deployment introduces the validated release to real Users and production infrastructure.
+
+### 57.2 Production Principle
+
+Production deployment must be controlled, repeatable, auditable, and reversible where technically possible.
+
+```text
+Approved Release
+      ↓
+Production Deployment
+      ↓
+Validation
+      ↓
+Monitoring
+```
+
+### 57.3 Production Components
+
+Production may contain:
+
+```text
+Production Android Application
+Production Backend
+Production Database
+Production Configuration
+Production Authentication
+Production P2P Infrastructure
+Monitoring Infrastructure
+Backup Infrastructure
+```
+
+### 57.4 Production Approval
+
+Production deployment requires the release approval defined by the Release Management process.
+
+### 57.5 Production Artifact
+
+Production must use the validated release artifact.
+
+### 57.6 Production Configuration
+
+Production configuration must be supplied through secure configuration management.
+
+### 57.7 Production Secrets
+
+Production secrets must be managed through secure secret-management mechanisms.
+
+They must never be committed to source control.
+
+### 57.8 Production Database
+
+The Production database must be backed up according to the Backup and Recovery strategy before risky schema changes.
+
+### 57.9 Production Migration
+
+Database migrations must be reviewed and validated before Production execution.
+
+### 57.10 Migration Ordering
+
+Production deployment must follow the API/database compatibility strategy.
+
+Where required:
+
+```text
+Backward-Compatible Migration
+      ↓
+Backend Deployment
+      ↓
+Client Compatibility
+```
+
+### 57.11 Production Deployment Flow
+
+```text
+Release Approval
+      ↓
+Backup / Pre-Deployment Checks
+      ↓
+Database Migration
+      ↓
+Backend Deployment
+      ↓
+Backend Health Check
+      ↓
+Android Release
+      ↓
+Smoke Tests
+      ↓
+Monitoring
+```
+
+### 57.12 Pre-Deployment Checks
+
+Verify:
+
+```text
+Release Artifact
+Database Backup
+Migration Status
+Configuration
+Secrets
+Dependencies
+Monitoring
+Rollback Plan
+```
+
+### 57.13 Backend Health Check
+
+After deployment:
+
+```text
+Backend
+ ↓
+Health Check
+ ↓
+Ready
+```
+
+must be verified before exposing the release broadly.
+
+### 57.14 Database Health Check
+
+Verify:
+
+```text
+Connectivity
+Schema Version
+Migration Status
+Critical Queries
+```
+
+### 57.15 API Health Check
+
+Verify critical API operations.
+
+### 57.16 Synchronization Health Check
+
+Verify:
+
+```text
+Push
+Pull
+SyncState
+```
+
+for controlled test data where possible.
+
+### 57.17 Android Release
+
+The Production Android release must use:
+
+```text
+Production API
+Production Configuration
+Production Signing
+```
+
+according to the Build Configuration strategy.
+
+### 57.18 Production P2P
+
+Production P2P must use Production Device Identity and trust mechanisms.
+
+### 57.19 Production Logging
+
+Production logging must use controlled verbosity and sensitive-data protection.
+
+### 57.20 Production Monitoring
+
+Immediately after deployment, monitor:
+
+```text
+API Errors
+Authentication Failures
+Synchronization Failures
+Database Errors
+Crash Rate
+Latency
+P2P Failures
+```
+
+### 57.21 Deployment Validation
+
+Post-deployment smoke tests should verify:
+
+```text
+Login
+Group Access
+Expense Creation
+Settlement
+Synchronization
+Balance
+```
+
+### 57.22 Gradual Rollout
+
+Where supported, Production Android releases should use a controlled rollout strategy.
+
+### 57.23 Rollout Monitoring
+
+During rollout:
+
+```text
+Release
+ ↓
+Monitor
+ ↓
+Evaluate
+ ↓
+Continue / Pause / Rollback
+```
+
+### 57.24 Deployment Failure
+
+If critical Production failures occur:
+
+```text
+Detect
+ ↓
+Assess
+ ↓
+Stop / Rollout Pause
+ ↓
+Rollback or Hotfix
+```
+
+### 57.25 Rollback
+
+Rollback strategy must distinguish between:
+
+```text
+Application Rollback
+Backend Rollback
+Database Rollback
+```
+
+Database rollback should not be assumed safe for every migration.
+
+### 57.26 Forward Recovery
+
+If a database migration cannot safely roll back:
+
+```text
+Migration
+ ↓
+Forward-Compatible Fix
+```
+
+must be used.
+
+### 57.27 Production Incident
+
+Production incidents must follow the operational incident process.
+
+### 57.28 Production Security
+
+Production deployment must verify:
+
+```text
+TLS
+Secrets
+Authentication
+Authorization
+Device Security
+Database Access
+```
+
+### 57.29 Production Completion Criteria
+
+Production Deployment is complete when:
+
+```text
+Approved Artifact Deployed
+Database Migration Successful
+Backend Healthy
+API Healthy
+Android Release Published
+Smoke Tests Passing
+Synchronization Healthy
+Monitoring Active
+No Release-Blocking Errors
+```
+
+### 57.30 Production Deployment Invariants
+
+The following rules are mandatory:
+
+- Production must use approved release artifacts.
+- Production secrets must never be committed to source control.
+- Production must remain isolated from non-production environments.
+- Database migrations must be reviewed before execution.
+- Required backups must be completed before risky migrations.
+- Backend health must be verified after deployment.
+- Critical synchronization flows must be verified after release.
+- Production monitoring must be active during deployment.
+- Critical failures must trigger controlled rollout pause or recovery.
+- Database rollback must never be assumed without verifying migration safety.
+
 
 ## 58. Monitoring and Observability
 
+### 58.1 Purpose
+
+This section defines the implementation of Monitoring and Observability for SplitSync V1.
+
+Observability must allow the system to answer:
+
+```text
+Is the System Healthy?
+What Failed?
+Where Did It Fail?
+Why Did It Fail?
+```
+
+### 58.2 Observability Components
+
+Monitoring should cover:
+
+```text
+Application
+Backend
+Database
+API
+Synchronization
+P2P
+Security
+Infrastructure
+```
+
+### 58.3 Health Checks
+
+The Backend should expose appropriate health information.
+
+Conceptually:
+
+```text
+Health
+Readiness
+Dependencies
+```
+
+### 58.4 Backend Health
+
+Monitor:
+
+```text
+Availability
+Response Time
+Error Rate
+Throughput
+```
+
+### 58.5 Database Health
+
+Monitor:
+
+```text
+Connectivity
+Query Latency
+Connection Usage
+Storage
+Errors
+```
+
+### 58.6 API Monitoring
+
+Monitor:
+
+```text
+Request Count
+Latency
+HTTP Errors
+Authentication Errors
+Authorization Errors
+```
+
+### 58.7 Android Monitoring
+
+Where appropriate, monitor:
+
+```text
+Crash Rate
+ANR Rate
+Startup Performance
+Sync Failures
+```
+
+### 58.8 Synchronization Monitoring
+
+Monitor:
+
+```text
+Sync Attempts
+Successful Syncs
+Failed Syncs
+Pending Operations
+Conflicts
+Retries
+Sync Duration
+```
+
+### 58.9 Push Monitoring
+
+Track:
+
+```text
+Operations Pushed
+Push Success
+Push Failure
+Push Retry
+```
+
+### 58.10 Pull Monitoring
+
+Track:
+
+```text
+Operations Pulled
+Pull Success
+Pull Failure
+Cursor Progress
+```
+
+### 58.11 Cursor Monitoring
+
+Monitor abnormal conditions such as:
+
+```text
+Cursor Not Advancing
+Cursor Regression
+Repeated Batch
+```
+
+### 58.12 Conflict Monitoring
+
+Track:
+
+```text
+Conflict Count
+Conflict Rate
+Open Conflicts
+Resolution Time
+```
+
+### 58.13 P2P Monitoring
+
+Track:
+
+```text
+Discovery Attempts
+Peer Connections
+Handshake Failures
+P2P Sync Failures
+Connection Loss
+P2P Retry
+```
+
+### 58.14 Security Monitoring
+
+Monitor security-relevant events such as:
+
+```text
+Authentication Failures
+Authorization Failures
+Device Revocations
+Peer Rejections
+Replay Rejections
+```
+
+### 58.15 Logging Integration
+
+Logs should include correlation information:
+
+```text
+Request ID
+Sync ID
+Operation ID
+Session ID
+```
+
+where applicable.
+
+### 58.16 Metrics
+
+Metrics should be designed around measurable system behavior.
+
+### 58.17 Alerting
+
+Alerts should exist for critical conditions such as:
+
+```text
+Backend Unavailable
+High Error Rate
+High Sync Failure Rate
+Database Failure
+Authentication Failure Spike
+P2P Failure Spike
+```
+
+### 58.18 Alert Thresholds
+
+Thresholds must be defined based on expected system behavior rather than arbitrary values.
+
+### 58.19 Alert Noise
+
+Alerts must be tuned to avoid excessive false positives.
+
+### 58.20 Dashboard
+
+Operational dashboards should expose:
+
+```text
+System Health
+API Health
+Database Health
+Sync Health
+P2P Health
+Security Events
+```
+
+### 58.21 Synchronization Dashboard
+
+A synchronization dashboard may include:
+
+```text
+Pending Operations
+Sync Success Rate
+Sync Failure Rate
+Conflict Count
+Retry Count
+Average Sync Duration
+```
+
+### 58.22 P2P Dashboard
+
+A P2P dashboard may include:
+
+```text
+Peer Connections
+Handshake Success Rate
+P2P Sync Success Rate
+Connection Failures
+Transfer Duration
+```
+
+### 58.23 Traceability
+
+A synchronization failure should be traceable across:
+
+```text
+Android
+ ↓
+API / P2P
+ ↓
+Backend
+ ↓
+Database
+```
+
+using correlation identifiers where applicable.
+
+### 58.24 Privacy
+
+Monitoring must minimize collection of:
+
+```text
+Personal Data
+Financial Payloads
+Authentication Secrets
+Cryptographic Material
+```
+
+### 58.25 Production Monitoring
+
+Production monitoring must be active before or at the time of Production deployment.
+
+### 58.26 Monitoring Failure
+
+Monitoring infrastructure failure must not corrupt application or financial state.
+
+### 58.27 Observability Testing
+
+Monitoring must be tested by generating controlled:
+
+```text
+Success
+Failure
+Authentication Error
+Sync Failure
+P2P Failure
+Database Error
+```
+
+### 58.28 Observability Completion Criteria
+
+Monitoring and Observability is complete when:
+
+```text
+Health Checks Implemented
+Application Monitoring Implemented
+Backend Monitoring Implemented
+Database Monitoring Implemented
+API Monitoring Implemented
+Sync Monitoring Implemented
+P2P Monitoring Implemented
+Security Monitoring Implemented
+Metrics Implemented
+Dashboards Implemented
+Alerts Implemented
+Correlation IDs Implemented
+Privacy Controls Implemented
+Monitoring Tests Implemented
+```
+
+### 58.29 Monitoring and Observability Invariants
+
+The following rules are mandatory:
+
+- Critical system health must be observable.
+- Synchronization health must be observable.
+- P2P failures must be observable.
+- Security failures must be observable.
+- Correlation IDs should allow failures to be traced across system boundaries.
+- Monitoring must not expose sensitive financial or security data.
+- Monitoring failures must not corrupt application state.
+- Alerts must represent actionable conditions.
+- Production monitoring must be active before relying on the release.
+
+
 ## 59. Backup and Recovery
+
+### 59.1 Purpose
+
+This section defines the implementation of Backup and Recovery for SplitSync V1.
+
+Backup and Recovery protects Backend data against:
+
+```text
+Database Failure
+Data Corruption
+Infrastructure Failure
+Operational Error
+Deployment Failure
+```
+
+### 59.2 Backup Principle
+
+Backups must be:
+
+```text
+Reliable
+Protected
+Recoverable
+Tested
+```
+
+### 59.3 Backup Scope
+
+Backend backups must protect critical persistent data including:
+
+```text
+Users
+Devices
+Groups
+Memberships
+Expenses
+ExpenseSplits
+Settlements
+Synchronization Metadata
+Conflicts
+```
+
+where stored by the Backend.
+
+### 59.4 Backup Types
+
+The implementation may use:
+
+```text
+Full Backup
+Incremental Backup
+Point-in-Time Recovery
+```
+
+according to the selected infrastructure.
+
+### 59.5 Backup Frequency
+
+Backup frequency must be defined according to the required recovery objectives.
+
+### 59.6 Recovery Point Objective
+
+The project must define the maximum acceptable amount of data that may be lost after a catastrophic failure.
+
+### 59.7 Recovery Time Objective
+
+The project must define the target time required to restore service after a catastrophic failure.
+
+### 59.8 Backup Storage
+
+Backups must be stored separately from the primary database where practical.
+
+### 59.9 Backup Security
+
+Backups must be protected using appropriate:
+
+```text
+Access Control
+Encryption
+Credential Protection
+```
+
+### 59.10 Backup Access
+
+Only authorized operators/services should have access to production backups.
+
+### 59.11 Backup Retention
+
+Backup retention must follow the operational and security requirements.
+
+### 59.12 Backup Verification
+
+A successful backup job must not be assumed to mean a recoverable backup.
+
+Backups must be verified.
+
+### 59.13 Recovery Testing
+
+Recovery tests must periodically restore backups into an isolated environment.
+
+```text
+Backup
+ ↓
+Restore
+ ↓
+Verify
+```
+
+### 59.14 Database Recovery
+
+Recovery must verify:
+
+```text
+Schema
+Data
+Constraints
+Indexes
+```
+
+### 59.15 Financial Data Recovery
+
+After recovery, verify:
+
+```text
+Expenses
+ExpenseSplits
+Settlements
+Balances
+```
+
+remain consistent.
+
+### 59.16 Synchronization Data Recovery
+
+Recovery must preserve:
+
+```text
+SyncOperations
+SyncState
+Cursors
+Conflicts
+```
+
+where stored by the Backend.
+
+### 59.17 Cursor Recovery
+
+Recovered synchronization cursors must remain consistent with the recovered synchronization data.
+
+### 59.18 Conflict Recovery
+
+Recovered conflicts must remain resolvable.
+
+### 59.19 Backup Before Migration
+
+Risky Production migrations should have a verified backup before execution.
+
+### 59.20 Backup Before Deployment
+
+Deployment procedures should define when a backup is required.
+
+### 59.21 Disaster Recovery
+
+The project should define recovery procedures for:
+
+```text
+Database Loss
+Backend Infrastructure Loss
+Storage Loss
+Configuration Loss
+```
+
+### 59.22 Recovery Environment
+
+Recovery must use an isolated recovery environment before Production restoration where practical.
+
+### 59.23 Recovery Validation
+
+After recovery:
+
+```text
+Database Healthy
++
+Backend Healthy
++
+API Healthy
++
+Synchronization Healthy
+```
+
+must be verified.
+
+### 59.24 Recovery and Android Clients
+
+Android clients must safely recover from temporary Backend unavailability.
+
+Local offline state must not be discarded merely because the Backend is being restored.
+
+### 59.25 Recovery and P2P
+
+P2P data exchange may help Devices retain/propagate valid state while Backend recovery occurs, subject to the synchronization model.
+
+### 59.26 Recovery Logging
+
+Recovery operations must be auditable.
+
+### 59.27 Recovery Security
+
+Restored environments must not expose production data to unauthorized environments.
+
+### 59.28 Recovery Testing Frequency
+
+Recovery tests should be performed periodically according to operational requirements.
+
+### 59.29 Backup Monitoring
+
+Monitor:
+
+```text
+Backup Success
+Backup Failure
+Backup Age
+Storage Usage
+Restore Test Result
+```
+
+### 59.30 Backup Failure
+
+A failed backup must generate an operational alert.
+
+### 59.31 Recovery Failure
+
+A failed restore must trigger investigation and remediation.
+
+### 59.32 Backup Completion Criteria
+
+Backup and Recovery is complete when:
+
+```text
+Backup Strategy Implemented
+Backup Scheduling Implemented
+Backup Storage Secured
+Backup Retention Defined
+Backup Monitoring Implemented
+Restore Procedure Implemented
+Recovery Testing Implemented
+RPO Defined
+RTO Defined
+Financial Data Verification Implemented
+Synchronization Data Verification Implemented
+Disaster Recovery Procedure Defined
+```
+
+### 59.33 Backup and Recovery Invariants
+
+The following rules are mandatory:
+
+- Critical Backend data must be backed up.
+- Backups must be protected from unauthorized access.
+- Backup success must be verifiable.
+- Restore procedures must be tested.
+- Financial data must remain consistent after recovery.
+- Synchronization metadata must remain consistent after recovery.
+- Cursors must not become inconsistent with recovered synchronization data.
+- Conflicts must remain resolvable after recovery.
+- Production migrations requiring backup must not proceed without the required verified backup.
+- Backup failures must be observable.
+- Recovery procedures must be documented and tested.
+
 
 ## 60. Release Management
 
+### 60.1 Purpose
+
+This section defines the Release Management implementation for SplitSync V1.
+
+Release Management controls how validated changes move from development to Production.
+
+```text
+Development
+      ↓
+Test
+      ↓
+Staging
+      ↓
+Production
+```
+
+### 60.2 Release Principle
+
+Every release must be:
+
+```text
+Versioned
+Validated
+Approved
+Traceable
+Deployable
+Recoverable
+```
+
+### 60.3 Release Artifact
+
+A release consists of the validated artifacts required for the system.
+
+Examples:
+
+```text
+Android APK/AAB
+Backend Artifact
+Database Migration
+Configuration
+Release Metadata
+```
+
+### 60.4 Release Version
+
+Each release must have a unique version.
+
+### 60.5 Build Number
+
+Android builds must have a unique build number.
+
+### 60.6 API Version
+
+The release must identify the API version supported by the client/backend.
+
+### 60.7 Database Version
+
+The release must identify the expected database schema version.
+
+### 60.8 Release Candidate
+
+A Release Candidate is an artifact that has passed the required Test/Staging validation.
+
+```text
+Validated Build
+      ↓
+Release Candidate
+```
+
+### 60.9 Release Checklist
+
+Before Production release:
+
+```text
+Build Passing
+Unit Tests Passing
+Integration Tests Passing
+E2E Tests Passing
+Security Tests Passing
+Synchronization Tests Passing
+P2P Tests Passing
+Migration Tests Passing
+Performance Validation Completed
+Staging Validation Completed
+Monitoring Ready
+Backup Ready
+Rollback Plan Ready
+```
+
+### 60.10 Release Approval
+
+Production release requires explicit approval according to the project's governance process.
+
+### 60.11 Release Notes
+
+Every release should document:
+
+```text
+Version
+Changes
+Bug Fixes
+Database Changes
+API Changes
+Synchronization Changes
+Security Changes
+Known Issues
+```
+
+### 60.12 Database Changes
+
+Release notes must clearly identify database migration requirements.
+
+### 60.13 API Changes
+
+Release notes must identify:
+
+```text
+New Endpoints
+Changed Endpoints
+Deprecated Endpoints
+API Version
+```
+
+where applicable.
+
+### 60.14 Synchronization Changes
+
+Synchronization changes must document:
+
+```text
+Sync Protocol Changes
+SyncOperation Changes
+SyncState Changes
+Conflict Changes
+Migration Requirements
+```
+
+### 60.15 P2P Changes
+
+P2P releases must document:
+
+```text
+Discovery Changes
+Handshake Changes
+Protocol Changes
+Compatibility Changes
+```
+
+### 60.16 Compatibility
+
+Before release, verify compatibility between:
+
+```text
+Android
+Backend
+Database
+API
+Sync Protocol
+P2P Protocol
+```
+
+### 60.17 Backward Compatibility
+
+The release must not break supported older clients unless the release explicitly introduces a planned breaking change.
+
+### 60.18 Release Branch
+
+If release branches are used, the release branch must contain only approved release changes.
+
+### 60.19 Release Tag
+
+Production releases should be tagged in source control.
+
+### 60.20 Artifact Traceability
+
+Every Production artifact must be traceable to:
+
+```text
+Source Commit
+Build
+Version
+Release
+```
+
+### 60.21 Release Deployment
+
+Production deployment must follow the Production Deployment procedure.
+
+### 60.22 Rollout Strategy
+
+Where supported, release rollout may be gradual.
+
+```text
+Small Percentage
+      ↓
+Monitor
+      ↓
+Increase
+      ↓
+Complete
+```
+
+### 60.23 Rollout Pause
+
+If critical problems are detected:
+
+```text
+Detect
+ ↓
+Pause Rollout
+ ↓
+Investigate
+```
+
+### 60.24 Rollback
+
+If required:
+
+```text
+Pause
+ ↓
+Rollback / Hotfix
+ ↓
+Validate
+ ↓
+Resume
+```
+
+### 60.25 Hotfix
+
+Critical Production defects may be addressed through a controlled hotfix process.
+
+### 60.26 Hotfix Validation
+
+Hotfixes must still pass the minimum required:
+
+```text
+Unit Tests
+Regression Tests
+Security Checks
+Deployment Validation
+```
+
+before Production deployment.
+
+### 60.27 Release Failure
+
+Failed releases must be documented and investigated.
+
+### 60.28 Release Monitoring
+
+After release:
+
+```text
+Monitor Errors
+Monitor Crashes
+Monitor Sync
+Monitor API
+Monitor Database
+Monitor P2P
+```
+
+### 60.29 Post-Release Validation
+
+Perform:
+
+```text
+Smoke Tests
+Health Checks
+Synchronization Checks
+Critical User Workflow Checks
+```
+
+### 60.30 Release Closure
+
+A release may be considered complete after:
+
+```text
+Deployment Successful
++
+Monitoring Stable
++
+Post-Release Validation Passed
+```
+
+### 60.31 Release Documentation
+
+The release record should contain:
+
+```text
+Release Version
+Source Commit
+Build Artifacts
+Deployment Time
+Migration Version
+Approval
+Validation Results
+Known Issues
+```
+
+### 60.32 Release Metrics
+
+Useful metrics include:
+
+```text
+Deployment Frequency
+Deployment Success Rate
+Rollback Rate
+Release Failure Rate
+Mean Time to Recovery
+Post-Release Defects
+```
+
+### 60.33 Release Completion Criteria
+
+Release Management is complete when:
+
+```text
+Versioning Implemented
+Release Candidate Process Implemented
+Release Checklist Defined
+Approval Process Defined
+Release Notes Implemented
+Artifact Traceability Implemented
+Compatibility Validation Implemented
+Production Rollout Implemented
+Rollback Process Defined
+Hotfix Process Defined
+Post-Release Validation Implemented
+Release Monitoring Implemented
+Release Documentation Implemented
+```
+
+### 60.34 Release Management Invariants
+
+The following rules are mandatory:
+
+- Every Production release must be uniquely versioned.
+- Production artifacts must be traceable to source code.
+- Only validated artifacts may be promoted to Production.
+- Required tests must pass before Production release.
+- Database migrations must be explicitly reviewed.
+- API compatibility must be verified.
+- Synchronization compatibility must be verified.
+- P2P protocol compatibility must be verified.
+- Production deployment must have an approved rollback/recovery strategy.
+- Critical releases must support controlled rollout where available.
+- Hotfixes must receive appropriate regression and security validation.
+- Post-release monitoring must be performed.
+- Release documentation must be retained.
+
 ## 61. Implementation Validation
+
+### 61.1 Purpose
+
+This section defines the validation process used to confirm that the SplitSync V1 implementation conforms to the approved Technical Design and Implementation Plan.
+
+Implementation validation must verify:
+
+```text
+Architecture
++
+Domain Rules
++
+Data Model
++
+Offline Behavior
++
+Synchronization
++
+Security
++
+P2P
++
+Testing
++
+Deployment
+```
+
+### 61.2 Validation Principle
+
+Implementation must be validated against the documented design rather than only against whether the application builds successfully.
+
+```text
+Technical Design
+      ↓
+Implementation
+      ↓
+Validation
+      ↓
+V1 Completion
+```
+
+### 61.3 Architecture Validation
+
+Verify that the implemented architecture matches:
+
+```text
+Android Architecture
+Backend Architecture
+Package Structure
+Module Boundaries
+Layer Boundaries
+```
+
+### 61.4 Domain Validation
+
+Verify that the implementation correctly represents:
+
+```text
+Domain Entities
+Value Objects
+Business Rules
+Domain Validation
+Domain Invariants
+```
+
+### 61.5 Database Validation
+
+Verify:
+
+```text
+Local Schema
+Backend Schema
+Relationships
+Constraints
+Indexes
+Transactions
+Migrations
+```
+
+### 61.6 Data Consistency Validation
+
+Verify consistency between:
+
+```text
+Expense
+ExpenseSplits
+Settlement
+Balance
+Group
+Membership
+```
+
+### 61.7 Offline Validation
+
+Verify:
+
+```text
+Offline Read
+Offline Mutation
+Local Transaction
+Pending SyncOperation
+Application Restart
+Network Recovery
+```
+
+### 61.8 Synchronization Validation
+
+Verify:
+
+```text
+Push
+Pull
+SyncState
+Cursor
+Retry
+Recovery
+Idempotency
+```
+
+### 61.9 Conflict Validation
+
+Verify:
+
+```text
+Conflict Detection
+Conflict Persistence
+Conflict Resolution
+Resolution Authorization
+Convergence
+```
+
+### 61.10 P2P Validation
+
+Verify:
+
+```text
+Discovery
+Handshake
+Authentication
+Authorization
+Protocol Negotiation
+P2P Push
+P2P Pull
+Recovery
+```
+
+### 61.11 Security Validation
+
+Verify:
+
+```text
+Authentication
+Authorization
+Device Identity
+Device Revocation
+Transport Security
+Secret Handling
+Replay Protection
+```
+
+### 61.12 API Validation
+
+Verify:
+
+```text
+API Contract
+Request Validation
+Response Contract
+Error Contract
+API Version
+Backward Compatibility
+```
+
+### 61.13 Background Processing Validation
+
+Verify:
+
+```text
+Worker Scheduling
+Retry
+Backoff
+Cancellation
+Process Death
+Recovery
+```
+
+### 61.14 Testing Validation
+
+Verify that required tests exist and pass:
+
+```text
+Unit
+Integration
+Synchronization
+Conflict
+P2P
+End-to-End
+Security
+Performance
+```
+
+### 61.15 Deployment Validation
+
+Verify:
+
+```text
+Development
+Test
+Staging
+Production
+```
+
+deployment procedures are implemented according to the defined architecture.
+
+### 61.16 Observability Validation
+
+Verify:
+
+```text
+Logging
+Metrics
+Health Checks
+Monitoring
+Alerts
+Correlation IDs
+```
+
+### 61.17 Backup Validation
+
+Verify:
+
+```text
+Backup
+Restore
+Recovery
+Financial Data Integrity
+Synchronization Metadata Integrity
+```
+
+### 61.18 Implementation Traceability
+
+Each major implementation item should be traceable to its corresponding design requirement.
+
+```text
+Requirement
+   ↓
+Technical Design
+   ↓
+Implementation
+   ↓
+Test
+   ↓
+Validation
+```
+
+### 61.19 Defect Classification
+
+Implementation defects should be classified as:
+
+```text
+Domain Defect
+Data Defect
+API Defect
+Synchronization Defect
+Security Defect
+P2P Defect
+UI Defect
+Infrastructure Defect
+Deployment Defect
+```
+
+### 61.20 Validation Failure
+
+If validation fails:
+
+```text
+Validation Failure
+      ↓
+Identify Defect
+      ↓
+Fix Implementation
+      ↓
+Run Relevant Tests
+      ↓
+Revalidate
+```
+
+### 61.21 Validation Completion Criteria
+
+Implementation Validation is complete when:
+
+```text
+Architecture Validated
+Domain Validated
+Database Validated
+Offline Behavior Validated
+Synchronization Validated
+Conflict Handling Validated
+P2P Validated
+Security Validated
+API Validated
+Background Processing Validated
+Testing Validated
+Deployment Validated
+Observability Validated
+Backup and Recovery Validated
+```
+
+### 61.22 Implementation Validation Invariants
+
+The following rules are mandatory:
+
+- Implementation must conform to the approved architecture.
+- Domain invariants must be preserved.
+- Financial data must remain consistent.
+- Offline operations must remain durable.
+- Synchronization must remain idempotent.
+- Conflicts must not be silently overwritten.
+- P2P synchronization must follow the security model.
+- Required tests must pass.
+- Deployment configuration must remain environment-specific.
+- Production readiness must be validated before release.
+
 
 ## 62. Implementation Checklist
 
+### 62.1 Purpose
+
+This section provides the master implementation checklist for SplitSync V1.
+
+### 62.2 Project Setup
+
+```text
+[ ] Repository Structure Created
+[ ] Android Project Created
+[ ] Backend Project Created
+[ ] Build Configuration Created
+[ ] Development Environment Configured
+[ ] Test Environment Configured
+```
+
+### 62.3 Domain
+
+```text
+[ ] Domain Entities Implemented
+[ ] Value Objects Implemented
+[ ] Common Types Implemented
+[ ] Domain Validation Implemented
+[ ] Domain Invariants Tested
+```
+
+### 62.4 Database
+
+```text
+[ ] Local Database Implemented
+[ ] Backend Database Implemented
+[ ] Entity Relationships Implemented
+[ ] Constraints Implemented
+[ ] Indexes Implemented
+[ ] Transactions Implemented
+[ ] Database Migrations Implemented
+```
+
+### 62.5 Expense Management
+
+```text
+[ ] Expense Creation Implemented
+[ ] Expense Update Implemented
+[ ] Expense Deletion Implemented
+[ ] Expense Splits Implemented
+[ ] Split Validation Implemented
+[ ] Settlement Implemented
+[ ] Balance Calculation Implemented
+```
+
+### 62.6 Groups and Membership
+
+```text
+[ ] Group Creation Implemented
+[ ] Group Management Implemented
+[ ] Membership Implemented
+[ ] Membership Validation Implemented
+[ ] Membership Authorization Implemented
+```
+
+### 62.7 Authentication and Authorization
+
+```text
+[ ] Authentication Implemented
+[ ] Session Handling Implemented
+[ ] Device Identity Implemented
+[ ] Authorization Implemented
+[ ] Device Revocation Implemented
+```
+
+### 62.8 Backend API
+
+```text
+[ ] API Endpoints Implemented
+[ ] Request DTOs Implemented
+[ ] Response DTOs Implemented
+[ ] Validation Implemented
+[ ] Error Handling Implemented
+[ ] API Versioning Implemented
+```
+
+### 62.9 Android
+
+```text
+[ ] Data Layer Implemented
+[ ] Repository Layer Implemented
+[ ] Application Services Integrated
+[ ] Presentation Layer Implemented
+[ ] Offline-First Behavior Implemented
+[ ] Background Processing Implemented
+```
+
+### 62.10 Synchronization
+
+```text
+[ ] SyncOperation Implemented
+[ ] SyncState Implemented
+[ ] Sync Engine Implemented
+[ ] Push Implemented
+[ ] Pull Implemented
+[ ] Cursor Handling Implemented
+[ ] Retry Implemented
+[ ] Recovery Implemented
+[ ] Idempotency Implemented
+```
+
+### 62.11 Conflict Handling
+
+```text
+[ ] Conflict Detection Implemented
+[ ] Conflict Persistence Implemented
+[ ] Conflict Resolution Implemented
+[ ] Resolution Validation Implemented
+[ ] Resolution Authorization Implemented
+[ ] Conflict Convergence Tested
+```
+
+### 62.12 P2P
+
+```text
+[ ] P2P Discovery Implemented
+[ ] P2P Connection Implemented
+[ ] Handshake Implemented
+[ ] Protocol Negotiation Implemented
+[ ] Peer Authentication Implemented
+[ ] Peer Authorization Implemented
+[ ] P2P Push Implemented
+[ ] P2P Pull Implemented
+[ ] P2P Recovery Implemented
+```
+
+### 62.13 Security
+
+```text
+[ ] Authentication Security Tested
+[ ] Authorization Security Tested
+[ ] Device Identity Security Tested
+[ ] Device Revocation Tested
+[ ] Transport Security Verified
+[ ] Secret Management Verified
+[ ] Replay Protection Tested
+[ ] Sensitive Logging Prevented
+```
+
+### 62.14 Testing
+
+```text
+[ ] Unit Tests Implemented
+[ ] Integration Tests Implemented
+[ ] Synchronization Tests Implemented
+[ ] Conflict Tests Implemented
+[ ] P2P Tests Implemented
+[ ] End-to-End Tests Implemented
+[ ] Security Tests Implemented
+[ ] Performance Tests Implemented
+[ ] Regression Tests Implemented
+```
+
+### 62.15 CI/CD
+
+```text
+[ ] CI Pipeline Implemented
+[ ] Build Validation Implemented
+[ ] Static Analysis Implemented
+[ ] Automated Tests Integrated
+[ ] Security Checks Integrated
+[ ] Artifact Generation Implemented
+[ ] Deployment Pipeline Implemented
+```
+
+### 62.16 Deployment
+
+```text
+[ ] Development Deployment Implemented
+[ ] Test Deployment Implemented
+[ ] Staging Deployment Implemented
+[ ] Production Deployment Implemented
+[ ] Migration Deployment Process Implemented
+[ ] Rollback Strategy Defined
+```
+
+### 62.17 Monitoring
+
+```text
+[ ] Health Checks Implemented
+[ ] Application Monitoring Implemented
+[ ] Backend Monitoring Implemented
+[ ] Database Monitoring Implemented
+[ ] Sync Monitoring Implemented
+[ ] P2P Monitoring Implemented
+[ ] Security Monitoring Implemented
+[ ] Alerts Implemented
+```
+
+### 62.18 Backup and Recovery
+
+```text
+[ ] Backup Strategy Implemented
+[ ] Backup Scheduling Implemented
+[ ] Backup Monitoring Implemented
+[ ] Restore Procedure Implemented
+[ ] Recovery Procedure Implemented
+[ ] Recovery Testing Completed
+[ ] RPO Defined
+[ ] RTO Defined
+```
+
+### 62.19 Release
+
+```text
+[ ] Release Version Defined
+[ ] Release Candidate Process Implemented
+[ ] Release Checklist Completed
+[ ] Release Notes Prepared
+[ ] Compatibility Validated
+[ ] Production Approval Obtained
+[ ] Post-Release Validation Defined
+```
+
+### 62.20 Final Checklist
+
+```text
+[ ] All V1 Features Implemented
+[ ] All Critical Business Rules Implemented
+[ ] All Critical Tests Passing
+[ ] Offline-First Behavior Verified
+[ ] Backend Synchronization Verified
+[ ] P2P Synchronization Verified
+[ ] Conflict Handling Verified
+[ ] Security Validation Completed
+[ ] Performance Validation Completed
+[ ] Migration Validation Completed
+[ ] Staging Validation Completed
+[ ] Monitoring Active
+[ ] Backup Verified
+[ ] Recovery Tested
+[ ] Production Deployment Ready
+```
+
+
 ## 63. V1 Completion Criteria
 
+### 63.1 Purpose
+
+This section defines the criteria that must be satisfied before SplitSync V1 is considered implementation-complete.
+
+### 63.2 Functional Completion
+
+All V1-defined functionality must be implemented and validated.
+
+```text
+Groups
+Memberships
+Expenses
+Expense Splits
+Settlements
+Balances
+Authentication
+Authorization
+Offline Operations
+Synchronization
+Conflict Handling
+P2P Synchronization
+```
+
+### 63.3 Domain Completion
+
+The Domain must satisfy all documented:
+
+```text
+Entities
+Value Objects
+Business Rules
+Validation Rules
+Invariants
+```
+
+### 63.4 Data Completion
+
+Both local and Backend persistence must be implemented and validated.
+
+```text
+Schema
+Relationships
+Constraints
+Transactions
+Migrations
+```
+
+### 63.5 Offline-First Completion
+
+The application must support:
+
+```text
+Local Reads
+Local Writes
+Offline Mutations
+Pending SyncOperations
+Application Restart
+Network Recovery
+```
+
+without requiring continuous Backend connectivity.
+
+### 63.6 Synchronization Completion
+
+Synchronization must support:
+
+```text
+Push
+Pull
+SyncState
+Cursor
+Retry
+Recovery
+Idempotency
+```
+
+### 63.7 Conflict Completion
+
+The system must support:
+
+```text
+Conflict Detection
+Conflict Persistence
+Conflict Resolution
+Resolution Validation
+Resolution Authorization
+Convergence
+```
+
+### 63.8 P2P Completion
+
+P2P functionality must support the V1-defined:
+
+```text
+Discovery
+Connection
+Handshake
+Authentication
+Authorization
+Synchronization
+Recovery
+```
+
+### 63.9 Security Completion
+
+Security requirements must be validated for:
+
+```text
+Authentication
+Authorization
+Device Identity
+Device Revocation
+Transport
+Secrets
+Replay Protection
+```
+
+### 63.10 Testing Completion
+
+Required automated tests must pass.
+
+```text
+Unit
+Integration
+Synchronization
+Conflict
+P2P
+End-to-End
+Security
+Performance
+```
+
+### 63.11 Deployment Completion
+
+The system must be deployable through:
+
+```text
+Development
+Test
+Staging
+Production
+```
+
+using documented procedures.
+
+### 63.12 Monitoring Completion
+
+Production monitoring must be capable of detecting critical:
+
+```text
+Application Failures
+Backend Failures
+Database Failures
+Synchronization Failures
+P2P Failures
+Security Failures
+```
+
+### 63.13 Recovery Completion
+
+Backup and recovery procedures must be implemented and tested.
+
+### 63.14 Documentation Completion
+
+Required implementation documentation must be complete, including:
+
+```text
+Technical Design
+Implementation Plan
+API Documentation
+Database Documentation
+Deployment Documentation
+Testing Documentation
+Release Documentation
+```
+
+### 63.15 Compatibility Completion
+
+The following must be compatible:
+
+```text
+Android
+Backend
+Database
+API
+Sync Protocol
+P2P Protocol
+```
+
+### 63.16 Release Readiness
+
+A release candidate must successfully pass:
+
+```text
+Test Environment
+Staging Environment
+Regression Suite
+Security Validation
+Synchronization Validation
+Production Readiness Validation
+```
+
+### 63.17 V1 Sign-Off
+
+V1 may be marked complete only after the required stakeholders approve:
+
+```text
+Functional Readiness
+Technical Readiness
+Security Readiness
+Operational Readiness
+Release Readiness
+```
+
+### 63.18 V1 Completion State
+
+The final state is:
+
+```text
+Implementation
+      ↓
+Validation
+      ↓
+Testing
+      ↓
+Staging
+      ↓
+Approval
+      ↓
+V1 Ready
+```
+
+### 63.19 V1 Completion Criteria
+
+V1 is complete when:
+
+```text
+[ ] Functional Requirements Implemented
+[ ] Domain Rules Implemented
+[ ] Database Implemented
+[ ] Android Implementation Complete
+[ ] Backend Implementation Complete
+[ ] Offline-First Implementation Complete
+[ ] Synchronization Complete
+[ ] Conflict Handling Complete
+[ ] P2P Complete
+[ ] Security Complete
+[ ] Testing Complete
+[ ] CI/CD Complete
+[ ] Deployment Complete
+[ ] Monitoring Complete
+[ ] Backup and Recovery Complete
+[ ] Documentation Complete
+[ ] Staging Validation Passed
+[ ] Release Candidate Approved
+[ ] Production Readiness Confirmed
+```
+
+
 ## 64. Future Implementation Extensions
+
+### 64.1 Purpose
+
+This section identifies implementation areas that may be added after SplitSync V1.
+
+Future extensions must not compromise the V1 architecture or existing financial/synchronization correctness.
+
+### 64.2 Extension Principle
+
+Future features should build on the existing architecture rather than introducing unrelated parallel implementations.
+
+```text
+V1 Foundation
+      ↓
+Extension
+      ↓
+New Capability
+```
+
+### 64.3 Advanced Synchronization
+
+Future versions may extend synchronization with:
+
+```text
+More Efficient Batching
+Advanced Delta Synchronization
+Improved Conflict Strategies
+Synchronization Optimization
+```
+
+### 64.4 Advanced Conflict Resolution
+
+Future versions may support:
+
+```text
+More Resolution Strategies
+User-Assisted Resolution
+Conflict History
+Advanced Merge Rules
+```
+
+### 64.5 Enhanced P2P
+
+Future P2P extensions may include:
+
+```text
+Improved Discovery
+Multi-Peer Synchronization
+Peer Relay
+Advanced Peer Management
+Improved Background P2P
+```
+
+### 64.6 Multi-Device Improvements
+
+Future versions may improve:
+
+```text
+Device Management
+Device Trust
+Device Revocation
+Device Synchronization
+```
+
+### 64.7 Performance Extensions
+
+Future optimization areas may include:
+
+```text
+Database Optimization
+Sync Batching Optimization
+Memory Optimization
+Network Optimization
+P2P Transfer Optimization
+```
+
+### 64.8 Scalability Extensions
+
+Future versions may support larger:
+
+```text
+Groups
+Memberships
+Expense Histories
+Synchronization Queues
+Device Counts
+```
+
+### 64.9 Backend Scaling
+
+Potential future infrastructure extensions include:
+
+```text
+Horizontal Scaling
+Database Scaling
+Caching
+Queue-Based Processing
+Load Distribution
+```
+
+### 64.10 Advanced Observability
+
+Future versions may add:
+
+```text
+Advanced Tracing
+Detailed Sync Diagnostics
+Performance Analytics
+Operational Dashboards
+Automated Anomaly Detection
+```
+
+### 64.11 Advanced Security
+
+Potential future security extensions include:
+
+```text
+Stronger Device Trust
+Additional Authentication Factors
+Advanced Key Rotation
+Enhanced Threat Detection
+```
+
+### 64.12 Data Export
+
+Future versions may support:
+
+```text
+Expense Export
+Settlement Export
+Balance Export
+Group Data Export
+```
+
+### 64.13 Data Import
+
+Future versions may support importing data from compatible external formats.
+
+### 64.14 Reporting Extensions
+
+Future versions may introduce:
+
+```text
+Expense Reports
+Group Reports
+Settlement Reports
+Spending Analytics
+```
+
+### 64.15 UI Extensions
+
+Future UI improvements may include:
+
+```text
+Advanced Filtering
+Search
+Sorting
+Visualization
+Improved Expense Entry
+Improved Settlement Workflows
+```
+
+### 64.16 Platform Extensions
+
+The architecture may later support additional clients/platforms where required.
+
+```text
+Android
+   ↓
+Additional Client
+```
+
+Such extensions must continue to use the defined Backend/API/Synchronization contracts.
+
+### 64.17 API Extensions
+
+Future API versions may introduce new capabilities while preserving supported V1 compatibility where required.
+
+### 64.18 Database Extensions
+
+Future schema changes must continue to use explicit versioned migrations.
+
+### 64.19 Synchronization Protocol Extensions
+
+Future protocol changes must use explicit protocol versioning.
+
+```text
+V1 Protocol
+      ↓
+Future Protocol Version
+```
+
+### 64.20 Backward Compatibility
+
+Future extensions must define compatibility behavior for existing:
+
+```text
+Android Clients
+Backend
+Database
+Sync Protocol
+P2P Peers
+```
+
+### 64.21 Feature Flags
+
+Future functionality may be introduced using feature flags where appropriate.
+
+Feature flags must not bypass:
+
+```text
+Authorization
+Validation
+Synchronization Integrity
+Security
+```
+
+### 64.22 Migration Strategy
+
+Future extensions requiring schema changes must provide:
+
+```text
+Migration
+Validation
+Rollback/Recovery Strategy
+Compatibility Plan
+```
+
+### 64.23 Testing Future Extensions
+
+Every future extension must add appropriate:
+
+```text
+Unit Tests
+Integration Tests
+Synchronization Tests
+Security Tests
+End-to-End Tests
+```
+
+where applicable.
+
+### 64.24 Future Extension Approval
+
+A future extension should be evaluated for:
+
+```text
+Business Value
+Architecture Impact
+Security Impact
+Data Impact
+Synchronization Impact
+Performance Impact
+Operational Impact
+```
+
+### 64.25 Future Extension Completion
+
+A future feature must not be considered complete until:
+
+```text
+Implementation
++
+Validation
++
+Testing
++
+Documentation
++
+Deployment Readiness
+```
+
+are completed.
+
+### 64.26 V1 Boundary
+
+Future extensions must remain outside the V1 scope unless explicitly approved as part of V1.
+
+### 64.27 Future Extension Invariants
+
+The following rules are mandatory:
+
+- Future extensions must preserve V1 financial correctness.
+- Future extensions must preserve existing Domain invariants.
+- Future extensions must not silently break supported API clients.
+- Database changes must use explicit migrations.
+- Synchronization protocol changes must be versioned.
+- P2P protocol changes must support explicit compatibility handling.
+- Security controls must not be bypassed by new features.
+- New synchronization behavior must preserve idempotency and convergence.
+- Future extensions must include appropriate automated tests.
+- V1 behavior must remain stable unless a deliberate breaking change is approved.
