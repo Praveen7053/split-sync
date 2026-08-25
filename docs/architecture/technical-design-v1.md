@@ -21190,19 +21190,13700 @@ The following rules are mandatory for V1:
 - Identity association and account linking must be idempotent.
 - Authentication state changes must not corrupt or delete local Domain data.
 
-17. Authorization Flow
+## 17. Authorization Flow
 
-18. Online Flow
+### 17.1 Purpose
 
-19. Offline Flow
+This section defines the authorization model and authorization flow for SplitSync V1.
 
-20. Peer-to-Peer Offline Flow
+Authentication answers:
 
-21. Backend Synchronization Flow
+```text
+Who is this User/Device?
+```
 
-22. Error Handling
+Authorization answers:
 
-23. Transaction Boundaries
+```text
+What is this User/Device allowed to do?
+```
+
+SplitSync must keep these responsibilities separate.
+
+The authorization system controls access to:
+
+- Groups.
+- Group membership.
+- Expenses.
+- Expense Splits.
+- Settlements.
+- Synchronization operations.
+- Peer-to-peer synchronization.
+- Backend resources.
+
+### 17.2 Core Principle
+
+The fundamental authorization rule is:
+
+```text
+Authenticated
+    ≠
+Authorized
+```
+
+A User may be correctly identified but still not have permission to perform a particular operation.
+
+Example:
+
+```text
+User U1
+    ↓
+Authenticated
+    ↓
+Not a member of Group G2
+    ↓
+Cannot modify Group G2
+```
+
+### 17.3 Authorization Layers
+
+SplitSync V1 uses multiple authorization layers:
+
+```text
+Device Authorization
+        ↓
+User Authorization
+        ↓
+Group Authorization
+        ↓
+Entity Authorization
+        ↓
+Operation Authorization
+```
+
+The exact checks depend on the operation being performed.
+
+### 17.4 Local Authorization
+
+Local authorization must work without Internet connectivity.
+
+Example:
+
+```text
+Internet = OFF
+
+User U1
+    ↓
+Member of Group G1
+    ↓
+Create Expense
+    ↓
+Allowed
+```
+
+The application must not require a backend request merely to validate ordinary local Group permissions.
+
+### 17.5 Backend Authorization
+
+When using the backend:
+
+```text
+Request
+    ↓
+Authenticate User/Device
+    ↓
+Validate Authorization
+    ↓
+Apply Operation
+```
+
+The backend must independently validate authorization.
+
+The Android client must never be treated as the sole authority for backend access control.
+
+### 17.6 P2P Authorization
+
+P2P authorization follows:
+
+```text
+Peer Identity
+      ↓
+Authenticated Peer
+      ↓
+User Identity
+      ↓
+Group Membership
+      ↓
+Allowed Synchronization Scope
+```
+
+A nearby peer must not automatically receive Group data.
+
+### 17.7 Authorization Subjects
+
+The primary authorization subjects are:
+
+```text
+User
+Device
+```
+
+A User represents the person performing the action.
+
+A Device represents the application installation from which the action originates.
+
+### 17.8 User Authorization
+
+User authorization determines whether the User can perform an action.
+
+Example:
+
+```text
+User U1
+    ↓
+Member of Group G1
+    ↓
+Can perform permitted G1 operations
+```
+
+### 17.9 Device Authorization
+
+The Device must also be recognized as an authorized source where required.
+
+Example:
+
+```text
+User U1
+    +
+Device D1
+    ↓
+Authorized synchronization source
+```
+
+A valid User identity must not automatically authorize an unknown or revoked Device.
+
+### 17.10 Group as Primary Authorization Boundary
+
+The Group is the primary authorization boundary for shared expense data.
+
+Conceptually:
+
+```text
+User
+  ↓
+Group Membership
+  ↓
+Group
+  ↓
+Expenses / Splits / Settlements
+```
+
+A User's access to Group-owned financial data is determined through Group membership and applicable permissions.
+
+### 17.11 Group Membership
+
+A User may be associated with a Group through:
+
+```text
+GroupMember
+```
+
+Conceptually:
+
+```text
+User U1
+    ↓
+GroupMember
+    ↓
+Group G1
+```
+
+Membership is the basis for ordinary Group access.
+
+### 17.12 Membership Status
+
+A Group membership should have a status such as:
+
+```text
+PENDING
+ACTIVE
+REMOVED
+DECLINED
+```
+
+The exact membership lifecycle is defined by the Group model.
+
+For authorization, the important distinction is:
+
+```text
+ACTIVE
+```
+
+versus:
+
+```text
+Not Active
+```
+
+### 17.13 Active Membership
+
+An Active member may perform operations allowed by their Group role/permissions.
+
+Example:
+
+```text
+User U1
+    ↓
+ACTIVE member of G1
+    ↓
+Create Expense
+```
+
+### 17.14 Removed Membership
+
+A removed member must not automatically retain authorization to perform new Group operations.
+
+Example:
+
+```text
+User U1
+    ↓
+Removed from G1
+    ↓
+New Expense
+    ↓
+Reject
+```
+
+Previously synchronized valid data may remain locally according to the application's data-retention rules.
+
+### 17.15 Pending Membership
+
+A pending invitation does not automatically grant full Group access.
+
+Example:
+
+```text
+Invitation
+    ↓
+PENDING
+    ↓
+Not yet authorized for normal Group operations
+```
+
+Membership becomes active only after the required acceptance/authorization flow.
+
+### 17.16 Group Roles
+
+V1 may define Group roles such as:
+
+```text
+OWNER
+ADMIN
+MEMBER
+```
+
+The exact role set must remain small and clear.
+
+### 17.17 OWNER
+
+The Owner has the highest Group-level authority.
+
+Typical responsibilities may include:
+
+```text
+Manage Group
+Manage Membership
+Change Group Settings
+Delete/Archive Group
+```
+
+The exact operations will be defined in the Group authorization matrix.
+
+### 17.18 ADMIN
+
+An Admin may perform selected management operations delegated by the Owner.
+
+Typical examples:
+
+```text
+Manage Members
+Manage Group Information
+```
+
+The exact permissions must be explicitly defined rather than assumed.
+
+### 17.19 MEMBER
+
+A Member is an ordinary Group participant.
+
+Typical permissions may include:
+
+```text
+View Group
+Create Expense
+View Expenses
+Create Settlement
+View Settlements
+```
+
+The exact permission matrix will be finalized before implementation.
+
+### 17.20 Role Is Not Authentication
+
+The role does not identify the User.
+
+```text
+User ID
+    ↓
+Identifies User
+
+Role
+    ↓
+Defines permissions within a Group
+```
+
+The same User may have different roles in different Groups.
+
+Example:
+
+```text
+User U1
+
+G1 → OWNER
+G2 → MEMBER
+G3 → ADMIN
+```
+
+### 17.21 Group-Specific Authorization
+
+Authorization must be evaluated in the context of the relevant Group.
+
+Example:
+
+```text
+User U1
+    ↓
+G1 → OWNER
+G2 → MEMBER
+```
+
+The User's OWNER permissions in G1 must not automatically apply to G2.
+
+### 17.22 Resource Ownership
+
+Some operations may depend on ownership.
+
+Example:
+
+```text
+Group G1
+    ↓
+Owner U1
+```
+
+Only the Owner may perform certain administrative operations.
+
+Ownership must be explicitly validated.
+
+### 17.23 Expense Authorization
+
+An Expense belongs to a Group.
+
+Therefore:
+
+```text
+Expense
+    ↓
+Group
+    ↓
+User Membership
+    ↓
+Authorization
+```
+
+A User cannot modify an Expense in a Group where the User is not authorized.
+
+### 17.24 Expense Creation
+
+A typical authorization flow is:
+
+```text
+Create Expense
+      ↓
+Identify User
+      ↓
+Identify Group
+      ↓
+Check Active Membership
+      ↓
+Check Expense Permission
+      ↓
+Validate Expense
+      ↓
+Create Expense
+```
+
+### 17.25 Expense Update
+
+For updating an Expense:
+
+```text
+Update Expense
+      ↓
+Identify User
+      ↓
+Identify Group
+      ↓
+Check Membership
+      ↓
+Check Update Permission
+      ↓
+Validate Entity Version
+      ↓
+Update
+```
+
+Version validation and authorization are separate checks.
+
+### 17.26 Expense Deletion
+
+Expense deletion requires stronger validation because it can affect financial history.
+
+Conceptually:
+
+```text
+Delete Expense
+      ↓
+Identify User
+      ↓
+Check Group Membership
+      ↓
+Check Delete Permission
+      ↓
+Check Domain Rules
+      ↓
+Create Delete Operation
+```
+
+The exact deletion policy will be finalized with the Expense lifecycle.
+
+### 17.27 Expense Split Authorization
+
+Expense Splits belong to an Expense.
+
+Therefore:
+
+```text
+ExpenseSplit
+    ↓
+Expense
+    ↓
+Group
+    ↓
+Authorization
+```
+
+A User should not modify an ExpenseSplit independently if doing so would violate the parent Expense's Domain rules.
+
+### 17.28 Settlement Authorization
+
+A Settlement belongs to a Group.
+
+Typical flow:
+
+```text
+Create Settlement
+      ↓
+Identify User
+      ↓
+Identify Group
+      ↓
+Check Active Membership
+      ↓
+Validate Settlement Permission
+      ↓
+Validate Participants
+      ↓
+Validate Amount
+      ↓
+Create Settlement
+```
+
+### 17.29 Settlement Participant Validation
+
+A settlement involving:
+
+```text
+From User
+To User
+```
+
+must validate that the relevant Users are authorized participants in the Group according to the Domain rules.
+
+The system must not allow arbitrary Users to be referenced in a Group settlement.
+
+### 17.30 Group Membership Authorization
+
+Membership changes are more sensitive than ordinary expense creation.
+
+Conceptually:
+
+```text
+Membership Change
+      ↓
+Identify Actor
+      ↓
+Check Group Role
+      ↓
+Check Target User
+      ↓
+Apply Membership Rule
+```
+
+Only authorized roles should be able to add/remove members.
+
+### 17.31 Invitation Authorization
+
+An invitation should be generated only by an authorized Group actor.
+
+Example:
+
+```text
+User U1
+    ↓
+OWNER / authorized role
+    ↓
+Invite User U2
+```
+
+A normal Member should not automatically gain the ability to modify Group membership unless explicitly permitted.
+
+### 17.32 Accept Invitation
+
+Accepting an invitation is a User action.
+
+Conceptually:
+
+```text
+Invitation
+      ↓
+Verify Invitation
+      ↓
+Verify Recipient
+      ↓
+User Accepts
+      ↓
+Create/Activate Membership
+```
+
+The receiving User must not be able to accept an invitation intended for another User.
+
+### 17.33 Peer Authorization
+
+P2P authorization must validate:
+
+```text
+Peer Device
+      ↓
+Source User
+      ↓
+Group Membership
+      ↓
+Requested Operation
+```
+
+Example:
+
+```text
+Peer Device D2
+    ↓
+User U2
+    ↓
+Member of G1
+    ↓
+Allowed to synchronize G1
+```
+
+### 17.34 Peer Discovery Is Not Authorization
+
+This rule is mandatory:
+
+```text
+Discovered Peer
+    ≠
+Authorized Peer
+```
+
+The application may display a discovered User, but synchronization still requires authentication and authorization.
+
+### 17.35 Peer Group Scope
+
+When two peers connect:
+
+```text
+Device A Groups
+        ∩
+Device B Authorized Groups
+        ↓
+Allowed Synchronization Scope
+```
+
+Only this scope should be considered for P2P synchronization.
+
+### 17.36 Synchronization Authorization
+
+A SyncOperation must be authorized before being applied.
+
+Conceptually:
+
+```text
+SyncOperation
+      ↓
+Identify Origin Device
+      ↓
+Identify User
+      ↓
+Identify Group
+      ↓
+Check Membership / Permission
+      ↓
+Validate Operation
+      ↓
+Apply
+```
+
+### 17.37 Origin Authorization
+
+The receiving side must validate the origin of the operation.
+
+Example:
+
+```text
+Operation O100
+Origin Device = D1
+Origin User   = U1
+Group         = G1
+```
+
+The receiver must determine whether:
+
+```text
+U1 / D1
+```
+
+was authorized to perform the operation against:
+
+```text
+G1
+```
+
+when the operation was created.
+
+### 17.38 Forwarded Operation
+
+An operation may travel:
+
+```text
+Device A
+    ↓
+Device B
+    ↓
+Device C
+```
+
+Device B must not become the origin.
+
+The authorization information must continue to identify:
+
+```text
+Original User
+Original Device
+Original Operation
+```
+
+### 17.39 P2P Forwarding
+
+A peer may forward an operation only when the protocol permits it.
+
+The forwarding device must not modify:
+
+```text
+operationId
+originDeviceId
+originUserId
+```
+
+The receiving device must still validate the operation.
+
+### 17.40 Backend Authorization
+
+The backend must independently verify:
+
+```text
+Authenticated User
+Authenticated Device
+Group Membership
+Role
+Requested Operation
+Entity State
+```
+
+The Android application cannot be trusted as the only authorization layer.
+
+### 17.41 Client-Side Authorization
+
+Android should perform authorization checks before executing local operations.
+
+Benefits include:
+
+- Immediate User feedback.
+- Consistent local behavior.
+- Reduced invalid local data.
+- Better offline support.
+
+However, client-side authorization does not replace backend authorization.
+
+### 17.42 Backend-Side Authorization
+
+The backend must independently repeat security-sensitive authorization checks.
+
+Example:
+
+```text
+Android says:
+"User is allowed"
+
+Backend:
+Verify independently
+```
+
+This prevents a modified or compromised client from bypassing authorization.
+
+### 17.43 Defense in Depth
+
+The authorization architecture follows:
+
+```text
+UI Validation
+      ↓
+Domain Authorization
+      ↓
+Local Persistence Validation
+      ↓
+Backend Authorization
+```
+
+Not every operation requires every layer, but security-sensitive operations must be validated at the appropriate boundaries.
+
+### 17.44 Domain Authorization
+
+Authorization rules that are part of the business domain should live in the Domain/Application layer rather than inside Android UI code.
+
+For example:
+
+```text
+Can User U1 modify Expense E1?
+```
+
+should not be decided by:
+
+```text
+ExpenseEditActivity
+```
+
+alone.
+
+### 17.45 UI Role Checks
+
+The UI may hide or disable actions based on permissions.
+
+Example:
+
+```text
+MEMBER
+    ↓
+Hide "Remove Member"
+```
+
+But UI visibility is not security.
+
+The underlying operation must still validate authorization.
+
+### 17.46 Unauthorized Local Operation
+
+If a User attempts an unauthorized local operation:
+
+```text
+Operation
+      ↓
+Authorization Check
+      ↓
+Denied
+```
+
+No Domain change should be persisted.
+
+There should be no:
+
+```text
+Expense
++
+SyncOperation
+```
+
+created for a denied operation.
+
+### 17.47 Unauthorized Remote Operation
+
+If an unauthorized SyncOperation is received:
+
+```text
+Receive Operation
+      ↓
+Authorization Check
+      ↓
+Denied
+```
+
+The operation must not modify the local Domain state.
+
+The result should be represented as an appropriate rejection.
+
+### 17.48 Authorization Failure vs Conflict
+
+These are different:
+
+```text
+Authorization Failure
+    ↓
+User/Device is not allowed
+
+Conflict
+    ↓
+Multiple valid changes cannot be safely combined
+```
+
+An unauthorized operation must not be treated as an ordinary data conflict.
+
+### 17.49 Authorization Failure vs Authentication Failure
+
+These are also different:
+
+```text
+Authentication Failure
+    ↓
+Cannot establish identity
+
+Authorization Failure
+    ↓
+Identity established
+but operation is not permitted
+```
+
+### 17.50 Authorization Failure vs Validation Failure
+
+Similarly:
+
+```text
+Authorization
+    ↓
+Is the actor allowed?
+
+Validation
+    ↓
+Is the operation data valid?
+```
+
+Example:
+
+```text
+User is authorized
+but split amounts are invalid
+```
+
+This is a Domain validation failure, not an authorization failure.
+
+### 17.51 Authorization Check Order
+
+Recommended order:
+
+```text
+1. Establish Identity
+        ↓
+2. Verify Device
+        ↓
+3. Verify Group Scope
+        ↓
+4. Verify Membership
+        ↓
+5. Verify Role / Permission
+        ↓
+6. Validate Domain Data
+        ↓
+7. Apply Operation
+```
+
+For backend synchronization:
+
+```text
+1. Authenticate Request
+        ↓
+2. Validate Device
+        ↓
+3. Validate User
+        ↓
+4. Validate Group Authorization
+        ↓
+5. Validate Operation
+        ↓
+6. Validate Version
+        ↓
+7. Apply Transaction
+```
+
+### 17.52 Authorization and Version
+
+Authorization must be checked independently from version.
+
+Example:
+
+```text
+User authorized
++
+Version conflict
+```
+
+Result:
+
+```text
+CONFLICT
+```
+
+Another example:
+
+```text
+User unauthorized
++
+Version matches
+```
+
+Result:
+
+```text
+REJECTED
+```
+
+### 17.53 Authorization and Offline Changes
+
+A User may create a valid local operation while offline.
+
+Example:
+
+```text
+User U1
+    ↓
+Active Member of G1
+    ↓
+Internet OFF
+    ↓
+Create Expense
+    ↓
+Authorized locally
+    ↓
+Persist Expense
+    ↓
+Create SyncOperation
+```
+
+When the operation later reaches the backend, authorization is checked again.
+
+### 17.54 Membership Changed While Offline
+
+Important scenario:
+
+```text
+Device A:
+User U1 is member of G1
+```
+
+Offline:
+
+```text
+U1 creates Expense E1
+```
+
+Meanwhile:
+
+```text
+Device B / Backend
+    ↓
+U1 removed from G1
+```
+
+Later:
+
+```text
+E1 synchronization
+    ↓
+Backend checks current authorization
+```
+
+The backend may reject the operation if the authorization rules require current membership.
+
+The exact historical-membership policy must be finalized in the Domain and Security design.
+
+### 17.55 Authorization Snapshot
+
+For synchronization, the system may need to preserve enough metadata to determine whether an operation was created by an authorized actor.
+
+Conceptually:
+
+```text
+Operation
+├── originUserId
+├── originDeviceId
+└── groupId
+```
+
+The exact authorization metadata will be finalized during implementation.
+
+### 17.56 Revoked Device
+
+If a Device is revoked:
+
+```text
+Device D1
+    ↓
+REVOKED
+```
+
+future backend synchronization operations from D1 should be rejected.
+
+Previously synchronized local data must not automatically be deleted.
+
+### 17.57 Revoked Peer
+
+Similarly:
+
+```text
+Peer D1
+    ↓
+No longer trusted
+```
+
+the local device must stop accepting new synchronization sessions from that peer.
+
+### 17.58 Group Removal and Synchronization
+
+When a User is removed from a Group:
+
+```text
+Group Membership
+    ↓
+REMOVED
+```
+
+new synchronization access should be blocked according to the authorization policy.
+
+Existing local data handling must follow the Group data-retention policy.
+
+### 17.59 Group Ownership Transfer
+
+If ownership can be transferred:
+
+```text
+Owner U1
+    ↓
+Transfer Ownership
+    ↓
+Owner U2
+```
+
+the authorization state must be synchronized consistently.
+
+Both local and backend authorization checks must respect the new ownership.
+
+### 17.60 Group Deletion
+
+Group deletion is a privileged operation.
+
+Conceptually:
+
+```text
+Delete Group
+      ↓
+Verify Owner / Authorized Role
+      ↓
+Verify Group State
+      ↓
+Create Group Deletion Change
+      ↓
+Synchronize
+```
+
+The exact deletion/tombstone strategy will be defined in the Group lifecycle.
+
+### 17.61 Permission Matrix
+
+The final permission matrix should explicitly define operations.
+
+A preliminary V1 model:
+
+| Operation | OWNER | ADMIN | MEMBER |
+|---|---:|---:|---:|
+| View Group | Yes | Yes | Yes |
+| View Expenses | Yes | Yes | Yes |
+| Create Expense | Yes | Yes | Yes |
+| Update Own Expense | Yes | Yes | Yes |
+| Update Others' Expense | Yes | Configurable | Configurable |
+| Delete Own Expense | Yes | Yes | Yes |
+| Delete Others' Expense | Yes | Configurable | No |
+| Create Settlement | Yes | Yes | Yes |
+| View Settlements | Yes | Yes | Yes |
+| Manage Members | Yes | Yes | No |
+| Change Group Settings | Yes | Configurable | No |
+| Delete/Archive Group | Yes | No | No |
+
+The exact V1 permission matrix must be finalized before implementation.
+
+### 17.62 Principle of Least Privilege
+
+Users should receive only the permissions required for their role.
+
+For example:
+
+```text
+MEMBER
+```
+
+should not automatically receive:
+
+```text
+Group Membership Administration
+```
+
+### 17.63 Default Deny
+
+Authorization should follow:
+
+```text
+Permission Explicitly Granted
+        ↓
+Allowed
+
+Permission Not Granted
+        ↓
+Denied
+```
+
+The system should not assume permission merely because an operation was not explicitly blocked.
+
+### 17.64 Authorization and Synchronization Scope
+
+A synchronization request must be scoped.
+
+Example:
+
+```text
+Request:
+Synchronize G1
+```
+
+must not implicitly return:
+
+```text
+G2
+G3
+G4
+```
+
+unless explicitly authorized and requested.
+
+### 17.65 Data Minimization
+
+The synchronization layer should transmit only data required for the authorized scope.
+
+Example:
+
+```text
+Peer authorized for G1
+```
+
+should receive:
+
+```text
+G1 data
+```
+
+not:
+
+```text
+All local Groups
+```
+
+### 17.66 Authorization and Profile Data
+
+User profile data also requires access control.
+
+Not every Group member necessarily needs access to every profile attribute.
+
+For example:
+
+```text
+Display Name
+```
+
+may be shared for Group identification.
+
+Sensitive attributes such as:
+
+```text
+Phone Number
+Email
+```
+
+should only be exposed when required by the relevant feature and authorization rules.
+
+### 17.67 Phone Number Authorization
+
+A phone number must not become globally visible simply because a User belongs to a Group.
+
+Access to phone numbers should be explicitly controlled by the relevant profile/privacy policy.
+
+### 17.68 Email Authorization
+
+Email follows the same principle.
+
+The application should not broadcast email addresses to nearby peers unless explicitly required and authorized.
+
+### 17.69 P2P Authorization Example
+
+```text
+Device A
+    ↓
+Discovers Device B
+    ↓
+B belongs to G1
+    ↓
+A and B authenticate
+    ↓
+B requests G1 synchronization
+    ↓
+A verifies B's Group membership
+    ↓
+Authorized
+    ↓
+Exchange G1 operations
+```
+
+### 17.70 P2P Unauthorized Example
+
+```text
+Device A
+    ↓
+Discovers Device B
+    ↓
+B is not a member of G1
+    ↓
+B requests G1 synchronization
+    ↓
+Authorization Check
+    ↓
+DENIED
+```
+
+No Group financial data should be transmitted.
+
+### 17.71 Backend Unauthorized Example
+
+```text
+Device A
+    ↓
+Authenticated User U1
+    ↓
+Request:
+Update Expense E100
+    ↓
+Expense belongs to G2
+    ↓
+U1 is not authorized for G2
+    ↓
+REJECT
+```
+
+The backend must not trust the client-provided claim that U1 owns or belongs to G2.
+
+### 17.72 Authorization Result
+
+Authorization checks should produce a structured result.
+
+Conceptually:
+
+```text
+AuthorizationResult
+├── allowed
+├── permission
+├── reasonCode
+└── metadata
+```
+
+Example:
+
+```text
+allowed = false
+reasonCode = NOT_GROUP_MEMBER
+```
+
+### 17.73 Authorization Reason Codes
+
+Potential V1 reason codes:
+
+```text
+NOT_AUTHENTICATED
+DEVICE_NOT_REGISTERED
+DEVICE_REVOKED
+NOT_GROUP_MEMBER
+MEMBERSHIP_INACTIVE
+INSUFFICIENT_ROLE
+RESOURCE_NOT_FOUND
+GROUP_ACCESS_DENIED
+OPERATION_NOT_ALLOWED
+```
+
+The final error-code catalog will be defined during API/Security implementation.
+
+### 17.74 Authorization Audit
+
+Security-sensitive authorization events may be logged for diagnostics/auditing.
+
+Examples:
+
+```text
+Unauthorized synchronization attempt
+Device revocation
+Membership change
+Role change
+Ownership transfer
+```
+
+Logs must not unnecessarily contain sensitive financial or personal information.
+
+### 17.75 Local Authorization Logs
+
+The Android application should avoid retaining excessive sensitive authorization logs.
+
+Local logs should primarily support:
+
+```text
+Debugging
+Error Diagnosis
+Security Diagnostics
+```
+
+### 17.76 Backend Authorization Logs
+
+The backend may maintain security-relevant audit information for:
+
+```text
+Authentication
+Authorization failures
+Device registration
+Device revocation
+Membership changes
+Administrative actions
+```
+
+The exact retention policy will be defined separately.
+
+### 17.77 Authorization and Transactions
+
+Authorization must be validated before committing the Domain change.
+
+Conceptually:
+
+```text
+BEGIN TRANSACTION
+
+Authorize
+    ↓
+Validate
+    ↓
+Apply Domain Change
+    ↓
+Create SyncOperation
+    ↓
+COMMIT
+```
+
+If authorization fails:
+
+```text
+ROLLBACK
+```
+
+### 17.78 Unauthorized Operation and Sync Queue
+
+An unauthorized local operation must never enter:
+
+```text
+sync_operations
+```
+
+because no valid Domain change was created.
+
+### 17.79 Unauthorized Remote Operation
+
+A rejected remote operation may be recorded as:
+
+```text
+REJECTED
+```
+
+for synchronization diagnostics, but it must not modify Domain state.
+
+### 17.80 Authorization and Conflict Data
+
+Authorization failure must not automatically create a normal Conflict.
+
+Example:
+
+```text
+User removed from Group
+      ↓
+Offline Expense arrives
+      ↓
+Authorization fails
+```
+
+This is:
+
+```text
+AUTHORIZATION_FAILURE
+```
+
+not:
+
+```text
+CONCURRENT_UPDATE
+```
+
+unless both conditions independently exist.
+
+### 17.81 Authorization and Conflict Can Coexist
+
+An operation may have:
+
+```text
+Version Conflict
++
+Authorization Problem
+```
+
+The system must apply a defined validation order.
+
+Security-sensitive authorization checks should not be bypassed simply because a version conflict exists.
+
+### 17.82 Authorization and Derived Data
+
+Derived balances do not require independent authorization records.
+
+Instead:
+
+```text
+User authorized to view Group
+        ↓
+Can calculate/view authorized Group balance
+```
+
+The balance is derived from authorized Domain data.
+
+### 17.83 Authorization and Offline Balance Calculation
+
+Offline:
+
+```text
+User
+    ↓
+Authorized Group Member
+    ↓
+Read Group Expenses
+    ↓
+Calculate Balance
+```
+
+No Internet request is required.
+
+### 17.84 Authorization Flow — Local Expense
+
+```text
+User
+  ↓
+Authenticated Locally
+  ↓
+Select Group
+  ↓
+Check Active Membership
+  ↓
+Check Permission
+  ↓
+Validate Expense
+  ↓
+Save Expense
+  ↓
+Create SyncOperation
+```
+
+### 17.85 Authorization Flow — Backend Expense
+
+```text
+Request
+  ↓
+Authenticate User/Device
+  ↓
+Identify Group
+  ↓
+Check Membership
+  ↓
+Check Permission
+  ↓
+Validate Expense
+  ↓
+Validate Version
+  ↓
+Apply Transaction
+```
+
+### 17.86 Authorization Flow — P2P Expense
+
+```text
+Receive Operation
+  ↓
+Authenticate Peer
+  ↓
+Identify Origin User/Device
+  ↓
+Identify Group
+  ↓
+Check Group Authorization
+  ↓
+Validate Operation
+  ↓
+Validate Version
+  ↓
+Apply Transaction
+```
+
+### 17.87 Complete Authorization Flow
+
+```text
+Request / Local Action
+        ↓
+Identify User
+        ↓
+Identify Device
+        ↓
+Authentication Valid?
+        │
+        ├── No → Reject / Local-only handling
+        │
+        └── Yes
+              ↓
+        Identify Resource
+              ↓
+        Identify Group
+              ↓
+        Check Membership
+              ↓
+        Check Role / Permission
+              ↓
+        Check Device Authorization
+              ↓
+        Validate Domain Rules
+              ↓
+        Validate Version
+              ↓
+        Apply Transaction
+              ↓
+        Create SyncOperation if required
+```
+
+### 17.88 Authorization Model Summary
+
+```text
+Authorization
+│
+├── Identity
+│   ├── User
+│   └── Device
+│
+├── Group Access
+│   ├── Membership
+│   ├── Role
+│   └── Permissions
+│
+├── Entity Access
+│   ├── Group
+│   ├── Expense
+│   ├── ExpenseSplit
+│   └── Settlement
+│
+├── Synchronization Access
+│   ├── Backend
+│   └── Peer
+│
+└── Security Rules
+    ├── Default Deny
+    ├── Least Privilege
+    ├── Independent Backend Validation
+    └── Data Minimization
+```
+
+### 17.89 Authorization Invariants
+
+The following rules are mandatory for V1:
+
+- Authentication and authorization must remain separate concerns.
+- A successfully authenticated User is not automatically authorized for every operation.
+- Local authorization must work without Internet connectivity.
+- Backend authorization must be independently validated by the backend.
+- P2P authorization must be independently validated by the receiving device.
+- Being connected to the same Wi-Fi or Hotspot does not grant authorization.
+- Group membership is the primary authorization boundary for shared expense data.
+- Only active Group members may perform ordinary Group operations.
+- Pending invitations do not automatically grant full Group access.
+- Removed members must not retain authorization for new Group operations.
+- Group roles must be scoped to the specific Group.
+- A User's role in one Group must not automatically apply to another Group.
+- Ownership and administrative permissions must be explicitly defined.
+- The permission model must follow least privilege.
+- The default authorization behavior must be deny unless permission is explicitly granted.
+- UI visibility must not be treated as a security boundary.
+- Domain/Application authorization must exist independently of UI checks.
+- Unauthorized local operations must not modify Domain state.
+- Unauthorized local operations must not create SyncOperations.
+- Unauthorized remote operations must not modify Domain state.
+- Authorization failures must be distinguished from authentication failures.
+- Authorization failures must be distinguished from Domain validation failures.
+- Authorization failures must be distinguished from synchronization conflicts.
+- SyncOperations must carry enough origin information to validate authorization.
+- Forwarded SyncOperations must preserve their original User and Device identity.
+- P2P synchronization must be limited to authorized Groups.
+- Synchronization requests must be scoped to authorized data.
+- Sensitive profile information must not be unnecessarily exposed during synchronization or discovery.
+- Phone numbers and email addresses must not be treated as unrestricted Group data.
+- Device revocation must prevent future unauthorized synchronization.
+- Authentication failure must not delete local Domain data.
+- Membership changes must be synchronized consistently.
+- Authorization checks must occur before committing sensitive Domain changes.
+- Authorization and Domain changes should be applied transactionally where required.
+- Backend authorization must never rely solely on claims supplied by the Android client.
+- Conflict resolution must not bypass authorization checks.
+- Derived balances inherit authorization from the underlying Group/Domain data.
+- Authorization rules must support both Backend and Peer synchronization.
+- Authorization design must preserve eventual convergence only among authorized devices and Users.
+
+## 18. Online Flow
+
+### 18.1 Purpose
+
+This section defines the online execution flow for SplitSync V1.
+
+SplitSync is designed to support both:
+
+```text
+Online Operation
+```
+
+and:
+
+```text
+Offline Operation
+```
+
+without maintaining separate application modes.
+
+When Internet connectivity is available, the application should automatically use the backend for:
+
+- Synchronization.
+- Server-side backup.
+- Cross-device synchronization.
+- Backend authentication.
+- Server-side Group synchronization.
+- Recovery of synchronized data.
+
+When Internet connectivity is unavailable, the application must continue using the local database and local-first architecture.
+
+### 18.2 Core Principle
+
+The application must not require the User to manually select:
+
+```text
+ONLINE MODE
+```
+
+or:
+
+```text
+OFFLINE MODE
+```
+
+Instead:
+
+```text
+Application
+     ↓
+Detect Available Connectivity
+     ↓
+Select Appropriate Synchronization Channel
+```
+
+The User should experience one continuous application.
+
+### 18.3 Online Does Not Mean Local Data Is Replaced
+
+Even when Internet is available:
+
+```text
+Room Database
+```
+
+remains the primary local working data source.
+
+The architecture is:
+
+```text
+User
+ ↓
+Android Application
+ ↓
+Local Domain / Room
+ ↓
+Sync Engine
+ ↓
+Backend
+```
+
+not:
+
+```text
+User
+ ↓
+Backend
+ ↓
+Application
+```
+
+### 18.4 Online Architecture
+
+Conceptually:
+
+```text
+┌─────────────────────────────┐
+│       Android Device        │
+│                             │
+│  UI                          │
+│   ↓                          │
+│  Domain                      │
+│   ↓                          │
+│  Room Database               │
+│   ↓                          │
+│  Sync Engine                 │
+└──────────────┬──────────────┘
+               │
+               │ Internet
+               ▼
+┌─────────────────────────────┐
+│       Spring Boot Backend   │
+│                             │
+│ Authentication              │
+│ Authorization               │
+│ Sync API                    │
+│ Domain Validation           │
+│ Persistence                 │
+└──────────────┬──────────────┘
+               │
+               ▼
+           MySQL
+```
+
+### 18.5 Online Flow Overview
+
+The general online flow is:
+
+```text
+Application Launch
+        ↓
+Load Local User
+        ↓
+Load Local Data
+        ↓
+Detect Connectivity
+        ↓
+Internet Available
+        ↓
+Check Backend Authentication
+        ↓
+Authenticate if Required
+        ↓
+Start Synchronization
+        ↓
+Push Local Changes
+        ↓
+Pull Remote Changes
+        ↓
+Apply Changes Locally
+        ↓
+Update SyncState
+        ↓
+Application Continues Normally
+```
+
+### 18.6 Application Launch With Internet
+
+When the application starts while Internet is available:
+
+```text
+Application Launch
+        ↓
+Load Device
+        ↓
+Load Local User
+        ↓
+Load Local Groups
+        ↓
+Load Local Expenses
+        ↓
+Display Local State
+        ↓
+Check Connectivity
+        ↓
+Start Backend Synchronization
+```
+
+The application should not wait for synchronization before displaying locally available data unless a specific operation explicitly requires fresh server data.
+
+### 18.7 Local Data First
+
+The User should see locally stored data immediately.
+
+Example:
+
+```text
+Application Launch
+      ↓
+Room Database
+      ↓
+Display Groups
+      ↓
+Display Expenses
+      ↓
+Background Synchronization
+```
+
+This keeps the application responsive even when:
+
+```text
+Backend is slow
+```
+
+or:
+
+```text
+Network is unstable
+```
+
+### 18.8 Connectivity Detection
+
+The application should determine whether backend connectivity is currently available.
+
+Conceptually:
+
+```text
+Connectivity Check
+        ↓
+Internet Available?
+    ┌───┴────┐
+   Yes       No
+    │         │
+Backend     Local
+Available   Operation
+```
+
+Connectivity detection must not be treated as proof that the backend request will succeed.
+
+### 18.9 Internet Available but Backend Unavailable
+
+Possible scenario:
+
+```text
+Internet = ON
+Backend = DOWN
+```
+
+The application must behave similarly to an offline synchronization condition:
+
+```text
+Local functionality
+       ↓
+Available
+
+SyncOperations
+       ↓
+Remain PENDING / Retryable
+```
+
+The application must not lose local data.
+
+### 18.10 Backend Authentication
+
+Before backend synchronization:
+
+```text
+Check Authentication
+        ↓
+Authenticated?
+   ┌────┴────┐
+  Yes       No
+   │          │
+ Sync       Authenticate
+```
+
+If authentication is unavailable:
+
+```text
+Local functionality continues
+```
+
+### 18.11 Authentication Expiration
+
+If the backend session has expired:
+
+```text
+Authenticated
+      ↓
+Token Expired
+      ↓
+Authentication Required
+```
+
+The application should:
+
+```text
+Preserve local data
+Preserve pending SyncOperations
+Request/perform re-authentication
+Resume synchronization after success
+```
+
+### 18.12 Local Expense Creation While Online
+
+Even online, a newly created Expense follows the local-first path:
+
+```text
+User Creates Expense
+        ↓
+Validate Locally
+        ↓
+Save Expense in Room
+        ↓
+Save ExpenseSplits
+        ↓
+Create SyncOperation
+        ↓
+COMMIT
+        ↓
+Synchronization Worker
+        ↓
+Backend
+```
+
+The application should not require the backend request to succeed before the Expense appears locally.
+
+### 18.13 Online Write Flow
+
+Complete write flow:
+
+```text
+User Action
+    ↓
+Domain Validation
+    ↓
+Authorization
+    ↓
+Room Transaction
+    ├── Save Domain Entity
+    ├── Save Related Entities
+    └── Create SyncOperation
+    ↓
+COMMIT
+    ↓
+UI Updates
+    ↓
+Sync Worker
+    ↓
+Backend API
+```
+
+### 18.14 Backend Push
+
+The Sync Engine sends pending operations to the backend.
+
+Example:
+
+```text
+sync_operations
+
+O100 → PENDING
+O101 → PENDING
+O102 → PENDING
+```
+
+The synchronization worker sends them:
+
+```text
+O100
+O101
+O102
+```
+
+and processes the corresponding results.
+
+### 18.15 Backend Operation Validation
+
+The backend validates each operation:
+
+```text
+Authentication
+        ↓
+Authorization
+        ↓
+Operation Structure
+        ↓
+Domain Rules
+        ↓
+Version
+        ↓
+Idempotency
+        ↓
+Apply Transaction
+```
+
+### 18.16 Backend Operation Result
+
+The backend may return:
+
+```text
+APPLIED
+ALREADY_APPLIED
+CONFLICT
+REJECTED
+```
+
+The Android application processes each result accordingly.
+
+### 18.17 Successful Push
+
+Example:
+
+```text
+O100
+    ↓
+Backend
+    ↓
+APPLIED
+```
+
+Local state:
+
+```text
+O100
+    ↓
+COMPLETED
+```
+
+### 18.18 Duplicate Push
+
+Example:
+
+```text
+O100
+    ↓
+Backend
+    ↓
+Already processed
+    ↓
+ALREADY_APPLIED
+```
+
+The local operation can safely become:
+
+```text
+COMPLETED
+```
+
+because the intended change already exists remotely.
+
+### 18.19 Conflict During Push
+
+Example:
+
+```text
+O100
+    ↓
+Backend
+    ↓
+Version Conflict
+```
+
+Result:
+
+```text
+CONFLICT
+```
+
+The Android application creates/updates the corresponding Conflict state.
+
+The local User's data must not be silently overwritten.
+
+### 18.20 Rejected Operation
+
+Example:
+
+```text
+O100
+    ↓
+Backend
+    ↓
+Authorization Failed
+```
+
+Result:
+
+```text
+REJECTED
+```
+
+The local application must process the rejection according to the authorization/conflict policy.
+
+It must not repeatedly retry a permanent rejection indefinitely.
+
+### 18.21 Pull Flow
+
+After pushing local changes, the application pulls remote changes.
+
+Conceptually:
+
+```text
+Local SyncState
+      ↓
+Current Cursor
+      ↓
+Backend
+      ↓
+Changes After Cursor
+      ↓
+Android
+      ↓
+Validate
+      ↓
+Apply Transaction
+      ↓
+Advance Cursor
+```
+
+### 18.22 Incremental Pull
+
+Example:
+
+```text
+Local Cursor:
+C500
+```
+
+Backend:
+
+```text
+C501
+C502
+C503
+C504
+```
+
+Request:
+
+```text
+Changes after C500
+```
+
+Response:
+
+```text
+C501-C504
+```
+
+After successful application:
+
+```text
+Local Cursor:
+C504
+```
+
+### 18.23 Pull Transaction
+
+Remote changes and SyncState advancement should be applied transactionally:
+
+```text
+BEGIN TRANSACTION
+
+Apply Remote Changes
+        ↓
+Update SyncState Cursor
+        ↓
+COMMIT
+```
+
+Failure:
+
+```text
+ROLLBACK
+```
+
+The cursor must remain at the last successfully applied position.
+
+### 18.24 Online Synchronization Order
+
+The default V1 synchronization cycle may follow:
+
+```text
+1. Check Authentication
+        ↓
+2. Push Local Operations
+        ↓
+3. Pull Remote Changes
+        ↓
+4. Apply Remote Changes
+        ↓
+5. Update SyncState
+        ↓
+6. Repeat if More Changes Exist
+        ↓
+7. Mark Synchronized
+```
+
+The exact push/pull optimization can be adjusted during implementation.
+
+### 18.25 Why Push First
+
+Pushing local changes first can reduce the period in which:
+
+```text
+Local change
+```
+
+exists only on the device.
+
+However, the final synchronization protocol may optimize the order depending on:
+
+```text
+Conflict Detection
+Cursor Semantics
+Server Protocol
+Performance
+```
+
+### 18.26 Online Synchronization Is Incremental
+
+The application should not download the complete Group database every time.
+
+Instead:
+
+```text
+Initial Sync
+    ↓
+Full Required State
+
+Future Sync
+    ↓
+Incremental Changes
+```
+
+This reduces:
+
+```text
+Bandwidth
+Processing
+Battery Consumption
+Server Load
+```
+
+### 18.27 Initial Online Synchronization
+
+For a newly backend-associated User:
+
+```text
+Local User
+      ↓
+Backend Authentication
+      ↓
+Initial Sync
+      ↓
+Download Authorized Groups
+      ↓
+Download Group Members
+      ↓
+Download Expenses
+      ↓
+Download Expense Splits
+      ↓
+Download Settlements
+      ↓
+Create/Update Local State
+      ↓
+Set SyncState
+```
+
+### 18.28 Existing Local Data During Initial Sync
+
+If local data already exists before backend association:
+
+```text
+Local Data
+      +
+Backend Data
+```
+
+must not be blindly merged or overwritten.
+
+The system must perform:
+
+```text
+Identity Mapping
++
+Duplicate Detection
++
+Operation Synchronization
++
+Conflict Detection
+```
+
+The exact local-to-backend account-linking migration strategy will be defined before implementation.
+
+### 18.29 Online Group Creation
+
+When Internet is available:
+
+```text
+User Creates Group
+      ↓
+Save Group Locally
+      ↓
+Create SyncOperation
+      ↓
+Backend Synchronization
+      ↓
+Backend Accepts
+      ↓
+Operation Completed
+```
+
+The Group should appear immediately in the local UI.
+
+### 18.30 Online Group Join
+
+A User joining a Group may follow:
+
+```text
+Invitation / Join Request
+      ↓
+Authentication
+      ↓
+Authorization
+      ↓
+Membership Created
+      ↓
+Local Group State Updated
+      ↓
+SyncState Created
+      ↓
+Group Data Synchronization
+```
+
+The exact invitation/join mechanism depends on the Group flow.
+
+### 18.31 Online Profile Synchronization
+
+When backend connectivity exists, the local profile may synchronize permitted profile information.
+
+Conceptually:
+
+```text
+Local User Profile
+      ↓
+SyncOperation
+      ↓
+Backend
+      ↓
+Validated User Profile
+```
+
+Sensitive attributes must follow the Security and Authorization rules.
+
+### 18.32 Online Expense Editing
+
+Example:
+
+```text
+Expense E1
+Version 5
+```
+
+User edits:
+
+```text
+Version 6
+```
+
+Local:
+
+```text
+Save E1 Version 6
+Create SyncOperation
+```
+
+Backend:
+
+```text
+Validate baseVersion = 5
+Current Version = 5
+        ↓
+Apply Version 6
+```
+
+### 18.33 Online Concurrent Edit
+
+Example:
+
+```text
+Device A:
+Version 5 → Version 6
+
+Device B:
+Version 5 → Version 6
+```
+
+Both synchronize with the backend.
+
+The backend detects:
+
+```text
+Concurrent Update
+```
+
+and creates a Conflict according to the Conflict Data Model.
+
+### 18.34 Online Settlement
+
+Settlement follows the same local-first pattern:
+
+```text
+Create Settlement
+      ↓
+Validate
+      ↓
+Save Locally
+      ↓
+Create SyncOperation
+      ↓
+Push Backend
+      ↓
+Backend Validation
+      ↓
+Apply / Reject / Conflict
+```
+
+### 18.35 Online Balance Calculation
+
+Balances remain locally derived:
+
+```text
+Expenses
++
+ExpenseSplits
++
+Settlements
+        ↓
+Balance Calculation
+```
+
+The application does not need to request a balance from the backend for every screen update.
+
+### 18.36 Backend Balance Validation
+
+The backend may calculate balances independently for:
+
+```text
+Validation
+Reporting
+API Responses
+```
+
+but the synchronized source of truth remains the Domain entities.
+
+### 18.37 Online UI State
+
+The UI may show synchronization status:
+
+```text
+Synced
+Syncing...
+Sync pending
+Sync failed
+Conflict requires attention
+```
+
+The exact UI wording will be defined in the UI Design.
+
+### 18.38 Online Sync Indicator
+
+A lightweight status indicator may represent:
+
+```text
+SYNCED
+SYNCING
+PENDING
+FAILED
+CONFLICT
+```
+
+The indicator must not block normal local operations.
+
+### 18.39 Online Request Failure
+
+A backend request can fail despite Internet availability.
+
+Example:
+
+```text
+Internet = ON
+Request = FAILED
+```
+
+The application should:
+
+```text
+Preserve local data
+Keep SyncOperation retryable
+Update SyncState
+Retry according to policy
+```
+
+### 18.40 Network Timeout
+
+Example:
+
+```text
+Request
+   ↓
+Timeout
+```
+
+The operation remains safe because:
+
+```text
+Operation ID
+```
+
+provides idempotency.
+
+The client can retry:
+
+```text
+Same Operation ID
+```
+
+without creating duplicate data.
+
+### 18.41 Server Unavailable
+
+If:
+
+```text
+Backend = unavailable
+```
+
+the application behaves locally:
+
+```text
+Local changes
+    ↓
+Persist
+    ↓
+SyncOperation = PENDING
+```
+
+Synchronization resumes when the backend becomes available.
+
+### 18.42 Backend Maintenance
+
+During backend maintenance:
+
+```text
+Backend unavailable
+```
+
+the application remains usable locally.
+
+The User should not lose:
+
+```text
+Expenses
+Groups
+Settlements
+Balances
+```
+
+### 18.43 Online to Offline Transition
+
+Important scenario:
+
+```text
+Online
+   ↓
+Internet Lost
+```
+
+The application should automatically transition operationally to:
+
+```text
+Local-first operation
+```
+
+No restart should be required.
+
+### 18.44 Online to Offline Flow
+
+```text
+Application Online
+      ↓
+Internet Lost
+      ↓
+Current Local Data Remains Available
+      ↓
+New Changes Saved Locally
+      ↓
+SyncOperations Become/Remain PENDING
+      ↓
+P2P Available?
+   ┌──┴──┐
+  Yes    No
+   │      │
+ P2P    Wait
+```
+
+### 18.45 Offline to Online Transition
+
+When Internet becomes available:
+
+```text
+Offline
+   ↓
+Connectivity Detected
+   ↓
+Backend Available
+   ↓
+Authenticate if Required
+   ↓
+Process Pending SyncOperations
+   ↓
+Pull Remote Changes
+   ↓
+Update SyncState
+   ↓
+Continue Normal Online Synchronization
+```
+
+### 18.46 Automatic Recovery
+
+The User should not have to manually re-enter expenses after connectivity is restored.
+
+Example:
+
+```text
+Offline:
+Expense E1 created
+
+Internet returns
+
+E1
+ ↓
+Automatic Sync
+ ↓
+Backend
+ ↓
+Completed
+```
+
+### 18.47 P2P and Online Simultaneously
+
+Possible state:
+
+```text
+Internet = ON
+P2P Peer = Available
+```
+
+The synchronization engine may have:
+
+```text
+Backend Channel
++
+Peer Channel
+```
+
+available simultaneously.
+
+Both channels must use:
+
+```text
+Operation ID
+Idempotency
+Conflict Detection
+Authorization
+```
+
+### 18.48 Online Sync Through Backend After P2P
+
+Example:
+
+```text
+Device A
+    ↓
+Creates E1
+    ↓
+P2P → Device B
+    ↓
+Device B receives E1
+    ↓
+Internet becomes available
+    ↓
+Device A → Backend
+    ↓
+Backend receives E1
+```
+
+If Device B later receives E1 from the backend:
+
+```text
+Operation ID already processed
+    ↓
+ALREADY_APPLIED
+```
+
+No duplicate Expense is created.
+
+### 18.49 Online Multi-Device Flow
+
+Example:
+
+```text
+Device A
+    ↓
+Creates Expense E1
+    ↓
+Backend
+    ↓
+Device B
+    ↓
+Receives E1
+```
+
+Device B updates:
+
+```text
+Room Database
+```
+
+and:
+
+```text
+SyncState
+```
+
+after successful application.
+
+### 18.50 Backend as Synchronization Hub
+
+The backend may act as the central synchronization hub when Internet is available:
+
+```text
+Device A
+      ↓
+      Backend
+      ↑
+Device B
+```
+
+The backend stores authorized synchronized state and exposes incremental changes to connected devices.
+
+### 18.51 Backend Is Not Required for Local Operation
+
+Even though the backend acts as the central synchronization hub online:
+
+```text
+Backend unavailable
+```
+
+does not mean:
+
+```text
+Application unavailable
+```
+
+The local database remains operational.
+
+### 18.52 Online Data Consistency
+
+The goal is:
+
+```text
+Local Changes
+      +
+Remote Changes
+      ↓
+Validated Synchronization
+      ↓
+Eventual Convergence
+```
+
+Temporary differences between devices are expected during synchronization.
+
+### 18.53 Online Conflict Handling
+
+Conflict handling follows the previously defined model:
+
+```text
+Incoming Change
+      ↓
+Version Check
+      ↓
+Conflict?
+   ┌──┴──┐
+  No    Yes
+   │      │
+Apply   Conflict
+         ↓
+    Resolution
+```
+
+The Online Flow does not introduce a separate conflict model.
+
+### 18.54 Online Authorization
+
+Every backend operation must pass:
+
+```text
+Authentication
+      ↓
+Authorization
+      ↓
+Domain Validation
+      ↓
+Version Validation
+```
+
+The Android application must not assume that a locally valid operation will necessarily be accepted by the backend.
+
+### 18.55 Online Security
+
+All backend communication must use secure transport and the authentication/security mechanisms defined in the Security Architecture.
+
+The application must protect:
+
+```text
+Authentication credentials
+Access tokens
+User information
+Group data
+Financial information
+```
+
+### 18.56 Online API Failure Handling
+
+API responses should be classified into:
+
+```text
+Success
+Retryable Failure
+Authentication Failure
+Authorization Failure
+Validation Failure
+Conflict
+Permanent Failure
+```
+
+The Sync Engine maps these responses to:
+
+```text
+SyncOperation Status
+SyncState Status
+Conflict State
+```
+
+### 18.57 Online Retry
+
+Retryable operations should use controlled retry/backoff.
+
+Conceptually:
+
+```text
+Request Failed
+      ↓
+Determine Error
+      ↓
+Retryable?
+   ┌──┴──┐
+  Yes    No
+   │      │
+Backoff  Process Result
+   │
+Retry
+```
+
+The same Operation ID must be reused.
+
+### 18.58 Online Batch Synchronization
+
+The Sync Engine may send multiple operations in a batch:
+
+```text
+O100
+O101
+O102
+O103
+```
+
+Batching may improve:
+
+```text
+Network efficiency
+Battery usage
+Server throughput
+```
+
+The backend must still provide sufficient per-operation results.
+
+### 18.59 Online Large Group
+
+For larger Groups, synchronization should use:
+
+```text
+Incremental changes
+Pagination
+Batched operations
+Cursor-based pulling
+```
+
+rather than downloading the entire Group on every synchronization cycle.
+
+### 18.60 Online Initial Group Sync
+
+For a newly joined Group:
+
+```text
+Join Group
+      ↓
+Authorized
+      ↓
+Request Initial Group State
+      ↓
+Download Required Data
+      ↓
+Persist Locally
+      ↓
+Create SyncState
+      ↓
+Calculate Local Balances
+```
+
+### 18.61 Online Data Pagination
+
+Large remote change sets may be returned in pages/batches.
+
+Example:
+
+```text
+C500
+   ↓
+Page 1 → C501-C550
+   ↓
+Page 2 → C551-C600
+   ↓
+Page 3 → C601-C650
+```
+
+The cursor must only advance after the corresponding data has been successfully committed.
+
+### 18.62 Online Sync Completion
+
+A synchronization cycle is considered complete when:
+
+```text
+All eligible local operations processed
+        +
+All required remote changes processed
+        +
+No unresolved blocking synchronization state
+```
+
+The SyncState may then become:
+
+```text
+SYNCED
+```
+
+### 18.63 Online Sync State Example
+
+```text
+Device:
+D001
+
+Scope:
+GROUP G100
+
+Channel:
+BACKEND
+
+Status:
+SYNCED
+
+Cursor:
+C1000
+
+Last Successful Sync:
+2026-08-25T12:00:00Z
+```
+
+### 18.64 Online Failed State Example
+
+```text
+Device:
+D001
+
+Scope:
+GROUP G100
+
+Channel:
+BACKEND
+
+Status:
+FAILED
+
+Cursor:
+C1000
+
+Last Successful Sync:
+2026-08-25T12:00:00Z
+
+Error:
+SERVER_UNAVAILABLE
+```
+
+Local Group data remains available.
+
+### 18.65 Online Conflict State Example
+
+```text
+Device:
+D001
+
+Scope:
+GROUP G100
+
+Channel:
+BACKEND
+
+Status:
+BLOCKED
+
+Cursor:
+C1000
+
+Error:
+CONFLICT
+```
+
+Only the affected conflict should require resolution where possible.
+
+### 18.66 Online Flow With Peer Fallback
+
+A possible hybrid strategy is:
+
+```text
+Local Change
+      ↓
+Backend Available?
+   ┌──┴──┐
+  Yes    No
+   │      │
+Backend  Peer Available?
+           │
+        ┌──┴──┐
+       Yes    No
+        │      │
+       Peer   Pending
+```
+
+The synchronization engine can retry the backend later even after successful P2P synchronization.
+
+### 18.67 No Manual Mode Switching
+
+The application must not require the User to choose:
+
+```text
+Offline Mode
+```
+
+when the Internet disappears.
+
+Similarly, the User should not have to manually choose:
+
+```text
+Online Mode
+```
+
+when connectivity returns.
+
+Connectivity should influence synchronization behavior automatically.
+
+### 18.68 Online Flow and Local-First Guarantee
+
+The most important rule is:
+
+```text
+Online synchronization must never break local-first operation.
+```
+
+Therefore:
+
+```text
+Backend Failure
+    ≠
+Local Failure
+```
+
+and:
+
+```text
+Internet Failure
+    ≠
+Application Failure
+```
+
+### 18.69 Complete Online Flow
+
+```text
+Application Launch
+        ↓
+Load Local Identity
+        ↓
+Load Local Domain Data
+        ↓
+Display Local State
+        ↓
+Detect Internet
+        ↓
+Backend Available?
+        │
+   ┌────┴────┐
+  Yes        No
+   │          │
+Authenticate  Continue
+   │          │
+   ↓          ↓
+Push Local   Local
+Changes      Operation
+   ↓
+Pull Remote
+Changes
+   ↓
+Apply Changes
+   ↓
+Detect Conflicts
+   ↓
+Update SyncState
+   ↓
+Synchronization Complete
+```
+
+### 18.70 Online Flow Summary
+
+```text
+Online Flow
+│
+├── Local Startup
+│   ├── Load Device
+│   ├── Load User
+│   └── Load Local Data
+│
+├── Connectivity
+│   ├── Detect Internet
+│   └── Detect Backend Availability
+│
+├── Authentication
+│   ├── Validate Session
+│   └── Authenticate if Required
+│
+├── Push
+│   ├── Load Pending Operations
+│   ├── Send to Backend
+│   └── Process Results
+│
+├── Pull
+│   ├── Use Sync Cursor
+│   ├── Receive Remote Changes
+│   └── Apply Locally
+│
+├── Conflict Handling
+│   ├── Detect
+│   ├── Record
+│   └── Resolve
+│
+└── Completion
+    ├── Update SyncState
+    └── Continue Local Operation
+```
+
+### 18.71 Online Flow Invariants
+
+The following rules are mandatory for V1:
+
+- The application must automatically detect and use Internet connectivity when available.
+- The User must not be required to manually switch between Online and Offline modes.
+- Local Room data remains the primary working data source even when online.
+- The application must display locally available data without unnecessarily waiting for backend synchronization.
+- Core expense functionality must remain available if the backend is unavailable.
+- Internet availability does not guarantee backend availability.
+- Backend authentication is required only for operations that require server authorization.
+- Authentication failure must not delete or invalidate local financial data.
+- Local changes must be persisted before backend synchronization is attempted.
+- Every successful local Domain change must have its corresponding SyncOperation persisted atomically.
+- Pending SyncOperations must survive network failures.
+- Backend synchronization must be idempotent.
+- Retries must reuse the original Operation ID.
+- Duplicate operations must never create duplicate financial records.
+- Backend authorization must be independently validated.
+- Remote changes must be validated before being applied locally.
+- Remote changes and cursor advancement must be applied transactionally where practical.
+- A failed remote transaction must not advance the synchronization cursor.
+- Online synchronization must use incremental synchronization after initial synchronization.
+- Large synchronization sets must support batching and pagination.
+- Balances must remain derived from synchronized Domain data.
+- Online synchronization must use the same Conflict Data Model as offline/peer synchronization.
+- Financial conflicts must not be silently resolved using arbitrary last-write-wins.
+- A synchronization failure must not make the local application unusable.
+- Transition from Online to Offline must happen without requiring application restart.
+- Transition from Offline to Online must automatically resume pending synchronization.
+- P2P and Backend synchronization may coexist.
+- The same Operation ID must remain valid across P2P and Backend synchronization.
+- Successful P2P synchronization must not prevent later Backend synchronization.
+- Backend synchronization must not create duplicate records for data already received through P2P.
+- Synchronization state must be persisted and recoverable after application/device restart.
+- Online synchronization must preserve eventual convergence across authorized devices.
+- Online functionality must improve synchronization and backup capabilities without compromising the local-first architecture.
+
+## 19. Offline Flow
+
+### 19.1 Purpose
+
+This section defines the offline execution flow for SplitSync V1.
+
+SplitSync must remain fully usable for its core expense-management functionality when:
+
+```text
+Internet = unavailable
+Backend = unavailable
+```
+
+The application continues to operate using:
+
+```text
+Local User
++
+Local Groups
++
+Local Expenses
++
+Local Expense Splits
++
+Local Settlements
++
+Local SyncOperations
++
+Local SyncState
+```
+
+The fundamental principle is:
+
+```text
+No Internet
+    ≠
+No Application
+```
+
+### 19.2 Core Principle
+
+The offline flow is based on:
+
+```text
+Create Locally
+      ↓
+Persist Locally
+      ↓
+Use Locally
+      ↓
+Queue Synchronization
+      ↓
+Sync Later
+```
+
+The User should not have to manually enable an Offline Mode.
+
+### 19.3 Offline Architecture
+
+Conceptually:
+
+```text
+┌─────────────────────────────┐
+│       Android Device        │
+│                             │
+│           UI                │
+│            ↓                │
+│        Domain Layer         │
+│            ↓                │
+│       Room Database         │
+│            ↓                │
+│       Sync Engine           │
+│            ↓                │
+│     Pending SyncOperations  │
+│                             │
+└─────────────────────────────┘
+
+Internet = OFF
+Backend  = Unavailable
+```
+
+The application continues to function entirely inside the device.
+
+### 19.4 Offline Startup
+
+When the application starts without Internet:
+
+```text
+Application Launch
+        ↓
+Load Device
+        ↓
+Load Local User
+        ↓
+Load Local Groups
+        ↓
+Load Local Expenses
+        ↓
+Load Local Settlements
+        ↓
+Load SyncState
+        ↓
+Application Ready
+```
+
+No backend request is required for startup.
+
+### 19.5 Offline Identity
+
+The local identity remains available:
+
+```text
+User ID
++
+Device ID
+```
+
+The application must not attempt to create a new User merely because the Internet is unavailable.
+
+### 19.6 Offline User Creation
+
+A new User can be created completely offline:
+
+```text
+Application Installed
+        ↓
+Generate Device ID
+        ↓
+Create Local User
+        ↓
+Store User Locally
+        ↓
+Application Ready
+```
+
+No server account is required.
+
+### 19.7 Offline Group Creation
+
+A User can create a Group offline:
+
+```text
+User
+  ↓
+Create Group
+  ↓
+Validate Locally
+  ↓
+Generate Group ID
+  ↓
+Save Group
+  ↓
+Create Group Membership
+  ↓
+Create SyncOperation
+  ↓
+COMMIT
+```
+
+The Group becomes immediately available locally.
+
+### 19.8 Offline Group Identity
+
+A Group created offline must have a stable:
+
+```text
+groupId
+```
+
+The Group ID must remain unchanged when the Group later synchronizes with:
+
+```text
+Backend
+```
+
+or:
+
+```text
+Peer Device
+```
+
+### 19.9 Offline Group Membership
+
+The local creator can establish the initial local membership:
+
+```text
+User U1
+    ↓
+Group G1
+    ↓
+OWNER
+```
+
+This state is persisted locally.
+
+Later, membership changes can be synchronized through:
+
+```text
+P2P
+```
+
+or:
+
+```text
+Backend
+```
+
+### 19.10 Offline Profile Identification
+
+Nearby Users may be identified through P2P connectivity when available.
+
+Example:
+
+```text
+Internet = OFF
+Local Wi-Fi = ON
+Hotspot = ON
+```
+
+Users may discover nearby SplitSync profiles through the P2P mechanism.
+
+### 19.11 Offline Without Any Connectivity
+
+The application must also work when:
+
+```text
+Internet = OFF
+P2P = unavailable
+```
+
+The User can still:
+
+```text
+View Groups
+View Expenses
+Create Expenses
+Edit Expenses
+Calculate Balances
+Create Settlements
+View Settlements
+```
+
+subject to normal local authorization and Domain rules.
+
+### 19.12 Offline Expense Creation
+
+The standard offline Expense flow is:
+
+```text
+User Creates Expense
+        ↓
+Validate Expense Locally
+        ↓
+Validate Group Membership
+        ↓
+Validate Permission
+        ↓
+Generate Expense ID
+        ↓
+Generate Operation ID
+        ↓
+Save Expense
+        ↓
+Save Expense Splits
+        ↓
+Create SyncOperation
+        ↓
+COMMIT
+```
+
+### 19.13 Offline Transaction Boundary
+
+Expense creation must be atomic.
+
+Conceptually:
+
+```text
+BEGIN TRANSACTION
+
+Create Expense
+      ↓
+Create Expense Splits
+      ↓
+Create SyncOperation
+      ↓
+COMMIT
+```
+
+If anything fails:
+
+```text
+ROLLBACK
+```
+
+This prevents situations where:
+
+```text
+Expense exists
+```
+
+but:
+
+```text
+SyncOperation does not exist
+```
+
+for a change that needs synchronization.
+
+### 19.14 Offline Expense Editing
+
+An existing Expense can be edited offline:
+
+```text
+Expense E1
+    ↓
+User Edits
+    ↓
+Validate Authorization
+    ↓
+Validate Domain Rules
+    ↓
+Update Local Expense
+    ↓
+Generate SyncOperation
+    ↓
+COMMIT
+```
+
+The edited state is immediately visible locally.
+
+### 19.15 Offline Expense Deletion
+
+If deletion is supported by the Expense lifecycle:
+
+```text
+Delete Expense
+      ↓
+Authorization
+      ↓
+Domain Validation
+      ↓
+Create Delete Operation / Tombstone
+      ↓
+Persist Locally
+      ↓
+Queue Synchronization
+```
+
+The exact deletion/tombstone strategy follows the Expense lifecycle and synchronization model.
+
+### 19.16 Offline Expense Split
+
+Expense Splits are created and maintained locally.
+
+Example:
+
+```text
+Expense E1
+      ↓
+Participants
+      ↓
+Expense Splits
+      ↓
+Validate Split
+      ↓
+Save Locally
+```
+
+The split must satisfy the applicable splitting rules before the transaction is committed.
+
+### 19.17 Offline Settlement
+
+Settlements can also be created offline:
+
+```text
+Create Settlement
+      ↓
+Validate Group
+      ↓
+Validate Participants
+      ↓
+Validate Amount
+      ↓
+Save Settlement
+      ↓
+Create SyncOperation
+      ↓
+COMMIT
+```
+
+### 19.18 Offline Balance Calculation
+
+Balances are calculated entirely from local data:
+
+```text
+Expenses
++
+Expense Splits
++
+Settlements
+        ↓
+Balance Calculation
+```
+
+No Internet request is required.
+
+### 19.19 Offline Balance Example
+
+Suppose:
+
+```text
+A paid ₹1000
+B paid ₹500
+```
+
+and the split data indicates:
+
+```text
+A owes ₹750
+B owes ₹750
+```
+
+The local application can calculate:
+
+```text
+A → receives ₹250
+B → pays ₹250
+```
+
+without contacting the backend.
+
+### 19.20 Offline Data Source
+
+For normal application screens:
+
+```text
+Room Database
+```
+
+is the source of locally available state.
+
+The UI should not depend on a network API to display:
+
+```text
+Groups
+Expenses
+Balances
+Settlements
+```
+
+### 19.21 Offline SyncOperation
+
+Every local change that must eventually synchronize should create a:
+
+```text
+SyncOperation
+```
+
+Example:
+
+```text
+Expense Created
+      ↓
+SyncOperation O100
+      ↓
+Status = PENDING
+```
+
+### 19.22 Offline SyncOperation Status
+
+Typical state:
+
+```text
+PENDING
+```
+
+while there is no available synchronization channel.
+
+Other states may include:
+
+```text
+IN_PROGRESS
+COMPLETED
+FAILED
+CONFLICT
+REJECTED
+```
+
+### 19.23 Offline Pending Queue
+
+Example:
+
+```text
+SyncOperations
+
+O100 → PENDING
+O101 → PENDING
+O102 → PENDING
+O103 → PENDING
+```
+
+These operations remain persisted locally until successfully synchronized or otherwise resolved.
+
+### 19.24 Offline Queue Persistence
+
+The pending synchronization queue must survive:
+
+```text
+Application Restart
+Process Death
+Device Restart
+Temporary Connectivity Loss
+```
+
+The queue must not exist only in memory.
+
+### 19.25 Offline Application Restart
+
+Example:
+
+```text
+User creates Expense E1
+      ↓
+SyncOperation O100 = PENDING
+      ↓
+Application Closed
+      ↓
+Application Reopened
+```
+
+After restart:
+
+```text
+Expense E1
+```
+
+and:
+
+```text
+O100 = PENDING
+```
+
+must still exist.
+
+### 19.26 Offline Device Restart
+
+The same guarantee applies after device restart:
+
+```text
+Device Restart
+      ↓
+Open SplitSync
+      ↓
+Load Room Database
+      ↓
+Load Pending Operations
+      ↓
+Continue Offline
+```
+
+### 19.27 Offline Queue Ordering
+
+Operations may have dependencies.
+
+Example:
+
+```text
+Create Group G1
+        ↓
+Create Expense E1 in G1
+```
+
+The Expense operation cannot be safely synchronized before the Group exists remotely unless the backend protocol explicitly supports dependency resolution.
+
+Therefore the synchronization engine must preserve or determine required operation dependencies.
+
+### 19.28 Offline Operation Dependencies
+
+Example:
+
+```text
+O100
+Create Group G1
+
+O101
+Create Expense E1 → G1
+```
+
+Dependency:
+
+```text
+O101 depends on O100
+```
+
+The Sync Engine must process operations in a safe order.
+
+### 19.29 Offline Membership Dependencies
+
+Similarly:
+
+```text
+Create Group
+      ↓
+Create Membership
+      ↓
+Create Expense
+```
+
+may require dependency ordering during synchronization.
+
+### 19.30 Offline Local Authorization
+
+Authorization is performed locally before a Domain change is committed.
+
+Example:
+
+```text
+User U1
+    ↓
+Active Member of G1
+    ↓
+Create Expense
+    ↓
+Permission Check
+    ↓
+Allowed
+```
+
+### 19.31 Offline Unauthorized Operation
+
+If the User is not authorized:
+
+```text
+Create Expense
+      ↓
+Authorization Check
+      ↓
+DENIED
+```
+
+The application must not create:
+
+```text
+Expense
+```
+
+or:
+
+```text
+SyncOperation
+```
+
+for the denied operation.
+
+### 19.32 Offline Conflict Detection
+
+Some conflicts can be detected locally.
+
+Example:
+
+```text
+Two local changes
+```
+
+may affect the same entity.
+
+The application should apply the Conflict Data Model where required.
+
+However, some conflicts can only become known when synchronization occurs.
+
+### 19.33 Offline Concurrent Changes
+
+Example:
+
+```text
+Device A
+    ↓
+Expense E1 edited offline
+
+Device B
+    ↓
+Same Expense E1 edited offline
+```
+
+Neither device may know about the other's change until:
+
+```text
+P2P synchronization
+```
+
+or:
+
+```text
+Backend synchronization
+```
+
+occurs.
+
+The system must therefore preserve the operation/version information required for later conflict detection.
+
+### 19.34 Offline Version Tracking
+
+Every mutable Domain entity should maintain the version information required by the synchronization architecture.
+
+Example:
+
+```text
+Expense E1
+Version = 5
+```
+
+Offline edit:
+
+```text
+Version = 6
+```
+
+The synchronization system can later compare this against remote state.
+
+### 19.35 Offline Operation Metadata
+
+A locally generated SyncOperation should preserve metadata such as:
+
+```text
+operationId
+entityId
+entityType
+operationType
+groupId
+originUserId
+originDeviceId
+baseVersion
+createdAt
+```
+
+The exact model is defined in the Synchronization Data Model and Sync Operation Model.
+
+### 19.36 Offline Time
+
+The application should record local timestamps for:
+
+```text
+Entity creation
+Entity update
+Operation creation
+```
+
+These timestamps may assist with diagnostics and synchronization but must not automatically be treated as the sole conflict-resolution mechanism.
+
+### 19.37 Offline and Last-Write-Wins
+
+The offline architecture must not assume:
+
+```text
+Latest Local Timestamp
+    =
+Correct Change
+```
+
+Concurrent financial changes must follow the defined Conflict Resolution model.
+
+### 19.38 Offline P2P Availability
+
+When Internet is unavailable, the Sync Engine should check whether an authorized peer is available.
+
+Conceptually:
+
+```text
+Internet = OFF
+      ↓
+Peer Available?
+   ┌──┴──┐
+  Yes    No
+   │      │
+ P2P    Pending
+```
+
+### 19.39 Offline P2P Synchronization
+
+If a peer is available:
+
+```text
+Discover Peer
+      ↓
+Authenticate
+      ↓
+Authorize Group
+      ↓
+Exchange Sync State
+      ↓
+Exchange Operations
+      ↓
+Apply Valid Changes
+      ↓
+Update SyncState
+```
+
+### 19.40 Offline Without P2P
+
+If no peer is available:
+
+```text
+Local Changes
+      ↓
+Persist
+      ↓
+SyncOperation = PENDING
+```
+
+No error should be shown merely because synchronization cannot currently occur.
+
+### 19.41 Offline Sync Status
+
+The UI may display:
+
+```text
+Saved locally
+Sync pending
+Waiting for connection
+```
+
+rather than treating pending synchronization as a failed expense operation.
+
+### 19.42 Offline User Experience
+
+The User should be able to perform core operations normally:
+
+```text
+Create Expense
+      ↓
+Save
+      ↓
+Continue Using App
+```
+
+The application should not unnecessarily show:
+
+```text
+Network Error
+```
+
+for every local operation.
+
+### 19.43 Offline Error Handling
+
+Errors should distinguish between:
+
+```text
+Local Operation Failure
+```
+
+and:
+
+```text
+Synchronization Unavailability
+```
+
+For example:
+
+```text
+Expense validation failed
+```
+
+is a local operation failure.
+
+While:
+
+```text
+Internet unavailable
+```
+
+is not a failure to save the Expense locally.
+
+### 19.44 Offline Storage Failure
+
+If Room cannot persist a local operation:
+
+```text
+Save Expense
+      ↓
+Database Failure
+```
+
+the application must report the actual local persistence failure.
+
+This is fundamentally different from network unavailability.
+
+### 19.45 Offline Data Integrity
+
+Local data must remain internally consistent.
+
+For an Expense:
+
+```text
+Expense
++
+ExpenseSplits
++
+SyncOperation
+```
+
+must satisfy the applicable Domain and database constraints.
+
+### 19.46 Offline Referential Integrity
+
+The local database must enforce required relationships.
+
+Example:
+
+```text
+ExpenseSplit
+    ↓
+Expense
+    ↓
+Group
+```
+
+An ExpenseSplit must not reference a nonexistent Expense.
+
+### 19.47 Offline Group Data
+
+A Group can contain:
+
+```text
+Group
+Group Members
+Expenses
+Expense Splits
+Settlements
+SyncOperations
+SyncState
+```
+
+All of this data can be used locally without Internet.
+
+### 19.48 Offline Profile Data
+
+The local User profile remains available:
+
+```text
+Display Name
+Phone
+Email
+User ID
+```
+
+subject to the profile model and privacy rules.
+
+### 19.49 Offline Phone Number
+
+The phone number may be stored locally as a profile attribute.
+
+It does not require Internet connectivity to exist.
+
+However:
+
+```text
+Phone Number
+```
+
+must not be treated as the primary local identity.
+
+### 19.50 Offline Email
+
+Email is optional.
+
+The User must not be blocked from creating a local profile merely because no email is available.
+
+### 19.51 Offline Group Member Identification
+
+When Users are connected through P2P:
+
+```text
+User ID
++
+Display Name
+```
+
+can be used to identify Group participants.
+
+Additional profile attributes should only be exchanged when required.
+
+### 19.52 Offline Expense History
+
+The complete locally available Group expense history should remain accessible.
+
+The User should be able to:
+
+```text
+View
+Search
+Filter
+Calculate
+```
+
+using local data without Internet.
+
+### 19.53 Offline Search
+
+Search and filtering of locally stored data must not require network access.
+
+Example:
+
+```text
+Search Expenses
+      ↓
+Room Query
+      ↓
+Results
+```
+
+### 19.54 Offline Sorting
+
+Sorting of local Groups, Expenses, Settlements, and other locally stored records must also work without Internet.
+
+### 19.55 Offline Derived Data
+
+Derived values should be calculated from local source data.
+
+Examples:
+
+```text
+Total Group Expense
+Individual Contribution
+Individual Share
+Net Balance
+Settlement Effect
+```
+
+### 19.56 Offline Balance Recalculation
+
+After a local Expense change:
+
+```text
+Expense Updated
+      ↓
+Recalculate Affected Balance
+      ↓
+Update UI
+```
+
+No backend request is required.
+
+### 19.57 Offline Settlement Effect
+
+After a local Settlement:
+
+```text
+Settlement Created
+      ↓
+Persist
+      ↓
+Recalculate Balance
+      ↓
+Display Updated Balance
+```
+
+### 19.58 Offline Group Statistics
+
+Group statistics can be calculated locally:
+
+```text
+Total Expenses
+Total Settlements
+Member Contributions
+Member Shares
+Outstanding Balances
+```
+
+### 19.59 Offline Sync With Multiple Peers
+
+A User may synchronize with multiple nearby devices over time:
+
+```text
+Device A
+   ↕
+Device B
+
+Device A
+   ↕
+Device C
+
+Device A
+   ↕
+Device D
+```
+
+Each peer synchronization state must be tracked appropriately.
+
+### 19.60 Offline Multi-Hop Synchronization
+
+An operation may move through:
+
+```text
+Device A
+    ↓
+Device B
+    ↓
+Device C
+```
+
+The original:
+
+```text
+operationId
+originUserId
+originDeviceId
+```
+
+must remain unchanged.
+
+### 19.61 Offline Duplicate Delivery
+
+The same operation may arrive through different paths:
+
+```text
+P2P
++
+Backend
+```
+
+or:
+
+```text
+Peer A
++
+Peer B
+```
+
+The receiving device must use idempotency to prevent duplicate application.
+
+### 19.62 Offline Operation Idempotency
+
+Example:
+
+```text
+O100
+```
+
+arrives twice.
+
+First:
+
+```text
+O100 → APPLIED
+```
+
+Second:
+
+```text
+O100 → ALREADY_APPLIED
+```
+
+No duplicate Expense should be created.
+
+### 19.63 Offline Synchronization Failure
+
+If P2P synchronization fails:
+
+```text
+P2P Failure
+      ↓
+Preserve Local Data
+      ↓
+Keep SyncOperation Pending
+      ↓
+Retry Later
+```
+
+A failed synchronization must not roll back successfully committed local changes.
+
+### 19.64 Offline P2P Connection Loss
+
+Example:
+
+```text
+10 operations
+```
+
+are being synchronized.
+
+Connection fails after:
+
+```text
+6 operations
+```
+
+The six successfully committed operations remain.
+
+The remaining operations stay retryable.
+
+### 19.65 Offline to Online Transition
+
+When Internet becomes available:
+
+```text
+Offline
+      ↓
+Connectivity Detected
+      ↓
+Backend Available
+      ↓
+Authenticate if Required
+      ↓
+Process Pending SyncOperations
+      ↓
+Pull Remote Changes
+      ↓
+Apply / Resolve Conflicts
+      ↓
+Update SyncState
+```
+
+### 19.66 Offline to P2P Transition
+
+When a peer becomes available:
+
+```text
+Offline
+      ↓
+Peer Discovered
+      ↓
+Authenticate
+      ↓
+Authorize
+      ↓
+Synchronize
+```
+
+The local application remains usable throughout the process.
+
+### 19.67 Offline to Online and P2P
+
+Both channels may become available:
+
+```text
+Internet = ON
+P2P = ON
+```
+
+The Sync Engine may use:
+
+```text
+Backend
++
+P2P
+```
+
+while maintaining the same:
+
+```text
+Operation ID
+Conflict Model
+Authorization Model
+Sync State
+```
+
+### 19.68 Offline Data and Backend Association
+
+A User may have significant local data before backend registration:
+
+```text
+Local User
+    ↓
+Groups
+    ↓
+Expenses
+    ↓
+Settlements
+```
+
+Later:
+
+```text
+Internet Available
+    ↓
+Backend Association
+```
+
+The local data must be preserved.
+
+The account-linking flow must determine how existing local data is associated with the backend.
+
+### 19.69 Offline Security
+
+Offline functionality must still enforce:
+
+```text
+Local Authentication / App Protection
+Local Authorization
+Data Integrity
+Secure Local Storage
+```
+
+where applicable.
+
+Offline must not mean:
+
+```text
+No Security
+```
+
+### 19.70 Offline P2P Security
+
+P2P synchronization must still require:
+
+```text
+Peer Authentication
+Group Authorization
+Message Integrity
+Secure Communication
+```
+
+Internet connectivity is not a prerequisite for these protections.
+
+### 19.71 Offline Sensitive Data
+
+The application should minimize unnecessary exposure of:
+
+```text
+Phone Numbers
+Email Addresses
+Financial Information
+```
+
+especially during local peer discovery.
+
+### 19.72 Offline Application Restart During Pending Sync
+
+Example:
+
+```text
+Expense E1 created
+      ↓
+O100 = PENDING
+      ↓
+Device Restart
+      ↓
+Application Launch
+```
+
+After restart:
+
+```text
+E1 exists
+O100 exists
+O100 = PENDING
+```
+
+Synchronization can resume when a suitable channel becomes available.
+
+### 19.73 Offline Crash During Write
+
+If the application crashes during a local transaction:
+
+```text
+BEGIN TRANSACTION
+      ↓
+Crash
+```
+
+Room/SQLite transaction semantics must ensure the transaction is either:
+
+```text
+Committed
+```
+
+or:
+
+```text
+Rolled Back
+```
+
+There must not be a partially committed Domain state.
+
+### 19.74 Offline Crash During Synchronization
+
+If the application crashes while synchronizing:
+
+```text
+Sync in progress
+      ↓
+Crash
+```
+
+already committed operations remain committed.
+
+Uncommitted operations are retried safely.
+
+### 19.75 Offline Sync Recovery
+
+After restart:
+
+```text
+Load SyncOperations
+      ↓
+Find PENDING / IN_PROGRESS
+      ↓
+Normalize Recoverable State
+      ↓
+Retry When Channel Available
+```
+
+An `IN_PROGRESS` state that cannot be proven complete should be safely recoverable through idempotent retry.
+
+### 19.76 Offline Sync State Recovery
+
+The SyncState must also survive application restart.
+
+Example:
+
+```text
+Group G1
+Peer D2
+Last Successful Operation = O500
+```
+
+After restart:
+
+```text
+Same SyncState
+```
+
+must be available.
+
+### 19.77 Offline Conflict Persistence
+
+If a conflict is detected through P2P:
+
+```text
+Conflict
+    ↓
+Persist Conflict Data
+```
+
+The conflict must survive:
+
+```text
+Application Restart
+Device Restart
+Connectivity Loss
+```
+
+### 19.78 Offline Conflict Resolution
+
+A User may resolve supported conflicts locally when the Conflict Data Model permits.
+
+The resolution itself becomes a Domain/Synchronization operation where required.
+
+### 19.79 Offline and Eventual Consistency
+
+The system accepts that devices may temporarily have different states:
+
+```text
+Device A ≠ Device B
+```
+
+while offline.
+
+The target is:
+
+```text
+After Successful Synchronization
+        ↓
+Device A = Device B
+```
+
+for the authorized synchronized scope, subject to resolved conflicts and valid authorization.
+
+### 19.80 Offline Consistency Model
+
+The application follows:
+
+```text
+Strong Local Consistency
++
+Eventual Cross-Device Consistency
+```
+
+Meaning:
+
+```text
+Local Database
+    ↓
+Immediately Consistent
+
+Other Devices
+    ↓
+Eventually Consistent
+```
+
+### 19.81 Offline Availability
+
+Core application operations should remain available when:
+
+```text
+Internet = OFF
+```
+
+and:
+
+```text
+P2P = OFF
+```
+
+This is one of the primary V1 requirements.
+
+### 19.82 Offline Performance
+
+Local operations should not wait for network timeouts.
+
+Example:
+
+```text
+Create Expense
+      ↓
+Local Validation
+      ↓
+Room Transaction
+      ↓
+UI Update
+```
+
+The User should receive immediate local feedback.
+
+### 19.83 Offline Network Independence
+
+The local Domain and Room layers must not directly depend on:
+
+```text
+HTTP
+REST
+Wi-Fi
+Hotspot
+Internet
+```
+
+The Sync Engine handles communication separately.
+
+### 19.84 Offline Architecture Boundary
+
+Conceptually:
+
+```text
+UI
+ ↓
+Domain
+ ↓
+Local Repository
+ ↓
+Room
+```
+
+and independently:
+
+```text
+Sync Engine
+ ├── Backend Channel
+ └── P2P Channel
+```
+
+The local Domain must remain operational even if both synchronization channels are unavailable.
+
+### 19.85 Offline Flow — Create Expense
+
+```text
+User
+  ↓
+Create Expense
+  ↓
+Local Authorization
+  ↓
+Domain Validation
+  ↓
+Room Transaction
+  ├── Expense
+  ├── Expense Splits
+  └── SyncOperation
+  ↓
+COMMIT
+  ↓
+Update Balance
+  ↓
+Display Expense
+  ↓
+Wait for Synchronization
+```
+
+### 19.86 Offline Flow — Create Settlement
+
+```text
+User
+  ↓
+Create Settlement
+  ↓
+Local Authorization
+  ↓
+Validate Participants
+  ↓
+Validate Amount
+  ↓
+Room Transaction
+  ├── Settlement
+  └── SyncOperation
+  ↓
+COMMIT
+  ↓
+Recalculate Balance
+  ↓
+Display Updated State
+```
+
+### 19.87 Offline Flow — P2P Sync
+
+```text
+Local Pending Operations
+        ↓
+Peer Discovered
+        ↓
+Peer Authentication
+        ↓
+Group Authorization
+        ↓
+Sync State Exchange
+        ↓
+Operation Exchange
+        ↓
+Validation
+        ↓
+Conflict Detection
+        ↓
+Apply Valid Operations
+        ↓
+Update SyncState
+        ↓
+Mark Operations Completed
+```
+
+### 19.88 Offline Flow — No Peer
+
+```text
+Local Change
+      ↓
+Room Transaction
+      ↓
+SyncOperation = PENDING
+      ↓
+No Peer
+      ↓
+No Internet
+      ↓
+Continue Local Usage
+```
+
+### 19.89 Offline Flow — Internet Returns
+
+```text
+Pending SyncOperations
+        ↓
+Internet Detected
+        ↓
+Backend Authentication
+        ↓
+Push Pending Operations
+        ↓
+Process Results
+        ↓
+Pull Remote Changes
+        ↓
+Apply Changes
+        ↓
+Resolve Conflicts
+        ↓
+Update SyncState
+        ↓
+Continue Normal Operation
+```
+
+### 19.90 Offline Flow Summary
+
+```text
+Offline Flow
+│
+├── Local Identity
+│   ├── User
+│   └── Device
+│
+├── Local Data
+│   ├── Groups
+│   ├── Members
+│   ├── Expenses
+│   ├── Expense Splits
+│   └── Settlements
+│
+├── Local Processing
+│   ├── Validation
+│   ├── Authorization
+│   ├── Balance Calculation
+│   └── Domain Rules
+│
+├── Local Persistence
+│   ├── Room
+│   ├── Transactions
+│   └── Durable Storage
+│
+├── Synchronization Queue
+│   ├── SyncOperations
+│   ├── SyncState
+│   └── Conflicts
+│
+├── Connectivity Options
+│   ├── No Connectivity
+│   ├── P2P
+│   └── Backend
+│
+└── Recovery
+    ├── Application Restart
+    ├── Device Restart
+    ├── Connection Loss
+    ├── Internet Return
+    └── Peer Availability
+```
+
+### 19.91 Offline Flow Invariants
+
+The following rules are mandatory for V1:
+
+- Core expense-management functionality must work without Internet connectivity.
+- Core expense-management functionality must also work when no P2P peer is available.
+- The User must not manually switch to Offline Mode.
+- Local identity must remain available without Internet.
+- One local User must remain associated with the Device.
+- Local Groups must remain accessible without Internet.
+- Local Expenses must remain accessible without Internet.
+- Local Expense Splits must remain accessible without Internet.
+- Local Settlements must remain accessible without Internet.
+- Local balances must be calculated without Internet.
+- Local search and filtering must work without Internet.
+- Local authorization must work without Internet.
+- Local Domain validation must work without Internet.
+- Local changes must be persisted in Room before synchronization is attempted.
+- Domain changes and their corresponding SyncOperations must be created atomically.
+- Pending SyncOperations must be durable.
+- Pending SyncOperations must survive application restart.
+- Pending SyncOperations must survive device restart.
+- Pending SyncOperations must survive temporary connectivity loss.
+- Local data must not be deleted because synchronization is unavailable.
+- Network failure must not be treated as local persistence failure.
+- P2P synchronization must remain optional.
+- Backend synchronization must remain optional while offline.
+- P2P synchronization must not require Internet connectivity.
+- Backend synchronization must resume automatically when Internet becomes available.
+- P2P synchronization may resume when an authorized peer becomes available.
+- Operation IDs must remain unchanged during later synchronization.
+- Origin User and Device identities must remain unchanged during synchronization.
+- Duplicate operations must never create duplicate financial records.
+- Operation dependencies must be respected during synchronization.
+- Local transactions must preserve referential and Domain integrity.
+- Application crashes must not leave partially committed Domain transactions.
+- Synchronization crashes must be recoverable through persisted state and idempotent retry.
+- Offline edits must preserve version information required for later conflict detection.
+- Offline concurrent changes must not be silently resolved using arbitrary last-write-wins.
+- Conflicts must use the defined Conflict Data Model.
+- Conflict state must survive application and device restart.
+- Offline authorization failures must not create Domain changes or SyncOperations.
+- Offline functionality must not expose sensitive profile information unnecessarily.
+- Phone number and email must not be treated as unrestricted peer-discovery data.
+- Local financial data must remain available even when backend authentication fails.
+- Online and offline execution must use the same Domain model.
+- Online and offline execution must use the same local persistence model.
+- Synchronization channels must remain separate from the core local Domain logic.
+- The system must provide strong local consistency.
+- The system must provide eventual cross-device consistency after successful synchronization.
+- Transition from Offline to Online must not require application restart.
+- Transition from Offline to P2P synchronization must not require application restart.
+- The application must continue normal local operation while synchronization is running.
+- Synchronization availability must improve connectivity and backup capabilities without becoming a prerequisite for local expense management.
+
+## 20. Peer-to-Peer Offline Flow
+
+### 20.1 Purpose
+
+This section defines the complete Peer-to-Peer (P2P) offline flow for SplitSync V1.
+
+The purpose of P2P synchronization is to allow authorized nearby SplitSync users to exchange required application data without Internet connectivity.
+
+The primary scenario is:
+
+```text
+Internet = OFF
+        ↓
+Users are physically nearby
+        ↓
+Devices connect through Wi-Fi / Hotspot / supported local transport
+        ↓
+SplitSync discovers nearby peers
+        ↓
+Peers authenticate each other
+        ↓
+Group authorization is verified
+        ↓
+Synchronization takes place
+        ↓
+Local databases converge
+```
+
+P2P is an optional synchronization channel.
+
+The application must remain fully functional even when:
+
+```text
+Internet = OFF
+P2P = unavailable
+```
+
+### 20.2 Core Principle
+
+The P2P architecture follows:
+
+```text
+Local First
+    +
+Peer Synchronization
+    +
+Backend Synchronization
+```
+
+P2P does not replace the local-first architecture.
+
+It provides a way for nearby devices to synchronize while the backend is unavailable.
+
+### 20.3 Primary P2P Scenario
+
+Example:
+
+```text
+User A
+    ↓
+Creates Group G1
+
+User B
+    ↓
+Needs to join G1
+
+Internet = OFF
+```
+
+Users can connect locally:
+
+```text
+Device A
+    ⇅
+Local Network / Hotspot
+    ⇅
+Device B
+```
+
+and exchange the required Group information.
+
+### 20.4 P2P Offline Flow Overview
+
+```text
+Local Changes
+      ↓
+Pending SyncOperations
+      ↓
+Peer Discovery
+      ↓
+Peer Selection
+      ↓
+Connection Establishment
+      ↓
+Peer Authentication
+      ↓
+Group Authorization
+      ↓
+Synchronization Handshake
+      ↓
+Sync State Exchange
+      ↓
+Operation Exchange
+      ↓
+Operation Validation
+      ↓
+Conflict Detection
+      ↓
+Apply Valid Changes
+      ↓
+Update SyncState
+      ↓
+Mark Operations Completed
+      ↓
+Disconnect
+```
+
+### 20.5 P2P Connectivity
+
+P2P communication may operate through supported Android local connectivity mechanisms such as:
+
+```text
+Wi-Fi
+Wi-Fi Hotspot
+Wi-Fi Direct
+```
+
+The exact transport implementation will be selected during Android implementation.
+
+The Domain and Sync Engine must not depend directly on a specific transport.
+
+### 20.6 Internet Is Not Required
+
+The P2P flow must work when:
+
+```text
+Local Network = Available
+Internet = Unavailable
+```
+
+For example:
+
+```text
+Device A
+    ↓
+Creates Hotspot
+
+Device B
+    ↓
+Connects to Hotspot
+
+Internet
+    ↓
+OFF
+```
+
+The devices can still establish a local synchronization session.
+
+### 20.7 Local Network Without Internet
+
+The application must distinguish:
+
+```text
+Local Connectivity
+```
+
+from:
+
+```text
+Internet Connectivity
+```
+
+Therefore:
+
+```text
+Local Network = YES
+Internet = NO
+```
+
+is a valid synchronization environment.
+
+### 20.8 P2P Without Internet and Without Backend
+
+During this flow:
+
+```text
+Backend = unavailable
+Internet = unavailable
+```
+
+the synchronization authority is temporarily:
+
+```text
+Peer-to-Peer
+```
+
+while each device remains locally authoritative for its own committed local data.
+
+### 20.9 Device A Offline State
+
+Example:
+
+```text
+Device A
+
+Group G1
+Expense E1
+Expense E2
+
+SyncOperations:
+O100 = PENDING
+O101 = PENDING
+```
+
+### 20.10 Device B Offline State
+
+Example:
+
+```text
+Device B
+
+Group G1
+Expense E3
+
+SyncOperations:
+O200 = PENDING
+```
+
+Both devices have valid local changes.
+
+### 20.11 P2P Discovery
+
+The first step is:
+
+```text
+Start Discovery
+      ↓
+Find Nearby SplitSync Devices
+```
+
+Example:
+
+```text
+Nearby SplitSync Users
+
+Praveen
+Rahul
+Amit
+```
+
+Discovery only identifies nearby devices.
+
+It does not authorize access.
+
+### 20.12 Discovery Information
+
+Only minimum required information should be exposed during discovery.
+
+Potential information:
+
+```text
+deviceId / discovery identifier
+displayName
+protocolVersion
+capabilities
+```
+
+Sensitive information should not be unnecessarily broadcast.
+
+### 20.13 Phone Number During Discovery
+
+Phone number should not be broadcast as the primary discovery identifier.
+
+The discovery identity should be based on:
+
+```text
+Device Identity
++
+User Identity / Display Identity
+```
+
+Phone number may be exchanged later only if required by an authorized feature.
+
+### 20.14 Peer Selection
+
+After discovery:
+
+```text
+Nearby Users
+      ↓
+User Selects Peer
+      ↓
+Connection Request
+```
+
+The User should be able to identify the intended person before synchronization begins.
+
+### 20.15 Connection Request
+
+Example:
+
+```text
+Device A
+    ↓
+Request Connection
+    ↓
+Device B
+```
+
+Device B may:
+
+```text
+Accept
+```
+
+or:
+
+```text
+Reject
+```
+
+the connection.
+
+### 20.16 No Automatic Trust
+
+The application must never assume:
+
+```text
+Same Wi-Fi
+    =
+Trusted User
+```
+
+or:
+
+```text
+Same Hotspot
+    =
+Authorized Group Member
+```
+
+Authentication and authorization remain mandatory.
+
+### 20.17 P2P Authentication
+
+After connection:
+
+```text
+Connection Established
+        ↓
+Peer Authentication
+```
+
+The devices establish confidence in:
+
+```text
+Who is the peer?
+```
+
+### 20.18 P2P Identity
+
+The peer identity is based on:
+
+```text
+User ID
++
+Device ID
+```
+
+The exact cryptographic identity mechanism is defined by the Security Architecture.
+
+### 20.19 P2P Authorization
+
+After authentication:
+
+```text
+Who is this?
+        ↓
+What is this peer allowed to access?
+```
+
+The receiving device must verify:
+
+```text
+User
+Device
+Group Membership
+Requested Scope
+```
+
+### 20.20 Group Scope Determination
+
+Suppose:
+
+```text
+Device A:
+G1
+G2
+G3
+
+Device B:
+G2
+G3
+G4
+```
+
+The candidate shared scope is:
+
+```text
+G2
+G3
+```
+
+Only authorized Groups should actually be synchronized.
+
+### 20.21 P2P Synchronization Handshake
+
+After authentication:
+
+```text
+HELLO
+      ↓
+HELLO_RESPONSE
+      ↓
+Capability Exchange
+      ↓
+Group Scope Exchange
+      ↓
+Sync State Exchange
+      ↓
+Operation Exchange
+```
+
+### 20.22 Protocol Version
+
+The handshake must include:
+
+```text
+protocolVersion
+```
+
+This allows devices to determine compatibility.
+
+Example:
+
+```text
+Device A → Protocol 1
+Device B → Protocol 1
+```
+
+Compatible.
+
+### 20.23 Capability Exchange
+
+Devices may exchange supported capabilities.
+
+Example:
+
+```text
+Device A:
+Expense
+ExpenseSplit
+Settlement
+
+Device B:
+Expense
+ExpenseSplit
+Settlement
+GroupInvitation
+```
+
+Only mutually supported functionality should be used during the session.
+
+### 20.24 Group Authorization Check
+
+Before exchanging Group data:
+
+```text
+Peer User
+    ↓
+Authenticated
+    ↓
+Group Membership
+    ↓
+Active?
+    ↓
+Permission Valid?
+```
+
+If authorization fails:
+
+```text
+Synchronization for that Group = DENIED
+```
+
+### 20.25 Group Invitation Through P2P
+
+A Group invitation may be exchanged offline.
+
+Example:
+
+```text
+User A
+    ↓
+Creates Group G1
+    ↓
+Invite User B
+    ↓
+P2P Connection
+    ↓
+Invitation Sent
+```
+
+User B must explicitly accept the invitation.
+
+### 20.26 Invitation Is Not Membership
+
+Receiving an invitation does not automatically create active membership.
+
+The flow is:
+
+```text
+Invitation Received
+      ↓
+Validate Invitation
+      ↓
+Show User
+      ↓
+User Accepts
+      ↓
+Create Membership
+```
+
+### 20.27 Offline Membership Creation
+
+After acceptance:
+
+```text
+User B
+    ↓
+Membership Created Locally
+    ↓
+Role Assigned
+    ↓
+Group State Updated
+    ↓
+SyncOperation Created
+```
+
+The membership change can later synchronize with other devices/backend.
+
+### 20.28 Group Data Exchange
+
+Once authorization is established:
+
+```text
+Group Metadata
++
+Authorized Membership Data
++
+Required Expense Data
++
+Expense Splits
++
+Settlements
++
+Relevant SyncOperations
+```
+
+may be exchanged according to the synchronization protocol.
+
+### 20.29 Operation Exchange
+
+P2P synchronization is based on:
+
+```text
+SyncOperation
+```
+
+rather than directly copying arbitrary database rows.
+
+Conceptually:
+
+```text
+Device A
+    ↓
+Operations required by Device B
+    ↓
+Device B
+```
+
+and:
+
+```text
+Device B
+    ↓
+Operations required by Device A
+    ↓
+Device A
+```
+
+### 20.30 Bidirectional P2P Synchronization
+
+P2P synchronization must support:
+
+```text
+Device A ⇄ Device B
+```
+
+Both devices may have locally created changes.
+
+### 20.31 Example — Bidirectional Sync
+
+Before synchronization:
+
+```text
+Device A:
+E1
+E2
+
+Device B:
+E3
+E4
+```
+
+After successful synchronization:
+
+```text
+Device A:
+E1
+E2
+E3
+E4
+
+Device B:
+E1
+E2
+E3
+E4
+```
+
+assuming all operations are authorized and valid.
+
+### 20.32 Sync State Exchange
+
+Before sending large amounts of data:
+
+```text
+Device A
+    ↓
+Current SyncState
+```
+
+and:
+
+```text
+Device B
+    ↓
+Current SyncState
+```
+
+are exchanged for the relevant scope.
+
+This allows the devices to determine what still needs to be synchronized.
+
+### 20.33 Incremental P2P Synchronization
+
+The system should avoid exchanging the entire Group history on every connection.
+
+Instead:
+
+```text
+Previous Sync State
+        ↓
+Determine Missing Operations
+        ↓
+Exchange Only Required Changes
+```
+
+### 20.34 P2P Operation Filtering
+
+Before sending operations, the Sync Engine must filter by:
+
+```text
+Group
+Authorization
+Operation State
+Peer State
+Protocol Compatibility
+```
+
+The device must not send its entire local database.
+
+### 20.35 Operation Identity
+
+When an operation is transmitted:
+
+```text
+Operation ID
+```
+
+must remain unchanged.
+
+Example:
+
+```text
+O100
+```
+
+sent from A to B remains:
+
+```text
+O100
+```
+
+on B.
+
+### 20.36 Origin Identity
+
+The original:
+
+```text
+originUserId
+originDeviceId
+```
+
+must remain unchanged.
+
+Example:
+
+```text
+Created on Device A
+```
+
+must remain:
+
+```text
+originDeviceId = A
+```
+
+even after reaching Device B.
+
+### 20.37 Multi-Hop Synchronization
+
+Operations may travel through multiple devices:
+
+```text
+Device A
+    ↓
+Device B
+    ↓
+Device C
+```
+
+The original operation identity must remain unchanged.
+
+This allows eventual convergence even when all devices cannot connect directly.
+
+### 20.38 P2P Operation Validation
+
+Every received operation must be validated before application:
+
+```text
+Receive Operation
+      ↓
+Verify Integrity
+      ↓
+Verify Origin
+      ↓
+Verify Authorization
+      ↓
+Validate Domain Rules
+      ↓
+Validate Dependencies
+      ↓
+Validate Version
+      ↓
+Apply
+```
+
+### 20.39 P2P Expense Synchronization
+
+For an Expense:
+
+```text
+Receive Expense Operation
+      ↓
+Validate Group
+      ↓
+Validate Origin User
+      ↓
+Validate Membership
+      ↓
+Validate Expense
+      ↓
+Validate Expense Splits
+      ↓
+Check Duplicate
+      ↓
+Check Version / Conflict
+      ↓
+Apply Transaction
+```
+
+### 20.40 P2P Settlement Synchronization
+
+For a Settlement:
+
+```text
+Receive Settlement Operation
+      ↓
+Validate Group
+      ↓
+Validate Participants
+      ↓
+Validate Authorization
+      ↓
+Validate Amount
+      ↓
+Check Duplicate
+      ↓
+Check Conflict
+      ↓
+Apply Transaction
+```
+
+### 20.41 P2P Group Synchronization
+
+For a Group:
+
+```text
+Receive Group Operation
+      ↓
+Validate Group Identity
+      ↓
+Validate Origin
+      ↓
+Validate Authorization
+      ↓
+Check Existing Group
+      ↓
+Apply / Merge / Conflict
+```
+
+### 20.42 P2P Membership Synchronization
+
+Membership operations require additional authorization:
+
+```text
+Receive Membership Operation
+      ↓
+Verify Origin
+      ↓
+Verify Origin Role
+      ↓
+Verify Target User
+      ↓
+Validate Membership Rule
+      ↓
+Apply
+```
+
+### 20.43 P2P Profile Synchronization
+
+Profile information should be synchronized only when required.
+
+Example:
+
+```text
+Display Name
+```
+
+may be shared for Group identification.
+
+Sensitive information such as:
+
+```text
+Phone Number
+Email
+```
+
+must follow explicit privacy and authorization rules.
+
+### 20.44 P2P Balance Synchronization
+
+Balances should not be treated as authoritative synchronization records.
+
+Instead:
+
+```text
+Expenses
++
+ExpenseSplits
++
+Settlements
+        ↓
+Local Balance Calculation
+```
+
+Each device calculates its own balances from synchronized source data.
+
+### 20.45 P2P Transaction Boundary
+
+Received changes should be committed transactionally.
+
+Example:
+
+```text
+BEGIN TRANSACTION
+
+Validate
+    ↓
+Apply Domain Change
+    ↓
+Update SyncOperation State
+    ↓
+Update SyncState
+    ↓
+COMMIT
+```
+
+If the transaction fails:
+
+```text
+ROLLBACK
+```
+
+### 20.46 Partial Batch Failure
+
+Suppose:
+
+```text
+10 operations
+```
+
+are received.
+
+If:
+
+```text
+6 operations
+```
+
+are successfully committed and:
+
+```text
+4 operations
+```
+
+fail:
+
+```text
+6 = successfully applied
+4 = retryable / rejected / conflict
+```
+
+The successful operations must not be rolled back merely because the remaining operations failed.
+
+### 20.47 P2P Acknowledgement
+
+The receiving device should return results such as:
+
+```text
+O100 → APPLIED
+O101 → ALREADY_APPLIED
+O102 → CONFLICT
+O103 → REJECTED
+```
+
+The sending device updates its local synchronization state accordingly.
+
+### 20.48 Duplicate Operation
+
+If:
+
+```text
+O100
+```
+
+is received twice:
+
+First:
+
+```text
+O100 → APPLIED
+```
+
+Second:
+
+```text
+O100 → ALREADY_APPLIED
+```
+
+The second delivery must not create another Domain entity.
+
+### 20.49 P2P Conflict
+
+Example:
+
+```text
+Expense E1
+Version 5
+```
+
+Device A:
+
+```text
+Version 6
+Amount ₹1200
+```
+
+Device B:
+
+```text
+Version 6
+Amount ₹1500
+```
+
+When they synchronize:
+
+```text
+Concurrent Update
+      ↓
+Conflict
+```
+
+The Conflict Data Model is used.
+
+### 20.50 No Arbitrary Last-Write-Wins
+
+P2P must not automatically use:
+
+```text
+Last Device Wins
+```
+
+or:
+
+```text
+Last Message Wins
+```
+
+for financial data.
+
+Conflict handling must follow the defined Conflict Resolution rules.
+
+### 20.51 P2P Connection Loss
+
+A P2P connection can fail because of:
+
+```text
+User moves away
+Wi-Fi disabled
+Hotspot disabled
+Device sleeps
+Application closed
+Android background restriction
+Network interference
+```
+
+The application must handle this safely.
+
+### 20.52 Connection Loss Behavior
+
+When the connection is lost:
+
+```text
+P2P Session
+      ↓
+DISCONNECTED
+```
+
+The application must:
+
+- Preserve successfully committed changes.
+- Preserve pending operations.
+- Preserve SyncState.
+- Preserve conflict information.
+- Allow future synchronization.
+- Avoid duplicate application during retry.
+
+### 20.53 P2P Session Recovery
+
+After reconnection:
+
+```text
+Reconnect
+      ↓
+Authenticate
+      ↓
+Exchange SyncState
+      ↓
+Determine Missing Operations
+      ↓
+Continue Synchronization
+```
+
+The application should not unnecessarily restart synchronization from the beginning.
+
+### 20.54 Interrupted Synchronization
+
+Example:
+
+```text
+O100
+O101
+O102
+O103
+O104
+```
+
+are being exchanged.
+
+Connection fails after:
+
+```text
+O100
+O101
+O102
+```
+
+are committed.
+
+After reconnect:
+
+```text
+O103
+O104
+```
+
+should be retried.
+
+Already committed operations should be safely recognized as already applied.
+
+### 20.55 P2P Sync State
+
+Peer synchronization state must be persisted.
+
+Conceptually:
+
+```text
+Local Device:
+D1
+
+Peer:
+D2
+
+Group:
+G1
+
+Channel:
+PEER
+
+Status:
+SYNCED
+```
+
+### 20.56 Peer-Specific State
+
+Different peers may have different synchronization progress.
+
+Example:
+
+```text
+D1 ↔ D2
+G1 → O500
+
+D1 ↔ D3
+G1 → O450
+```
+
+These states must not be treated as one global cursor.
+
+### 20.57 P2P Sync Completion
+
+A P2P synchronization cycle is complete when:
+
+```text
+All eligible local operations exchanged
+        +
+All required peer operations processed
+        +
+No blocking synchronization state remains
+```
+
+The session can then move toward:
+
+```text
+DISCONNECTED
+```
+
+### 20.58 Offline P2P and Local Availability
+
+Synchronization must not block normal local usage.
+
+While:
+
+```text
+P2P Synchronization = running
+```
+
+the User should still be able to create valid local expenses.
+
+These new changes become additional:
+
+```text
+SyncOperations
+```
+
+and can be synchronized during the current or next cycle.
+
+### 20.59 New Local Change During P2P
+
+Example:
+
+```text
+P2P Synchronization Running
+        ↓
+User Creates Expense E10
+        ↓
+Local Transaction
+        ↓
+SyncOperation O300 = PENDING
+```
+
+The application may:
+
+```text
+Synchronize O300
+```
+
+during the current session or later.
+
+It must not block the User from creating the Expense.
+
+### 20.60 P2P and Local Authorization
+
+Every local operation remains subject to:
+
+```text
+Local Authentication
++
+Group Membership
++
+Role / Permission
++
+Domain Validation
+```
+
+P2P availability does not change local authorization rules.
+
+### 20.61 P2P and Remote Authorization
+
+Every received operation remains subject to:
+
+```text
+Peer Authentication
++
+Origin Validation
++
+Group Authorization
++
+Domain Validation
+```
+
+A trusted peer connection does not automatically authorize every operation.
+
+### 20.62 P2P Security Boundary
+
+The P2P flow must protect against:
+
+```text
+Unknown Devices
+Unauthorized Users
+Unauthorized Groups
+Operation Tampering
+Replay
+Impersonation
+Duplicate Operations
+Data Interception
+```
+
+The cryptographic implementation belongs to the Security Architecture.
+
+### 20.63 P2P Secure Communication
+
+Once peers authenticate:
+
+```text
+Authenticated Peer
+      ↓
+Secure Session
+      ↓
+Synchronization
+```
+
+Sensitive synchronization data should not be transmitted without appropriate confidentiality and integrity protection.
+
+### 20.64 P2P Replay Protection
+
+An attacker must not be able to repeatedly replay:
+
+```text
+O100
+```
+
+to create duplicate financial records.
+
+Application-level:
+
+```text
+Operation ID
+```
+
+provides idempotency.
+
+The secure communication layer must additionally provide appropriate replay protection.
+
+### 20.65 P2P Message Integrity
+
+Received messages must be validated for integrity.
+
+Conceptually:
+
+```text
+Message
+    ↓
+Integrity Verification
+    ↓
+Valid?
+   ┌──┴──┐
+  Yes    No
+   │      │
+Process  Reject
+```
+
+### 20.66 P2P Data Minimization
+
+Only the required authorized data should be exchanged.
+
+For example:
+
+```text
+Peer authorized for G1
+```
+
+should not automatically receive:
+
+```text
+G2
+G3
+G4
+```
+
+### 20.67 P2P Profile Privacy
+
+Discovery should expose only the minimum information required for identifying a nearby User.
+
+Potentially visible:
+
+```text
+Display Name
+```
+
+Potentially restricted:
+
+```text
+Phone
+Email
+Financial Information
+```
+
+### 20.68 P2P Hotspot Scenario
+
+A common V1 flow:
+
+```text
+Device A
+    ↓
+Hotspot ON
+
+Device B
+    ↓
+Connects to Hotspot
+
+Device C
+    ↓
+Connects to Hotspot
+```
+
+SplitSync devices discover one another.
+
+Then:
+
+```text
+Authentication
+      ↓
+Authorization
+      ↓
+Synchronization
+```
+
+### 20.69 Hotspot Without Internet
+
+The hotspot may have:
+
+```text
+Internet = OFF
+```
+
+and still provide:
+
+```text
+Local Network = ON
+```
+
+P2P synchronization must continue to work in this scenario.
+
+### 20.70 Multiple Peers
+
+A device may synchronize with several peers sequentially:
+
+```text
+Device A
+   ↕
+Device B
+
+Device A
+   ↕
+Device C
+
+Device A
+   ↕
+Device D
+```
+
+The Sync Engine must preserve operation identity and synchronization state across all sessions.
+
+### 20.71 Multi-Hop Example
+
+```text
+Device A
+    ↓
+Creates E1
+
+Device B
+    ↓
+Synchronizes with A
+    ↓
+Receives E1
+
+Device C
+    ↓
+Synchronizes with B
+    ↓
+Receives E1
+```
+
+The operation remains:
+
+```text
+operationId = O100
+originDeviceId = A
+```
+
+### 20.72 P2P Then Backend
+
+Example:
+
+```text
+Device A
+    ↓
+Creates E1
+    ↓
+P2P → Device B
+    ↓
+Device B receives E1
+```
+
+Later:
+
+```text
+Internet Available
+    ↓
+Device A → Backend
+    ↓
+Backend receives E1
+```
+
+If Device B later receives E1 from the Backend:
+
+```text
+O100 already exists
+    ↓
+ALREADY_APPLIED
+```
+
+No duplicate Expense is created.
+
+### 20.73 Backend Then P2P
+
+The reverse is also possible:
+
+```text
+Device A
+    ↓
+Backend
+    ↓
+Device B
+
+Later:
+
+Device B
+    ↓
+P2P
+    ↓
+Device C
+```
+
+The same operation identity is preserved.
+
+### 20.74 P2P as a Synchronization Channel
+
+The architecture treats P2P as:
+
+```text
+Sync Channel
+```
+
+alongside:
+
+```text
+Backend Channel
+```
+
+Conceptually:
+
+```text
+                Sync Engine
+                    │
+          ┌─────────┴─────────┐
+          │                   │
+     Backend Channel      P2P Channel
+          │                   │
+       Internet          Local Network
+```
+
+### 20.75 Transport Independence
+
+The P2P flow must not directly depend on:
+
+```text
+Wi-Fi implementation
+Hotspot implementation
+Wi-Fi Direct implementation
+```
+
+Instead:
+
+```text
+P2P Transport
+      ↓
+P2P Protocol
+      ↓
+Sync Engine
+```
+
+### 20.76 P2P and Sync Engine
+
+The Sync Engine remains responsible for:
+
+```text
+Operation Selection
+Operation Ordering
+Validation
+Conflict Detection
+Idempotency
+SyncState
+```
+
+The P2P layer is responsible for:
+
+```text
+Discovery
+Connection
+Transport
+Message Exchange
+Session Management
+```
+
+### 20.77 P2P Session Lifecycle
+
+```text
+DISCOVERING
+      ↓
+CONNECTING
+      ↓
+CONNECTED
+      ↓
+AUTHENTICATING
+      ↓
+SYNCHRONIZING
+      ↓
+DISCONNECTING
+      ↓
+DISCONNECTED
+```
+
+Failure:
+
+```text
+Any State
+    ↓
+FAILED
+```
+
+### 20.78 P2P Session Persistence
+
+The active communication session itself does not need to survive an application restart.
+
+However, the important synchronization state must survive:
+
+```text
+SyncOperation
+SyncState
+Conflict
+Domain Data
+```
+
+### 20.79 P2P Failure Recovery
+
+Example:
+
+```text
+P2P Failed
+      ↓
+Local Data Safe
+      ↓
+SyncOperations Remain Pending
+      ↓
+Retry Later
+```
+
+The application remains fully usable.
+
+### 20.80 P2P Offline Flow — Complete Example
+
+```text
+User A creates Expense E1
+        ↓
+Room Database
+        ↓
+SyncOperation O100 = PENDING
+        ↓
+Internet = OFF
+        ↓
+User B becomes nearby
+        ↓
+Device Discovery
+        ↓
+User A selects User B
+        ↓
+Connection Request
+        ↓
+Peer Authentication
+        ↓
+Group Authorization
+        ↓
+Sync Handshake
+        ↓
+Sync State Exchange
+        ↓
+A sends O100
+        ↓
+B validates O100
+        ↓
+B applies E1
+        ↓
+B returns APPLIED
+        ↓
+A updates O100
+        ↓
+B sends its pending operations
+        ↓
+A validates and applies them
+        ↓
+Both devices update SyncState
+        ↓
+Synchronization Complete
+        ↓
+Disconnect
+```
+
+### 20.81 P2P Offline Flow — Group Invitation
+
+```text
+User A
+    ↓
+Creates Group G1
+    ↓
+Creates Invite for User B
+    ↓
+P2P Connection
+    ↓
+Send Invitation
+    ↓
+User B Validates Invitation
+    ↓
+User B Accepts
+    ↓
+Create Local Membership
+    ↓
+Create SyncOperation
+    ↓
+Exchange Required Group Data
+```
+
+### 20.82 P2P Offline Flow — Multiple Expenses
+
+Before synchronization:
+
+```text
+Device A:
+E1
+E2
+E3
+
+Device B:
+E4
+E5
+```
+
+After synchronization:
+
+```text
+Device A:
+E1
+E2
+E3
+E4
+E5
+
+Device B:
+E1
+E2
+E3
+E4
+E5
+```
+
+assuming all operations are valid and authorized.
+
+### 20.83 P2P Offline Flow — Connection Failure
+
+```text
+10 Operations
+      ↓
+6 Applied
+      ↓
+Connection Lost
+      ↓
+Local Transactions Preserved
+      ↓
+4 Operations Remain Pending
+      ↓
+Reconnect Later
+      ↓
+Continue From Current Sync State
+```
+
+### 20.84 P2P Offline Flow — No Peer
+
+```text
+User Creates Expense
+      ↓
+Local Transaction
+      ↓
+SyncOperation = PENDING
+      ↓
+No Peer Found
+      ↓
+No Internet
+      ↓
+Continue Using Application
+```
+
+### 20.85 P2P Offline Flow — Internet Returns
+
+```text
+P2P Synchronization May Have Completed
+        ↓
+Internet Becomes Available
+        ↓
+Backend Authentication
+        ↓
+Backend Synchronization
+        ↓
+Already Applied Operations Detected
+        ↓
+No Duplicate Data
+        ↓
+Remaining Changes Synchronized
+```
+
+### 20.86 P2P Offline Consistency Model
+
+P2P synchronization follows:
+
+```text
+Strong Local Consistency
++
+Eventual Peer Consistency
+```
+
+Immediately after a local change:
+
+```text
+Local Device
+    ↓
+Consistent
+```
+
+Before synchronization:
+
+```text
+Peer Device
+    ↓
+May be Different
+```
+
+After successful synchronization:
+
+```text
+Authorized Shared Scope
+    ↓
+Converges
+```
+
+### 20.87 P2P Offline Availability
+
+P2P must not reduce local availability.
+
+Even when:
+
+```text
+P2P = unavailable
+```
+
+the User can continue:
+
+```text
+Create Expense
+Edit Expense
+Create Settlement
+View Balance
+```
+
+### 20.88 P2P Offline Performance
+
+P2P synchronization should not block normal local operations.
+
+Local operation:
+
+```text
+Create Expense
+      ↓
+Room Transaction
+      ↓
+UI Update
+```
+
+should remain independent of:
+
+```text
+P2P Network
+```
+
+### 20.89 P2P Offline Data Integrity
+
+The receiving device must never apply partially validated financial data.
+
+The required sequence is:
+
+```text
+Receive
+    ↓
+Verify
+    ↓
+Validate
+    ↓
+Authorize
+    ↓
+Apply Transaction
+```
+
+### 20.90 P2P Offline Synchronization Boundary
+
+The architectural boundary is:
+
+```text
+┌──────────────────────────────┐
+│        Local Domain          │
+│                              │
+│ Groups                       │
+│ Expenses                     │
+│ Expense Splits               │
+│ Settlements                  │
+└──────────────┬───────────────┘
+               │
+               ▼
+        ┌──────────────┐
+        │ Sync Engine  │
+        └──────┬───────┘
+               │
+               ▼
+        ┌──────────────┐
+        │ P2P Channel  │
+        └──────┬───────┘
+               │
+               ▼
+          Remote Peer
+```
+
+The P2P layer must not directly manipulate UI state.
+
+### 20.91 P2P Offline Flow Summary
+
+```text
+P2P Offline Flow
+│
+├── Connectivity
+│   ├── Local Wi-Fi
+│   ├── Hotspot
+│   └── Supported Local Transport
+│
+├── Discovery
+│   └── Find Nearby SplitSync Devices
+│
+├── Connection
+│   └── Establish Peer Session
+│
+├── Authentication
+│   └── Verify Peer Identity
+│
+├── Authorization
+│   └── Verify Group Access
+│
+├── Handshake
+│   ├── Protocol Version
+│   ├── Capabilities
+│   └── Group Scope
+│
+├── Synchronization
+│   ├── Sync State
+│   ├── Pending Operations
+│   ├── Operation Validation
+│   └── Bidirectional Exchange
+│
+├── Conflict Handling
+│   └── Conflict Data Model
+│
+├── Persistence
+│   ├── Room
+│   ├── SyncOperation
+│   └── SyncState
+│
+└── Recovery
+    ├── Connection Loss
+    ├── Retry
+    ├── Duplicate Delivery
+    └── Internet Return
+```
+
+### 20.92 P2P Offline Flow Invariants
+
+The following rules are mandatory for V1:
+
+- P2P synchronization must work without Internet connectivity.
+- P2P synchronization is an additional synchronization channel.
+- Core application functionality must remain available even when no P2P peer is available.
+- The User must not manually switch to a special P2P Offline Mode.
+- Local data remains available throughout the P2P synchronization process.
+- Local changes must always be persisted before synchronization.
+- P2P synchronization must operate on SyncOperations rather than arbitrary database copying.
+- P2P discovery must be separate from authentication.
+- P2P authentication must be separate from authorization.
+- Being connected to the same Wi-Fi or Hotspot does not imply trust.
+- A discovered peer must not automatically receive Group data.
+- Only authenticated and authorized peers may synchronize Group data.
+- Group synchronization must be limited to authorized Groups.
+- Sensitive profile information must not be unnecessarily broadcast.
+- Phone number must not be used as the primary discovery identity.
+- User ID and Device ID must remain distinct.
+- Operation IDs must remain unchanged during P2P synchronization.
+- Origin User ID and Origin Device ID must remain unchanged.
+- Operations must remain valid when forwarded through multiple peers.
+- Received operations must be validated before being applied.
+- Received operations must be authorized before being applied.
+- Received operations must be applied transactionally.
+- Duplicate operations must never create duplicate financial records.
+- P2P synchronization must be bidirectional.
+- Peer-specific SyncState must be maintained independently.
+- P2P synchronization must support incremental synchronization.
+- P2P synchronization must not require full database exchange on every connection.
+- Operation dependencies must be respected.
+- Connection failure must not roll back successful local transactions.
+- Pending operations must survive connection loss.
+- P2P synchronization must be resumable where practical.
+- P2P synchronization must use the same Conflict Data Model as Backend synchronization.
+- P2P must not introduce arbitrary last-write-wins behavior for financial data.
+- Balances must be calculated from synchronized source data rather than treated as authoritative transferred values.
+- P2P synchronization must not block normal local application usage.
+- New local changes created during P2P synchronization must be persisted normally.
+- P2P synchronization must remain independent of the selected Android transport implementation.
+- P2P transport must not directly modify Domain entities.
+- Internet connectivity must not be required for P2P authentication or synchronization.
+- P2P synchronization may coexist with Backend synchronization when Internet becomes available.
+- The same Operation ID must remain idempotent across P2P and Backend channels.
+- Data received through P2P must not be duplicated when later received through the Backend.
+- P2P synchronization must support eventual convergence among authorized devices.
+- Local consistency must be maintained even when peer synchronization is unavailable.
+- Security protections must remain active during offline P2P communication.
+- P2P synchronization must fail safely without deleting or corrupting local financial data.
+
+## 21. Backend Synchronization Flow
+
+### 21.1 Purpose
+
+This section defines the complete Backend Synchronization Flow for SplitSync V1.
+
+The Backend Synchronization Flow is responsible for synchronizing locally persisted changes from Android devices with the SplitSync backend and for receiving authorized changes created by other devices.
+
+The backend synchronization architecture must support:
+
+```text
+Online Operation
++
+Offline Operation
++
+Automatic Recovery
++
+Multiple Devices
++
+Idempotent Operations
++
+Conflict Detection
++
+Authorization
++
+Eventual Consistency
+```
+
+The backend acts as the central synchronization point when Internet connectivity is available.
+
+### 21.2 Core Principle
+
+The Backend Synchronization Flow follows:
+
+```text
+Local First
+    ↓
+Persist Locally
+    ↓
+Queue SyncOperation
+    ↓
+Backend Synchronization
+    ↓
+Validate
+    ↓
+Apply
+    ↓
+Return Result
+    ↓
+Pull Remote Changes
+    ↓
+Apply Locally
+```
+
+The backend must never become a mandatory dependency for local expense management.
+
+### 21.3 Backend Synchronization Architecture
+
+```text
+┌──────────────────────────────┐
+│        Android Device        │
+│                              │
+│ UI                           │
+│  ↓                           │
+│ Domain                       │
+│  ↓                           │
+│ Room                         │
+│  ↓                           │
+│ Sync Engine                  │
+│  ↓                           │
+│ Backend Sync Channel         │
+└──────────────┬───────────────┘
+               │
+             HTTPS
+               │
+               ▼
+┌──────────────────────────────┐
+│       Spring Boot Backend    │
+│                              │
+│ Authentication               │
+│ Authorization                │
+│ Sync API                     │
+│ Domain Validation            │
+│ Conflict Detection           │
+│ Idempotency                  │
+│ Transaction Management       │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│            MySQL             │
+└──────────────────────────────┘
+```
+
+### 21.4 Backend as Synchronization Hub
+
+When Internet connectivity is available:
+
+```text
+Device A
+      ↓
+      Backend
+      ↑
+Device B
+```
+
+The backend provides a common synchronization point for authorized devices.
+
+This allows:
+
+```text
+Device A
+    ↓
+Backend
+    ↓
+Device B
+```
+
+without requiring Device A and Device B to be directly connected.
+
+### 21.5 Backend Is Not the Local Working Database
+
+The Android application must continue using:
+
+```text
+Room
+```
+
+as its local persistence layer.
+
+The backend is responsible for:
+
+```text
+Remote Persistence
++
+Synchronization
++
+Cross-Device Data Exchange
++
+Server-Side Validation
++
+Authorization
+```
+
+### 21.6 Synchronization Trigger
+
+Backend synchronization may be triggered by:
+
+```text
+Application Launch
+Connectivity Restored
+Pending SyncOperation
+Periodic Background Sync
+User-Initiated Sync
+Successful Authentication
+Relevant Data Change
+```
+
+The exact Android scheduling mechanism is defined in the Android Architecture.
+
+### 21.7 Connectivity Detection
+
+The application first determines whether backend communication may be possible:
+
+```text
+Connectivity Available?
+        │
+   ┌────┴────┐
+  Yes        No
+   │          │
+Sync       Wait
+```
+
+Connectivity availability does not guarantee backend availability.
+
+### 21.8 Backend Availability
+
+The synchronization engine must distinguish:
+
+```text
+Internet Available
+```
+
+from:
+
+```text
+Backend Available
+```
+
+Example:
+
+```text
+Internet = ON
+Backend = DOWN
+```
+
+The local application continues normally and pending operations remain retryable.
+
+### 21.9 Authentication Check
+
+Before synchronization:
+
+```text
+Check Authentication
+        ↓
+Authenticated?
+   ┌────┴────┐
+  Yes        No
+   │          │
+ Sync      Authenticate
+```
+
+Authentication failure must not remove local data.
+
+### 21.10 Authentication Recovery
+
+If authentication has expired:
+
+```text
+Token Expired
+      ↓
+Refresh / Re-authenticate
+      ↓
+Authentication Successful
+      ↓
+Resume Synchronization
+```
+
+If authentication cannot be restored:
+
+```text
+Local Operation
+      ↓
+Continue
+```
+
+while backend synchronization remains pending.
+
+### 21.11 Synchronization Scope
+
+Synchronization must be scoped to the authorized User and Groups.
+
+The application must not request or receive unrelated data.
+
+Conceptually:
+
+```text
+Authenticated User
+      ↓
+Authorized Groups
+      ↓
+Synchronization Scope
+```
+
+### 21.12 Synchronization Cycle
+
+A standard synchronization cycle is:
+
+```text
+Start Sync
+    ↓
+Authenticate
+    ↓
+Push Local Operations
+    ↓
+Process Push Results
+    ↓
+Pull Remote Changes
+    ↓
+Apply Remote Changes
+    ↓
+Update SyncState
+    ↓
+Check More Changes
+    ↓
+Complete
+```
+
+### 21.13 Push Before Pull
+
+The default V1 flow is:
+
+```text
+Push
+  ↓
+Pull
+```
+
+This is intended to reduce the period during which local changes exist only on the device.
+
+The exact protocol may optimize this sequence later without changing the local-first principle.
+
+### 21.14 Loading Pending Operations
+
+The Sync Engine queries:
+
+```text
+sync_operations
+```
+
+for operations such as:
+
+```text
+PENDING
+FAILED_RETRYABLE
+```
+
+that are eligible for synchronization.
+
+### 21.15 Operation Ordering
+
+Operations must be processed in a safe order.
+
+For example:
+
+```text
+Create Group G1
+      ↓
+Create Membership M1
+      ↓
+Create Expense E1
+```
+
+must respect the required dependency order.
+
+### 21.16 Operation Dependencies
+
+Each operation may have dependencies.
+
+Example:
+
+```text
+O100 → Create Group G1
+
+O101 → Create Expense E1 in G1
+```
+
+Therefore:
+
+```text
+O101 depends on O100
+```
+
+The Sync Engine must not blindly send dependent operations in an invalid order.
+
+### 21.17 Preparing a Sync Request
+
+For each operation:
+
+```text
+SyncOperation
+      ↓
+Serialize Required Data
+      ↓
+Attach Authentication
+      ↓
+Attach Device Identity
+      ↓
+Send Backend Request
+```
+
+The request must contain the information required by the Backend Synchronization API.
+
+### 21.18 Operation Identity
+
+Every synchronization operation must have a stable:
+
+```text
+operationId
+```
+
+The same Operation ID must be reused during retries.
+
+Example:
+
+```text
+O100
+```
+
+Retry:
+
+```text
+O100
+```
+
+not:
+
+```text
+O101
+```
+
+### 21.19 Idempotency
+
+The backend must process operations idempotently.
+
+Example:
+
+```text
+Device sends O100
+      ↓
+Backend applies O100
+      ↓
+Response lost
+      ↓
+Device retries O100
+      ↓
+Backend recognizes O100
+      ↓
+ALREADY_APPLIED
+```
+
+No duplicate financial entity should be created.
+
+### 21.20 Backend Operation Lookup
+
+The backend should be able to determine whether:
+
+```text
+operationId
+```
+
+has already been processed.
+
+Conceptually:
+
+```text
+operationId
+      ↓
+Already Processed?
+   ┌──┴──┐
+  Yes    No
+   │      │
+Return   Validate
+Result
+```
+
+### 21.21 Backend Authentication
+
+The backend validates:
+
+```text
+User Identity
++
+Device Identity
++
+Authentication Credentials
+```
+
+before processing the synchronization request.
+
+### 21.22 Backend Device Validation
+
+The backend must verify that the Device is allowed to synchronize.
+
+Example:
+
+```text
+Device D1
+    ↓
+Registered?
+    │
+ ┌──┴──┐
+Yes    No
+ │      │
+Sync   Reject
+```
+
+A revoked Device must not continue synchronization.
+
+### 21.23 Backend Authorization
+
+After authentication:
+
+```text
+User
+ ↓
+Device
+ ↓
+Group
+ ↓
+Membership
+ ↓
+Role / Permission
+ ↓
+Operation
+```
+
+must be validated.
+
+### 21.24 Backend Group Authorization
+
+For an operation against:
+
+```text
+Group G1
+```
+
+the backend must independently determine whether the originating User/Device is authorized for:
+
+```text
+G1
+```
+
+The Android client cannot be trusted to provide this authorization decision.
+
+### 21.25 Backend Operation Validation
+
+The backend validates:
+
+```text
+Operation Structure
++
+Entity Data
++
+Domain Rules
++
+Authorization
++
+Dependencies
++
+Version
++
+Idempotency
+```
+
+before applying the operation.
+
+### 21.26 Backend Transaction
+
+A successful operation should be applied transactionally:
+
+```text
+BEGIN TRANSACTION
+
+Validate
+    ↓
+Apply Domain Change
+    ↓
+Record Operation
+    ↓
+Create Change Record
+    ↓
+COMMIT
+```
+
+Failure:
+
+```text
+ROLLBACK
+```
+
+### 21.27 Change Record
+
+The backend needs a mechanism to determine which changes should later be pulled by other devices.
+
+Conceptually:
+
+```text
+Domain Change
+      ↓
+Change Record
+      ↓
+Global / Group Sequence
+      ↓
+Available for Pull
+```
+
+The exact database implementation is defined in the Database Architecture.
+
+### 21.28 Server-Side Change Ordering
+
+The backend should assign an ordering mechanism to synchronized changes.
+
+Example:
+
+```text
+Change 1001
+Change 1002
+Change 1003
+```
+
+Devices can use this ordering for incremental synchronization.
+
+The exact cursor strategy is defined by the Synchronization Data Model.
+
+### 21.29 Push Result
+
+The backend may return:
+
+```text
+APPLIED
+ALREADY_APPLIED
+CONFLICT
+REJECTED
+```
+
+Additional retryable error states may be defined by the API.
+
+### 21.30 APPLIED
+
+Example:
+
+```text
+O100
+    ↓
+Backend
+    ↓
+APPLIED
+```
+
+Android updates:
+
+```text
+O100 → COMPLETED
+```
+
+### 21.31 ALREADY_APPLIED
+
+Example:
+
+```text
+O100
+    ↓
+Backend
+    ↓
+Already exists
+```
+
+Result:
+
+```text
+ALREADY_APPLIED
+```
+
+The Android device can safely mark the operation as completed.
+
+### 21.32 CONFLICT
+
+Example:
+
+```text
+O100
+    ↓
+Backend
+    ↓
+Version Conflict
+```
+
+The backend returns:
+
+```text
+CONFLICT
+```
+
+The Android device stores the conflict according to the Conflict Data Model.
+
+### 21.33 REJECTED
+
+Example:
+
+```text
+O100
+    ↓
+Authorization Failure
+```
+
+or:
+
+```text
+Invalid Domain Operation
+```
+
+Result:
+
+```text
+REJECTED
+```
+
+The Sync Engine must distinguish permanent rejection from retryable failures.
+
+### 21.34 Retryable Failure
+
+Examples:
+
+```text
+Network Timeout
+Temporary Server Error
+Service Unavailable
+```
+
+These may remain:
+
+```text
+PENDING / RETRYABLE
+```
+
+and be retried later.
+
+### 21.35 Permanent Failure
+
+Examples:
+
+```text
+Invalid Operation
+Unauthorized Operation
+Invalid Group
+Invalid Domain State
+```
+
+These should not be retried indefinitely.
+
+### 21.36 Push Result Processing
+
+Conceptually:
+
+```text
+Backend Response
+      ↓
+Classify Result
+      │
+      ├── APPLIED
+      │      ↓
+      │   COMPLETED
+      │
+      ├── ALREADY_APPLIED
+      │      ↓
+      │   COMPLETED
+      │
+      ├── CONFLICT
+      │      ↓
+      │   CONFLICT
+      │
+      ├── REJECTED
+      │      ↓
+      │   REJECTED
+      │
+      └── RETRYABLE
+             ↓
+          Retry Later
+```
+
+### 21.37 Pull Synchronization
+
+After pushing local operations:
+
+```text
+Pull Remote Changes
+```
+
+The application sends its current synchronization cursor.
+
+Example:
+
+```text
+lastCursor = C500
+```
+
+### 21.38 Pull Request
+
+Conceptually:
+
+```text
+User / Device
+      ↓
+Group Scope
+      ↓
+Current Cursor
+      ↓
+Backend
+```
+
+The backend returns authorized changes after that cursor.
+
+### 21.39 Incremental Pull
+
+Example:
+
+```text
+Local Cursor:
+C500
+```
+
+Backend:
+
+```text
+C501
+C502
+C503
+C504
+```
+
+Response:
+
+```text
+C501-C504
+```
+
+After successful local application:
+
+```text
+Cursor = C504
+```
+
+### 21.40 Cursor Semantics
+
+The cursor represents:
+
+```text
+Last Successfully Applied Remote Change
+```
+
+It must not advance merely because a response was received.
+
+### 21.41 Cursor Update Transaction
+
+Remote changes and cursor advancement should be handled transactionally:
+
+```text
+BEGIN TRANSACTION
+
+Apply Remote Changes
+      ↓
+Update Cursor
+      ↓
+COMMIT
+```
+
+If application fails:
+
+```text
+ROLLBACK
+```
+
+and the cursor remains unchanged.
+
+### 21.42 Remote Change Validation
+
+Every pulled change must be validated before local application.
+
+Conceptually:
+
+```text
+Receive Change
+      ↓
+Verify Integrity
+      ↓
+Verify Origin
+      ↓
+Check Authorization
+      ↓
+Validate Domain Data
+      ↓
+Check Duplicate
+      ↓
+Check Version
+      ↓
+Apply
+```
+
+### 21.43 Remote Authorization
+
+A remote change is not automatically trusted merely because it came from the backend.
+
+The Android application should still validate the change according to the synchronization protocol and local Domain constraints.
+
+### 21.44 Applying Remote Changes
+
+Example:
+
+```text
+Remote Expense E10
+      ↓
+Not Present Locally
+      ↓
+Validate
+      ↓
+Insert Expense
+      ↓
+Insert Expense Splits
+      ↓
+Record Operation
+      ↓
+Update SyncState
+```
+
+### 21.45 Existing Remote Entity
+
+If the entity already exists:
+
+```text
+Remote Expense E10
+      ↓
+Local Expense E10 exists
+      ↓
+Compare Version / Operation
+```
+
+Possible outcomes:
+
+```text
+Already Applied
+Update Required
+Conflict
+Invalid
+```
+
+### 21.46 Duplicate Remote Change
+
+If:
+
+```text
+operationId = O100
+```
+
+has already been applied locally:
+
+```text
+O100
+    ↓
+Already Applied
+    ↓
+Do Not Apply Again
+```
+
+### 21.47 Remote Conflict
+
+Example:
+
+```text
+Local:
+Expense E1 Version 6
+
+Remote:
+Expense E1 Version 6
+Different Change
+```
+
+The application detects:
+
+```text
+Concurrent Update
+```
+
+and creates the appropriate Conflict state.
+
+### 21.48 Conflict Does Not Mean Data Loss
+
+When a conflict occurs:
+
+```text
+Local State
++
+Remote State
+```
+
+must be preserved according to the Conflict Data Model.
+
+The system must not silently discard one side merely because synchronization failed.
+
+### 21.49 Conflict Resolution
+
+Conflict resolution may produce:
+
+```text
+Resolution Operation
+```
+
+where required.
+
+Example:
+
+```text
+Conflict
+   ↓
+User Resolves
+   ↓
+Resolved State
+   ↓
+New SyncOperation
+   ↓
+Backend
+```
+
+### 21.50 Pull Pagination
+
+A large number of changes may require multiple pages.
+
+Example:
+
+```text
+Cursor C500
+
+Page 1:
+C501-C550
+
+Page 2:
+C551-C600
+
+Page 3:
+C601-C650
+```
+
+The Sync Engine processes each page safely.
+
+### 21.51 Pull Page Transaction
+
+Each page may be applied transactionally:
+
+```text
+BEGIN TRANSACTION
+
+Apply Page
+      ↓
+Update Cursor
+      ↓
+COMMIT
+```
+
+This allows recovery if the next page fails.
+
+### 21.52 Large Group Synchronization
+
+Large Groups should use:
+
+```text
+Incremental Pull
++
+Pagination
++
+Batching
+```
+
+rather than repeatedly transferring complete Group state.
+
+### 21.53 Initial Backend Synchronization
+
+A new device may require initial synchronization:
+
+```text
+Authenticate
+      ↓
+Determine Authorized Groups
+      ↓
+Download Initial Group State
+      ↓
+Persist Locally
+      ↓
+Initialize SyncState
+```
+
+### 21.54 Initial Sync With Existing Local Data
+
+If the device already contains local data:
+
+```text
+Local State
++
+Backend State
+```
+
+must not be blindly overwritten.
+
+The synchronization process must determine:
+
+```text
+Identity
++
+Ownership
++
+Operation History
++
+Duplicate Operations
++
+Conflicts
+```
+
+before combining the states.
+
+The exact account-linking/migration strategy is defined separately.
+
+### 21.55 Backend Group Creation
+
+Online Group creation follows:
+
+```text
+Create Group Locally
+      ↓
+Create SyncOperation
+      ↓
+Push Backend
+      ↓
+Backend Authorization
+      ↓
+Backend Validation
+      ↓
+Create Group
+      ↓
+Create Change Record
+      ↓
+Return APPLIED
+```
+
+### 21.56 Backend Expense Creation
+
+```text
+Create Expense Locally
+      ↓
+Create Expense Splits
+      ↓
+Create SyncOperation
+      ↓
+Push Backend
+      ↓
+Authenticate
+      ↓
+Authorize
+      ↓
+Validate
+      ↓
+Persist
+      ↓
+Create Change Record
+      ↓
+Return APPLIED
+```
+
+### 21.57 Backend Expense Update
+
+Example:
+
+```text
+Local Expense:
+E1 Version 5
+
+User edits:
+Version 6
+
+SyncOperation:
+baseVersion = 5
+```
+
+Backend:
+
+```text
+Current Version = 5
+      ↓
+Version Matches
+      ↓
+Apply Update
+      ↓
+Version = 6
+```
+
+### 21.58 Backend Expense Conflict
+
+Example:
+
+```text
+Device A:
+E1 Version 5 → Version 6
+
+Device B:
+E1 Version 5 → Version 6
+```
+
+If Device A reaches the backend first:
+
+```text
+A → Version 6
+```
+
+Then Device B:
+
+```text
+B → baseVersion 5
+```
+
+Backend detects:
+
+```text
+Conflict
+```
+
+according to the Conflict Resolution model.
+
+### 21.59 Backend Settlement Creation
+
+```text
+Create Settlement Locally
+      ↓
+SyncOperation
+      ↓
+Backend
+      ↓
+Authenticate
+      ↓
+Authorize
+      ↓
+Validate Participants
+      ↓
+Validate Amount
+      ↓
+Persist
+      ↓
+Create Change Record
+      ↓
+APPLIED
+```
+
+### 21.60 Backend Membership Change
+
+Membership operations require additional authorization.
+
+Example:
+
+```text
+OWNER
+    ↓
+Remove Member
+    ↓
+Local Operation
+    ↓
+SyncOperation
+    ↓
+Backend
+    ↓
+Validate Owner Permission
+    ↓
+Apply Membership Change
+```
+
+### 21.61 Backend Invitation
+
+An invitation may be synchronized as a Domain operation:
+
+```text
+Create Invitation
+      ↓
+SyncOperation
+      ↓
+Backend
+      ↓
+Validate Inviter Authorization
+      ↓
+Persist Invitation
+      ↓
+Available to Recipient
+```
+
+### 21.62 Backend Device Registration
+
+A Device may need backend registration before synchronization.
+
+Conceptually:
+
+```text
+Local Device
+      ↓
+Authentication
+      ↓
+Device Registration
+      ↓
+Backend Associates Device
+      ↓
+Device Authorized
+      ↓
+Synchronization
+```
+
+The exact registration flow is defined in Authentication and Security Architecture.
+
+### 21.63 Backend Device Revocation
+
+If a Device is revoked:
+
+```text
+Device D1
+      ↓
+REVOKED
+```
+
+future synchronization requests must be rejected.
+
+Local data should not automatically be deleted.
+
+### 21.64 Backend Sync Queue Recovery
+
+After application restart:
+
+```text
+Load SyncOperations
+      ↓
+Find Pending / Retryable
+      ↓
+Resume Synchronization
+```
+
+The application does not need to recreate operations.
+
+### 21.65 Crash During Push
+
+Example:
+
+```text
+Send O100
+      ↓
+Backend applies O100
+      ↓
+Android crashes before response
+```
+
+After restart:
+
+```text
+O100 still exists
+```
+
+Android retries:
+
+```text
+O100
+```
+
+Backend responds:
+
+```text
+ALREADY_APPLIED
+```
+
+Therefore no duplicate record is created.
+
+### 21.66 Crash During Pull
+
+Example:
+
+```text
+Receive C501-C550
+      ↓
+Application crashes
+```
+
+If the transaction was not committed:
+
+```text
+Changes rolled back
+Cursor remains previous value
+```
+
+The next synchronization safely requests the same range again.
+
+### 21.67 Backend Timeout
+
+Example:
+
+```text
+Send O100
+      ↓
+Timeout
+```
+
+The result is unknown.
+
+The Sync Engine must not create a new Operation ID.
+
+Instead:
+
+```text
+Retry O100
+```
+
+using idempotency.
+
+### 21.68 Backend Temporary Failure
+
+Example:
+
+```text
+HTTP 503
+```
+
+The operation remains:
+
+```text
+RETRYABLE
+```
+
+and is retried using controlled backoff.
+
+### 21.69 Backend Permanent Failure
+
+Example:
+
+```text
+Authorization denied
+```
+
+The operation becomes:
+
+```text
+REJECTED
+```
+
+and should not be continuously retried.
+
+### 21.70 Retry Policy
+
+Retryable failures should use:
+
+```text
+Exponential Backoff
++
+Maximum Retry Delay
++
+Connectivity Awareness
+```
+
+The exact numeric retry policy will be defined during implementation.
+
+### 21.71 Background Synchronization
+
+Backend synchronization should preferably run in the background when Android allows it.
+
+Potential triggers:
+
+```text
+Connectivity Restored
+Periodic Work
+Application Start
+User Action
+Pending Operations
+```
+
+The Android implementation should use the appropriate background execution mechanism.
+
+### 21.72 Foreground Synchronization
+
+Some operations may be initiated while the User is actively using the application:
+
+```text
+User Creates Expense
+      ↓
+Local Save
+      ↓
+Sync Worker
+```
+
+The User should not need to wait for backend completion to continue using the application.
+
+### 21.73 Background Synchronization Failure
+
+If background synchronization fails:
+
+```text
+Local Data
+      ↓
+Remains Available
+```
+
+The failure is represented through:
+
+```text
+SyncState
++
+SyncOperation State
+```
+
+### 21.74 Manual Synchronization
+
+The application may provide:
+
+```text
+Sync Now
+```
+
+as an optional User action.
+
+However:
+
+```text
+Sync Now
+```
+
+must not be required for ordinary synchronization.
+
+### 21.75 Automatic Synchronization
+
+Preferred flow:
+
+```text
+Connectivity Available
+      ↓
+Pending Changes?
+   ┌──┴──┐
+  Yes    No
+   │      │
+ Sync   Done
+```
+
+### 21.76 Backend Synchronization and Local Changes
+
+A User can continue making changes while synchronization is active.
+
+Example:
+
+```text
+O100
+O101
+```
+
+are being synchronized.
+
+User creates:
+
+```text
+O102
+```
+
+The new operation is persisted locally and becomes eligible for a later/current synchronization cycle.
+
+### 21.77 Concurrent Local and Remote Changes
+
+Possible state:
+
+```text
+Local:
+E1 Version 5
+
+Remote:
+E2 Version 4
+```
+
+The Sync Engine can:
+
+```text
+Push E1
+Pull E2
+```
+
+without blocking unrelated entities.
+
+### 21.78 Entity-Level Conflict Scope
+
+A conflict should normally affect the smallest applicable scope.
+
+Example:
+
+```text
+Expense E1
+```
+
+has a conflict.
+
+This should not automatically block:
+
+```text
+Expense E2
+Expense E3
+Settlement S1
+```
+
+unless the Domain dependency requires it.
+
+### 21.79 Group-Level Blocking
+
+Some operations may legitimately require Group-level serialization or conflict handling.
+
+For example:
+
+```text
+Group Ownership Transfer
+```
+
+may affect multiple related entities.
+
+The exact rules are defined by the Domain and Conflict Resolution models.
+
+### 21.80 Backend Change Propagation
+
+When Device A changes an Expense:
+
+```text
+Device A
+    ↓
+Backend
+    ↓
+Change Record
+```
+
+Device B later pulls:
+
+```text
+Changes after cursor
+```
+
+and receives the Expense change.
+
+### 21.81 Backend as Source of Remote Changes
+
+For online synchronization:
+
+```text
+Backend
+```
+
+is the source from which a device receives changes created by:
+
+```text
+Other Authorized Devices
+```
+
+and backend-authoritative operations.
+
+### 21.82 Backend Does Not Replace Local State
+
+The Android application must not periodically discard Room data and redownload the complete backend database.
+
+Instead:
+
+```text
+Local State
++
+Incremental Remote Changes
+```
+
+are combined through the synchronization protocol.
+
+### 21.83 Synchronization Scope by Group
+
+A device may synchronize multiple Groups:
+
+```text
+G1
+G2
+G3
+```
+
+Each Group must be synchronized according to its authorized scope.
+
+### 21.84 Group Cursor
+
+The synchronization system may maintain a Group-specific cursor or another equivalent scope-aware mechanism.
+
+Example:
+
+```text
+G1 → C500
+G2 → C820
+G3 → C120
+```
+
+The exact cursor design is defined in the Synchronization Data Model.
+
+### 21.85 Device-Level Sync State
+
+The application may also maintain device-level synchronization metadata:
+
+```text
+Device ID
+Last Successful Sync
+Last Failure
+Backend State
+```
+
+This is separate from Group-level change tracking where required.
+
+### 21.86 Backend Synchronization State
+
+Possible states:
+
+```text
+IDLE
+SYNCING
+SYNCED
+FAILED
+BLOCKED
+AUTH_REQUIRED
+```
+
+The exact enum is defined in the Sync State Model.
+
+### 21.87 Synchronization Metrics
+
+The application may record non-sensitive synchronization metrics such as:
+
+```text
+Last Successful Sync
+Pending Operation Count
+Last Sync Error
+Last Sync Duration
+```
+
+These metrics support diagnostics and User visibility.
+
+### 21.88 Backend Sync Error Classification
+
+Errors should be classified into:
+
+```text
+NETWORK_ERROR
+AUTHENTICATION_ERROR
+AUTHORIZATION_ERROR
+VALIDATION_ERROR
+CONFLICT
+SERVER_ERROR
+RATE_LIMITED
+UNKNOWN_ERROR
+```
+
+The final API error catalog will be defined separately.
+
+### 21.89 Network Error
+
+Example:
+
+```text
+Timeout
+No Internet
+Connection Reset
+```
+
+Result:
+
+```text
+Retryable
+```
+
+unless the system determines otherwise.
+
+### 21.90 Authentication Error
+
+Example:
+
+```text
+401
+```
+
+Flow:
+
+```text
+Authentication Error
+      ↓
+Refresh / Re-authenticate
+      ↓
+Retry Synchronization
+```
+
+If re-authentication fails:
+
+```text
+Sync Paused
+Local Operation Continues
+```
+
+### 21.91 Authorization Error
+
+Example:
+
+```text
+403
+```
+
+Flow:
+
+```text
+Authorization Error
+      ↓
+Do Not Blindly Retry
+      ↓
+Mark Operation Rejected / Blocked
+      ↓
+Apply Security Policy
+```
+
+### 21.92 Validation Error
+
+Example:
+
+```text
+Invalid Expense Split
+```
+
+Result:
+
+```text
+Permanent Rejection
+```
+
+The invalid operation must not be retried indefinitely.
+
+### 21.93 Conflict Error
+
+Example:
+
+```text
+409 / Domain Conflict
+```
+
+Result:
+
+```text
+Create Conflict
+```
+
+and stop retrying the same operation until the conflict is resolved according to the Conflict Resolution model.
+
+### 21.94 Rate Limiting
+
+If the backend rate-limits a device:
+
+```text
+Rate Limited
+      ↓
+Respect Retry-After / Backoff
+      ↓
+Retry Later
+```
+
+The local application remains available.
+
+### 21.95 Backend Security Boundary
+
+The backend must independently enforce:
+
+```text
+Authentication
+Authorization
+Validation
+Idempotency
+Transaction Integrity
+```
+
+The Android application is not trusted as a security authority.
+
+### 21.96 Backend Transaction and Operation Record
+
+For a successful synchronization operation:
+
+```text
+BEGIN TRANSACTION
+
+Apply Domain Change
+      ↓
+Persist Operation ID
+      ↓
+Create Change Record
+      ↓
+COMMIT
+```
+
+This ensures that the operation and resulting change are not separated by a partial transaction.
+
+### 21.97 Operation Record and Idempotency
+
+The backend must persist enough information to determine:
+
+```text
+Was operation O100 already processed?
+```
+
+The stored operation record may include:
+
+```text
+operationId
+originDeviceId
+originUserId
+entityId
+operationType
+result
+processedAt
+```
+
+The exact schema is defined in the Database Architecture.
+
+### 21.98 Backend Change Record
+
+A change record should provide enough information for:
+
+```text
+Incremental Pull
+Ordering
+Scope Filtering
+```
+
+Conceptually:
+
+```text
+Change
+├── changeId / sequence
+├── groupId
+├── entityType
+├── entityId
+├── operationId
+└── createdAt
+```
+
+The exact model is defined separately.
+
+### 21.99 Pull Authorization
+
+When a device requests:
+
+```text
+Changes for G1
+```
+
+the backend must verify that the authenticated User/Device is authorized to access G1.
+
+The client-provided:
+
+```text
+groupId
+```
+
+must not itself grant access.
+
+### 21.100 Backend Data Minimization
+
+The backend should return only:
+
+```text
+Authorized
++
+Required
++
+Not Already Synchronized
+```
+
+data.
+
+### 21.101 Backend Sync and P2P
+
+The Backend and P2P channels must use the same synchronization concepts:
+
+```text
+SyncOperation
+Operation ID
+Origin Identity
+Version
+Conflict Model
+SyncState
+```
+
+This allows:
+
+```text
+P2P → Backend
+```
+
+and:
+
+```text
+Backend → P2P
+```
+
+without creating duplicate Domain records.
+
+### 21.102 P2P Then Backend Example
+
+```text
+Device A
+    ↓
+Creates O100
+    ↓
+P2P → Device B
+    ↓
+B applies O100
+    ↓
+Internet returns
+    ↓
+A → Backend
+    ↓
+Backend applies O100
+    ↓
+B → Backend
+    ↓
+Backend / B recognize O100
+    ↓
+No duplicate
+```
+
+### 21.103 Backend Then P2P Example
+
+```text
+Device A
+    ↓
+Creates O100
+    ↓
+Backend
+    ↓
+Device B
+    ↓
+B receives O100
+
+Later:
+B
+ ↓
+P2P
+ ↓
+Device C
+```
+
+Device C receives the same operation identity:
+
+```text
+O100
+```
+
+### 21.104 Backend Synchronization and Eventual Consistency
+
+The system aims for:
+
+```text
+Local Strong Consistency
++
+Remote Eventual Consistency
+```
+
+Temporary differences are expected while devices are:
+
+```text
+Offline
+Synchronizing
+Disconnected
+```
+
+### 21.105 Backend Synchronization Completion
+
+A Group synchronization cycle is complete when:
+
+```text
+Eligible Local Operations
+        ↓
+Processed
+        +
+Required Remote Changes
+        ↓
+Applied
+        +
+Sync Cursor Updated
+        +
+No Blocking Error
+```
+
+Then:
+
+```text
+SyncState = SYNCED
+```
+
+### 21.106 Complete Backend Push Flow
+
+```text
+Pending SyncOperations
+        ↓
+Check Connectivity
+        ↓
+Authenticate
+        ↓
+Load Eligible Operations
+        ↓
+Order Operations
+        ↓
+Send Batch / Operation
+        ↓
+Backend Authentication
+        ↓
+Backend Authorization
+        ↓
+Backend Validation
+        ↓
+Idempotency Check
+        ↓
+Version / Conflict Check
+        ↓
+Apply Transaction
+        ↓
+Create Change Record
+        ↓
+Return Result
+        ↓
+Update Local SyncOperation
+```
+
+### 21.107 Complete Backend Pull Flow
+
+```text
+Current SyncState
+        ↓
+Authenticate
+        ↓
+Request Changes After Cursor
+        ↓
+Backend Authorization
+        ↓
+Return Authorized Changes
+        ↓
+Receive Batch
+        ↓
+Validate Changes
+        ↓
+Check Duplicate
+        ↓
+Check Conflict
+        ↓
+Apply Transaction
+        ↓
+Update Cursor
+        ↓
+COMMIT
+        ↓
+Request Next Batch if Required
+```
+
+### 21.108 Complete Backend Synchronization Flow
+
+```text
+Application / Connectivity Trigger
+                ↓
+        Check Backend Availability
+                ↓
+        Authenticate User/Device
+                ↓
+          Determine Scope
+                ↓
+        Load Pending Operations
+                ↓
+          Order Operations
+                ↓
+             PUSH
+                ↓
+        Process Push Results
+                ↓
+       Handle Conflicts/Rejects
+                ↓
+              PULL
+                ↓
+      Receive Remote Changes
+                ↓
+         Validate Changes
+                ↓
+      Apply Changes Transactionally
+                ↓
+          Update SyncState
+                ↓
+      More Changes Available?
+             ┌──┴──┐
+            Yes    No
+             │      │
+            Pull   Complete
+             │
+             └───────┐
+                     ↓
+                  SYNCED
+```
+
+### 21.109 Backend Synchronization Summary
+
+```text
+Backend Synchronization
+│
+├── Connectivity
+│   ├── Internet Detection
+│   └── Backend Availability
+│
+├── Authentication
+│   ├── User
+│   └── Device
+│
+├── Scope
+│   └── Authorized Groups
+│
+├── Push
+│   ├── Pending Operations
+│   ├── Ordering
+│   ├── Idempotency
+│   ├── Authorization
+│   ├── Validation
+│   └── Conflict Detection
+│
+├── Pull
+│   ├── Cursor
+│   ├── Incremental Changes
+│   ├── Pagination
+│   ├── Validation
+│   └── Transactional Apply
+│
+├── Recovery
+│   ├── Retry
+│   ├── Timeout
+│   ├── Authentication Recovery
+│   └── Application Restart
+│
+└── Completion
+    ├── SyncState
+    ├── Operation State
+    └── Eventual Convergence
+```
+
+### 21.110 Backend Synchronization Invariants
+
+The following rules are mandatory for V1:
+
+- Backend synchronization must remain optional for core local expense functionality.
+- Local Room data remains the primary working data source on Android.
+- Backend synchronization must not require the User to manually switch modes.
+- Synchronization should start automatically when suitable connectivity is available.
+- Internet availability does not guarantee backend availability.
+- Backend authentication must be validated before synchronization.
+- Backend authorization must be independently validated.
+- Device authorization must be independently validated.
+- Group authorization must be independently validated.
+- Client-provided authorization claims must never be trusted without server-side verification.
+- Synchronization must be scoped to authorized Groups.
+- The backend must not return unauthorized Group data.
+- Local changes must be persisted before being sent to the backend.
+- Domain changes and their SyncOperations must be created atomically.
+- Every synchronization operation must have a stable Operation ID.
+- Retries must reuse the same Operation ID.
+- Backend operation processing must be idempotent.
+- Duplicate operations must never create duplicate financial records.
+- Operation dependencies must be respected.
+- Backend Domain changes must be applied transactionally.
+- Operation records and resulting change records should be committed consistently with the Domain change.
+- Backend changes must be available for incremental synchronization by authorized devices.
+- Pull synchronization must use a cursor or equivalent incremental synchronization mechanism.
+- The synchronization cursor must represent the last successfully applied remote change.
+- The cursor must not advance before the corresponding changes are successfully committed locally.
+- Remote changes must be validated before being applied to Room.
+- Remote changes must not bypass local Domain integrity rules.
+- Remote changes must not bypass local synchronization validation.
+- Conflicts must use the defined Conflict Data Model.
+- Financial conflicts must not be resolved using arbitrary last-write-wins.
+- Permanent failures must not be retried indefinitely.
+- Retryable failures must use controlled retry/backoff.
+- Authentication failures must trigger appropriate authentication recovery.
+- Authorization failures must not be blindly retried.
+- Validation failures must not be blindly retried.
+- Timeouts must be safely retryable through idempotency.
+- Application crashes must not cause duplicate backend operations.
+- Application crashes during pull must not cause the synchronization cursor to advance incorrectly.
+- Pending SyncOperations must survive application restart.
+- SyncState must survive application restart.
+- Backend synchronization must continue automatically after connectivity is restored.
+- Backend synchronization must not block normal local application usage.
+- New local changes may be created while synchronization is running.
+- New local changes must receive their own SyncOperations.
+- Synchronization should be incremental rather than repeatedly downloading complete Group state.
+- Large synchronization sets must support batching and pagination.
+- Group synchronization state must be tracked with sufficient scope to prevent incorrect cursor sharing.
+- P2P and Backend synchronization must use the same Operation ID and Domain synchronization concepts.
+- Data synchronized through P2P must not be duplicated when later synchronized through the Backend.
+- Data synchronized through the Backend must not be duplicated when later synchronized through P2P.
+- Backend synchronization must preserve eventual convergence across authorized devices.
+- Backend failure must not make the local application unusable.
+- Local financial data must never be deleted merely because backend synchronization fails.
+- Synchronization state must accurately represent pending, completed, failed, rejected, and conflicted operations.
+- The backend must remain the authoritative remote synchronization point for online cross-device synchronization.
+- The local application must remain the authoritative working environment for the User's current device.
+
+## 22. Error Handling
+
+### 22.1 Purpose
+
+This section defines the error-handling strategy for SplitSync V1.
+
+SplitSync must distinguish between:
+
+- Local application errors.
+- Domain validation errors.
+- Authentication errors.
+- Authorization errors.
+- Network errors.
+- Backend errors.
+- Synchronization errors.
+- Conflict errors.
+- P2P communication errors.
+- Persistence errors.
+- Security-related errors.
+
+The most important principle is:
+
+```text
+An error in synchronization must not cause loss of valid local data.
+```
+
+### 22.2 Core Principle
+
+SplitSync follows:
+
+```text
+Fail Safely
++
+Preserve Local Data
++
+Classify Errors
++
+Retry Only When Appropriate
++
+Never Silently Lose Financial Data
+```
+
+### 22.3 Error Handling Architecture
+
+```text
+User / System Action
+        ↓
+Operation
+        ↓
+Validation
+        ↓
+Execution
+        ↓
+Error?
+   ┌────┴────┐
+  No        Yes
+   │          │
+Success    Classify Error
+              ↓
+        Handle by Category
+              ↓
+        Recover / Retry /
+        Reject / Report
+```
+
+### 22.4 Error Categories
+
+The primary V1 error categories are:
+
+```text
+LOCAL_ERROR
+VALIDATION_ERROR
+AUTHENTICATION_ERROR
+AUTHORIZATION_ERROR
+NETWORK_ERROR
+BACKEND_ERROR
+SYNC_ERROR
+CONFLICT_ERROR
+P2P_ERROR
+DATABASE_ERROR
+SECURITY_ERROR
+UNKNOWN_ERROR
+```
+
+### 22.5 Error Classification
+
+Every significant error should be classified before determining the recovery strategy.
+
+Example:
+
+```text
+Network Timeout
+    ↓
+NETWORK_ERROR
+    ↓
+Retryable
+```
+
+Another example:
+
+```text
+Invalid Expense Split
+    ↓
+VALIDATION_ERROR
+    ↓
+Permanent
+```
+
+### 22.6 Local Errors
+
+A local error occurs while performing an operation entirely on the device.
+
+Examples:
+
+```text
+Invalid local state
+Database failure
+Unexpected application state
+Invalid local reference
+```
+
+Local errors must be handled without assuming backend availability.
+
+### 22.7 Validation Errors
+
+Validation errors occur when input or Domain data violates application rules.
+
+Examples:
+
+```text
+Expense amount <= 0
+Invalid split amount
+Invalid percentage total
+Invalid settlement amount
+Missing required Group
+Invalid participant
+```
+
+These errors are normally:
+
+```text
+NON-RETRYABLE
+```
+
+until the underlying data is corrected.
+
+### 22.8 Authentication Errors
+
+Authentication errors occur when the application cannot establish a valid identity.
+
+Examples:
+
+```text
+Invalid credentials
+Expired authentication
+Invalid token
+Revoked session
+Invalid device authentication
+```
+
+The application should attempt the appropriate authentication recovery where possible.
+
+### 22.9 Authorization Errors
+
+Authorization errors occur when the identity is known but the operation is not permitted.
+
+Examples:
+
+```text
+User is not a Group member
+Insufficient Group role
+Device revoked
+Operation not permitted
+```
+
+These errors must not be blindly retried.
+
+### 22.10 Network Errors
+
+Network errors occur when communication cannot be established or maintained.
+
+Examples:
+
+```text
+No Internet
+Connection timeout
+Connection reset
+DNS failure
+Network unavailable
+```
+
+For backend synchronization:
+
+```text
+Network Error
+    ↓
+Keep Local Data
+    ↓
+Keep SyncOperation
+    ↓
+Retry Later
+```
+
+### 22.11 Backend Errors
+
+Backend errors are failures returned by the backend service.
+
+Examples:
+
+```text
+HTTP 500
+HTTP 502
+HTTP 503
+Service unavailable
+Unexpected server response
+```
+
+The application must determine whether the error is:
+
+```text
+Retryable
+```
+
+or:
+
+```text
+Permanent
+```
+
+### 22.12 Synchronization Errors
+
+Synchronization errors occur while processing:
+
+```text
+SyncOperation
+SyncState
+Remote Changes
+Cursor
+Conflict
+```
+
+Examples:
+
+```text
+Operation rejected
+Invalid remote change
+Cursor error
+Dependency failure
+Synchronization protocol error
+```
+
+### 22.13 Conflict Errors
+
+A conflict occurs when multiple valid changes cannot be automatically combined.
+
+Example:
+
+```text
+Device A
+    ↓
+Expense E1 → Version 6
+
+Device B
+    ↓
+Expense E1 → Version 6
+```
+
+The system must create:
+
+```text
+CONFLICT
+```
+
+rather than silently overwrite one change.
+
+### 22.14 P2P Errors
+
+P2P errors include:
+
+```text
+Peer discovery failure
+Connection failure
+Authentication failure
+Authorization failure
+Protocol mismatch
+Message integrity failure
+Connection interruption
+Peer unavailable
+```
+
+P2P errors must not affect already committed local Domain data.
+
+### 22.15 Database Errors
+
+Database errors occur when local persistence fails.
+
+Examples:
+
+```text
+SQLite error
+Room transaction failure
+Constraint violation
+Database corruption
+Storage unavailable
+```
+
+A database failure is fundamentally different from:
+
+```text
+Network unavailable
+```
+
+### 22.16 Security Errors
+
+Security errors include:
+
+```text
+Invalid authentication
+Invalid signature
+Tampered message
+Untrusted peer
+Invalid security token
+Revoked device
+```
+
+Security-sensitive errors must fail closed.
+
+### 22.17 Unknown Errors
+
+Unexpected errors must be classified as:
+
+```text
+UNKNOWN_ERROR
+```
+
+until sufficient information is available.
+
+Unknown errors must not result in destructive recovery behavior.
+
+### 22.18 Error Severity
+
+Errors may be classified by severity:
+
+```text
+INFO
+WARNING
+ERROR
+CRITICAL
+```
+
+Examples:
+
+```text
+Sync temporarily unavailable
+    → WARNING
+
+Database transaction failure
+    → ERROR
+
+Detected security compromise
+    → CRITICAL
+```
+
+### 22.19 Retryability
+
+Every operational error should be classified as:
+
+```text
+RETRYABLE
+NON_RETRYABLE
+USER_ACTION_REQUIRED
+```
+
+Example:
+
+```text
+Network Timeout
+    → RETRYABLE
+
+Invalid Expense
+    → NON_RETRYABLE
+
+Authentication Expired
+    → USER_ACTION_REQUIRED / RECOVERABLE
+```
+
+### 22.20 Retryable Errors
+
+Typical retryable errors include:
+
+```text
+Network timeout
+Temporary backend failure
+Service unavailable
+Temporary connection failure
+Rate limiting
+Temporary P2P disconnection
+```
+
+### 22.21 Non-Retryable Errors
+
+Typical non-retryable errors include:
+
+```text
+Invalid Domain data
+Invalid Expense Split
+Unauthorized operation
+Invalid Group membership
+Malformed operation
+Unsupported operation
+Permanent protocol mismatch
+```
+
+### 22.22 User Action Required
+
+Some errors require the User to take action.
+
+Examples:
+
+```text
+Authentication expired
+Conflict requires resolution
+Permission changed
+Invalid user input
+```
+
+The application should clearly communicate the required action.
+
+### 22.23 Error Handling Must Preserve Local Data
+
+The following must never happen merely because synchronization fails:
+
+```text
+Delete Expense
+Delete Group
+Delete Settlement
+Delete SyncOperation
+Clear Local Database
+```
+
+### 22.24 Local Operation Failure
+
+For a local operation:
+
+```text
+User Action
+    ↓
+Validation
+    ↓
+Database Transaction
+    ↓
+Failure
+```
+
+The transaction must be rolled back if it cannot be safely committed.
+
+### 22.25 Local Transaction Failure
+
+Example:
+
+```text
+Create Expense
+      ↓
+Create Expense Splits
+      ↓
+Database Failure
+```
+
+Result:
+
+```text
+ROLLBACK
+```
+
+The application must not leave:
+
+```text
+Partial Expense
+```
+
+in the local database.
+
+### 22.26 Atomic Expense Creation
+
+Expense creation must be atomic:
+
+```text
+BEGIN TRANSACTION
+
+Expense
+Expense Splits
+SyncOperation
+
+COMMIT
+```
+
+If any required part fails:
+
+```text
+ROLLBACK
+```
+
+### 22.27 Atomic Settlement Creation
+
+Similarly:
+
+```text
+BEGIN TRANSACTION
+
+Settlement
+SyncOperation
+
+COMMIT
+```
+
+If persistence fails:
+
+```text
+ROLLBACK
+```
+
+### 22.28 Error During SyncOperation Creation
+
+If the Domain entity is successfully saved but the corresponding SyncOperation cannot be created, the entire transaction must fail.
+
+Therefore:
+
+```text
+Expense Saved
++
+SyncOperation Failed
+```
+
+must not become a committed state for operations requiring synchronization.
+
+### 22.29 Synchronization Error
+
+For:
+
+```text
+SyncOperation O100
+```
+
+the Sync Engine must preserve the operation until its final state is known.
+
+Possible states:
+
+```text
+PENDING
+IN_PROGRESS
+COMPLETED
+FAILED
+CONFLICT
+REJECTED
+```
+
+### 22.30 Retry State
+
+A retryable failure may result in:
+
+```text
+FAILED
+```
+
+with metadata such as:
+
+```text
+retryCount
+lastAttemptAt
+nextRetryAt
+lastErrorCode
+```
+
+The exact fields are defined by the Sync State / Sync Operation model.
+
+### 22.31 Retry Backoff
+
+Retryable synchronization failures should use controlled backoff:
+
+```text
+Attempt 1
+    ↓
+Wait
+Attempt 2
+    ↓
+Longer Wait
+Attempt 3
+    ↓
+Longer Wait
+```
+
+This prevents:
+
+```text
+Battery Drain
+Network Flooding
+Server Overload
+```
+
+### 22.32 Retry With Same Operation ID
+
+A retry must use:
+
+```text
+Same operationId
+```
+
+Example:
+
+```text
+O100
+```
+
+must remain:
+
+```text
+O100
+```
+
+for every retry.
+
+### 22.33 Timeout Handling
+
+Example:
+
+```text
+Send O100
+    ↓
+Timeout
+```
+
+The result may be unknown.
+
+The application must not assume:
+
+```text
+Operation definitely failed
+```
+
+Instead:
+
+```text
+Retry O100
+```
+
+using idempotency.
+
+### 22.34 Backend 5xx Errors
+
+Typical:
+
+```text
+500
+502
+503
+504
+```
+
+may be treated as retryable depending on the specific response.
+
+The local operation remains safe:
+
+```text
+SyncOperation = RETRYABLE
+```
+
+### 22.35 Backend 4xx Errors
+
+Typical client-side errors may include:
+
+```text
+400
+401
+403
+404
+409
+422
+429
+```
+
+They must not all be handled identically.
+
+Example:
+
+```text
+401 → Authentication recovery
+403 → Authorization failure
+409 → Conflict
+422 → Validation failure
+429 → Retry with backoff
+```
+
+### 22.36 Authentication Error Flow
+
+```text
+Backend Request
+      ↓
+Authentication Error
+      ↓
+Refresh / Re-authenticate
+      ↓
+Success?
+   ┌──┴──┐
+  Yes    No
+   │      │
+Retry   Pause Sync
+         ↓
+    Local Operation
+       Remains
+```
+
+### 22.37 Authorization Error Flow
+
+```text
+Backend Request
+      ↓
+Authorization Error
+      ↓
+Do Not Blindly Retry
+      ↓
+Mark Operation Rejected / Blocked
+      ↓
+Preserve Local State
+      ↓
+Apply Defined Resolution Policy
+```
+
+### 22.38 Validation Error Flow
+
+```text
+Backend Request
+      ↓
+Validation Error
+      ↓
+Permanent Failure
+      ↓
+Mark Operation REJECTED
+      ↓
+Do Not Retry Automatically
+```
+
+### 22.39 Conflict Error Flow
+
+```text
+Backend Request
+      ↓
+Conflict
+      ↓
+Create Conflict Record
+      ↓
+Preserve Relevant States
+      ↓
+Mark Operation CONFLICT
+      ↓
+User / Resolution Strategy
+```
+
+### 22.40 Rate Limit Error
+
+```text
+Backend
+    ↓
+429 / Rate Limited
+    ↓
+Read Retry Information
+    ↓
+Wait
+    ↓
+Retry
+```
+
+The application must not continuously retry without delay.
+
+### 22.41 Backend Unavailable
+
+Example:
+
+```text
+Internet = ON
+Backend = OFF
+```
+
+The application should behave as:
+
+```text
+Local Operation = Available
+Synchronization = Pending
+```
+
+### 22.42 Internet Unavailable
+
+Example:
+
+```text
+Internet = OFF
+```
+
+The application should not treat normal local operations as failures.
+
+Instead:
+
+```text
+Expense Creation
+      ↓
+Local Save
+      ↓
+SyncOperation = PENDING
+```
+
+### 22.43 Offline Error Handling
+
+The User should not receive a blocking:
+
+```text
+Network Error
+```
+
+merely because the application cannot synchronize.
+
+A more appropriate state is:
+
+```text
+Saved locally
+Sync pending
+```
+
+### 22.44 P2P Connection Error
+
+Example:
+
+```text
+P2P Session
+    ↓
+Connection Lost
+```
+
+Result:
+
+```text
+Local Data = Preserved
+Successful Operations = Preserved
+Remaining Operations = Retryable
+```
+
+### 22.45 P2P Authentication Failure
+
+```text
+Peer Connection
+      ↓
+Authentication Failure
+      ↓
+Reject P2P Session
+      ↓
+Do Not Exchange Group Data
+      ↓
+Local Application Continues
+```
+
+### 22.46 P2P Authorization Failure
+
+```text
+Authenticated Peer
+      ↓
+Group Authorization Failure
+      ↓
+Deny Group Synchronization
+      ↓
+Do Not Send Group Data
+```
+
+Other authorized Groups may still be synchronized if the protocol permits.
+
+### 22.47 P2P Protocol Mismatch
+
+Example:
+
+```text
+Device A → Protocol 1
+Device B → Protocol 99
+```
+
+If incompatible:
+
+```text
+Reject Session / Negotiate Compatible Version
+```
+
+The application must not attempt to interpret unsupported messages.
+
+### 22.48 P2P Message Integrity Failure
+
+If a received message fails integrity verification:
+
+```text
+Message
+    ↓
+Integrity Check
+    ↓
+FAIL
+    ↓
+Reject Message
+    ↓
+Do Not Apply Data
+```
+
+Repeated security failures may terminate the peer session.
+
+### 22.49 P2P Duplicate Data
+
+If the same operation is received repeatedly:
+
+```text
+operationId
+    ↓
+Already Applied?
+   ┌──┴──┐
+  Yes    No
+   │      │
+Ignore  Process
+```
+
+The duplicate must not create another financial record.
+
+### 22.50 Remote Data Validation Failure
+
+If a remote change cannot satisfy local Domain rules:
+
+```text
+Remote Change
+      ↓
+Validation
+      ↓
+FAIL
+```
+
+The application must not blindly insert the data.
+
+The failure should be recorded for synchronization diagnostics and appropriate recovery.
+
+### 22.51 Cursor Failure
+
+If a pull cursor cannot be safely advanced:
+
+```text
+Do Not Advance Cursor
+```
+
+The application should retry from the last known valid cursor.
+
+### 22.52 Cursor Corruption
+
+If local synchronization state becomes invalid:
+
+```text
+Invalid Cursor
+      ↓
+Stop Affected Synchronization Scope
+      ↓
+Recover / Reinitialize SyncState
+      ↓
+Resynchronize Required Data
+```
+
+Recovery must not delete valid local Domain data.
+
+### 22.53 SyncOperation Corruption
+
+If an operation is malformed locally:
+
+```text
+Invalid SyncOperation
+      ↓
+Do Not Send
+      ↓
+Mark Invalid / Error
+      ↓
+Preserve Domain Data
+      ↓
+Record Diagnostic Information
+```
+
+The application must avoid infinite retry loops.
+
+### 22.54 Dependency Failure
+
+Example:
+
+```text
+Create Expense E1
+```
+
+depends on:
+
+```text
+Create Group G1
+```
+
+If Group synchronization fails:
+
+```text
+E1
+    ↓
+WAITING_FOR_DEPENDENCY
+```
+
+The Expense operation should not be sent until the dependency is resolved.
+
+### 22.55 Dependency Cycle
+
+If the synchronization system detects:
+
+```text
+O100 → O101
+O101 → O100
+```
+
+it must treat this as a synchronization error rather than continuously retrying.
+
+### 22.56 Conflict Does Not Mean Failure of Local Save
+
+Important rule:
+
+```text
+Local Expense Save = Successful
+Backend Conflict = Later Synchronization Result
+```
+
+The application must not roll back a previously successful local transaction merely because a later synchronization conflict occurs.
+
+### 22.57 Conflict Does Not Mean Data Deletion
+
+When a conflict occurs:
+
+```text
+Local State
++
+Remote State
+```
+
+must be preserved according to the Conflict Data Model.
+
+### 22.58 Error and SyncOperation Relationship
+
+Conceptually:
+
+```text
+SyncOperation
+├── status
+├── retryCount
+├── lastErrorCode
+├── lastErrorMessage / safe diagnostic
+├── lastAttemptAt
+└── nextRetryAt
+```
+
+Sensitive information should not be stored unnecessarily in error messages.
+
+### 22.59 Error and SyncState Relationship
+
+SyncState may contain:
+
+```text
+status
+lastSuccessfulSync
+lastFailure
+lastErrorCode
+cursor
+```
+
+The exact fields are defined by the Sync State Model.
+
+### 22.60 Error Persistence
+
+Important synchronization errors should be persisted when they are required for:
+
+```text
+Retry
+Recovery
+Diagnostics
+User Notification
+```
+
+Transient UI errors do not necessarily need permanent persistence.
+
+### 22.61 Error Logging
+
+Logging should support:
+
+```text
+Debugging
+Diagnostics
+Failure Analysis
+```
+
+Logs must avoid unnecessary sensitive information.
+
+### 22.62 Sensitive Data in Logs
+
+The application must avoid logging:
+
+```text
+Passwords
+Authentication Tokens
+Private Keys
+Full Phone Numbers
+Full Email Addresses
+Financial Details
+Sensitive Personal Information
+```
+
+unless explicitly required and securely handled.
+
+### 22.63 Backend Error Logging
+
+The backend may log:
+
+```text
+Request ID
+Operation ID
+User / Device reference
+Error Code
+Timestamp
+Service Component
+```
+
+but should avoid unnecessary sensitive payload data.
+
+### 22.64 Correlation ID
+
+Backend requests may use a:
+
+```text
+requestId / correlationId
+```
+
+to trace a synchronization request across services and logs.
+
+Example:
+
+```text
+requestId = R1001
+operationId = O500
+```
+
+This helps diagnose failures without exposing sensitive payloads.
+
+### 22.65 User-Facing Error Messages
+
+User-facing messages should be understandable.
+
+Avoid exposing technical details such as:
+
+```text
+NullPointerException
+SQL constraint violation
+HTTP 500
+Stack trace
+```
+
+Instead:
+
+```text
+"Your expense was saved locally and will sync when the connection is available."
+```
+
+### 22.66 Local Validation Message
+
+Example:
+
+```text
+Split amounts must equal the expense total.
+```
+
+This is preferable to:
+
+```text
+VALIDATION_EXCEPTION_102
+```
+
+for normal User-facing UI.
+
+### 22.67 Sync Failure Message
+
+Example:
+
+```text
+"Saved locally. Sync will retry when the connection is available."
+```
+
+This communicates that:
+
+```text
+Local Data = Safe
+```
+
+### 22.68 Authentication Message
+
+Example:
+
+```text
+"Your session has expired. Please sign in again to sync your data."
+```
+
+Local data remains available where permitted.
+
+### 22.69 Authorization Message
+
+Example:
+
+```text
+"You no longer have permission to modify this group."
+```
+
+The application should not expose unnecessary security details.
+
+### 22.70 Conflict Message
+
+Example:
+
+```text
+"This expense was changed on another device. Review the changes to resolve the conflict."
+```
+
+### 22.71 P2P Failure Message
+
+Example:
+
+```text
+"Could not synchronize with this device. Your local changes are safe."
+```
+
+### 22.72 Database Failure Message
+
+Example:
+
+```text
+"Unable to save this change locally. Please try again."
+```
+
+A database failure should not be described as a network error.
+
+### 22.73 Unknown Error Message
+
+Example:
+
+```text
+"Something went wrong. Your existing data has not been removed."
+```
+
+The application should record diagnostic information where appropriate.
+
+### 22.74 Error Recovery Hierarchy
+
+Recovery should follow:
+
+```text
+1. Prevent Data Loss
+        ↓
+2. Roll Back Unsafe Transaction
+        ↓
+3. Preserve Valid Local State
+        ↓
+4. Classify Error
+        ↓
+5. Retry if Safe
+        ↓
+6. Request User Action if Required
+        ↓
+7. Record Diagnostic Information
+```
+
+### 22.75 Error Handling During Application Startup
+
+If synchronization fails during startup:
+
+```text
+Application Startup
+      ↓
+Load Local Database
+      ↓
+Display Local State
+      ↓
+Attempt Synchronization
+      ↓
+Failure
+```
+
+The application should continue using local data.
+
+### 22.76 Error Handling During Background Sync
+
+If background synchronization fails:
+
+```text
+Background Sync
+      ↓
+Failure
+      ↓
+Persist Sync State
+      ↓
+Retry Later
+```
+
+The failure should not interrupt ordinary User interaction.
+
+### 22.77 Error Handling During User-Initiated Sync
+
+If the User selects:
+
+```text
+Sync Now
+```
+
+and synchronization fails:
+
+```text
+Show Appropriate Status
++
+Keep Local Data
++
+Keep Retryable Operations
+```
+
+### 22.78 Error Handling During P2P Sync
+
+If P2P fails:
+
+```text
+End / Pause P2P Session
+      ↓
+Preserve Local State
+      ↓
+Keep Pending Operations
+      ↓
+Retry Later
+```
+
+### 22.79 Error Handling During Online-to-Offline Transition
+
+```text
+Online
+   ↓
+Network Lost
+   ↓
+Request Fails
+   ↓
+Classify as Network Error
+   ↓
+Keep Operation Locally
+   ↓
+Continue Offline
+```
+
+### 22.80 Error Handling During Offline-to-Online Transition
+
+```text
+Offline
+   ↓
+Internet Returns
+   ↓
+Sync Attempt
+   ↓
+Backend Error
+```
+
+The application remains:
+
+```text
+Locally Operational
+```
+
+and synchronization retries later.
+
+### 22.81 Error Handling After Application Restart
+
+After restart:
+
+```text
+Load SyncOperations
+      ↓
+Find Incomplete Operations
+      ↓
+Recover Safe States
+      ↓
+Retry Eligible Operations
+```
+
+The application must not assume that an `IN_PROGRESS` operation failed merely because the previous process ended.
+
+Idempotency must make retry safe.
+
+### 22.82 Error Handling After Device Restart
+
+Same principle:
+
+```text
+Device Restart
+      ↓
+Load Room
+      ↓
+Load SyncState
+      ↓
+Load SyncOperations
+      ↓
+Resume
+```
+
+### 22.83 Error Handling and Data Integrity
+
+The system must guarantee:
+
+```text
+No Partial Domain Transaction
+```
+
+For example:
+
+```text
+Expense exists
+```
+
+without:
+
+```text
+Required ExpenseSplits
+```
+
+must not be committed when the operation requires both.
+
+### 22.84 Error Handling and Referential Integrity
+
+Database constraints and Domain validation must prevent invalid references such as:
+
+```text
+ExpenseSplit → nonexistent Expense
+Settlement → nonexistent Group
+Expense → nonexistent Group
+```
+
+### 22.85 Error Handling and Idempotency
+
+Idempotency is mandatory for operations that may be retried.
+
+The same:
+
+```text
+operationId
+```
+
+must produce a consistent backend result without duplicate Domain changes.
+
+### 22.86 Error Handling and Authorization
+
+Authorization errors must not be converted into:
+
+```text
+Retry Forever
+```
+
+Example:
+
+```text
+403
+    ↓
+Authorization Failure
+    ↓
+Do Not Retry Indefinitely
+```
+
+### 22.87 Error Handling and Security
+
+Security-sensitive failures should use:
+
+```text
+Fail Closed
+```
+
+Example:
+
+```text
+Cannot verify peer identity
+    ↓
+Do Not Trust Peer
+```
+
+### 22.88 Error Handling and Privacy
+
+Error messages must not reveal sensitive information.
+
+For example, an unauthorized request should not expose:
+
+```text
+Whether a private Group exists
+```
+
+unless the relevant authorization policy permits such disclosure.
+
+### 22.89 Error Handling and P2P Discovery
+
+Discovery failure:
+
+```text
+No Peer Found
+```
+
+is not an application failure.
+
+The User can continue:
+
+```text
+Offline
+```
+
+and synchronize later.
+
+### 22.90 Error Handling and Backend Discovery
+
+Backend unavailable:
+
+```text
+No Backend
+```
+
+is not a local application failure.
+
+The application remains:
+
+```text
+Local-first
+```
+
+### 22.91 Error Handling and Financial Data
+
+Because SplitSync manages financial records:
+
+```text
+Expense
+Settlement
+Balance
+```
+
+must receive stronger data-integrity guarantees than ordinary UI state.
+
+Errors must never silently alter:
+
+```text
+Amount
+Participant
+Split
+Settlement
+Balance Source Data
+```
+
+### 22.92 Error Handling and Derived Balances
+
+If balance calculation fails:
+
+```text
+Do Not Persist Incorrect Balance
+```
+
+Balances should be recalculated from valid source data.
+
+Where possible:
+
+```text
+Expenses
++
+Splits
++
+Settlements
+```
+
+remain the source of truth.
+
+### 22.93 Error Handling and Synchronization State
+
+Synchronization state is operational metadata.
+
+If SyncState becomes invalid:
+
+```text
+Recover / Reinitialize SyncState
+```
+
+without deleting valid Domain data.
+
+### 22.94 Error Handling and Conflict State
+
+Conflict data is itself important synchronization state.
+
+If a conflict exists:
+
+```text
+Do Not Silently Delete Conflict
+```
+
+unless it has been explicitly resolved or superseded according to the Conflict Model.
+
+### 22.95 Error Handling and Operation State
+
+An operation should move through controlled states:
+
+```text
+PENDING
+   ↓
+IN_PROGRESS
+   ↓
+COMPLETED
+```
+
+or:
+
+```text
+IN_PROGRESS
+   ↓
+FAILED
+```
+
+or:
+
+```text
+IN_PROGRESS
+   ↓
+CONFLICT
+```
+
+or:
+
+```text
+IN_PROGRESS
+   ↓
+REJECTED
+```
+
+### 22.96 Error State Recovery
+
+Recoverable:
+
+```text
+FAILED
+    ↓
+Retry
+    ↓
+IN_PROGRESS
+```
+
+Permanent:
+
+```text
+REJECTED
+    ↓
+No Automatic Retry
+```
+
+Conflict:
+
+```text
+CONFLICT
+    ↓
+Resolution Required
+```
+
+### 22.97 Error Handling and Operation Dependencies
+
+If a parent operation fails:
+
+```text
+Create Group G1
+```
+
+dependent operations:
+
+```text
+Create Expense E1
+```
+
+may need to remain:
+
+```text
+WAITING
+```
+
+until the dependency is resolved.
+
+### 22.98 Error Handling and Batch Operations
+
+If a batch contains:
+
+```text
+O100
+O101
+O102
+O103
+```
+
+each operation should receive an independently meaningful result where possible.
+
+One failure should not unnecessarily cause unrelated valid operations to be lost.
+
+### 22.99 Error Handling and Partial Synchronization
+
+Example:
+
+```text
+10 operations
+```
+
+Results:
+
+```text
+6 → APPLIED
+2 → RETRYABLE
+1 → CONFLICT
+1 → REJECTED
+```
+
+The local Sync Engine must preserve each result separately.
+
+### 22.100 Error Handling and Eventual Recovery
+
+A temporary error should not permanently break synchronization.
+
+Example:
+
+```text
+Backend unavailable
+      ↓
+Sync paused
+      ↓
+Backend available
+      ↓
+Sync resumes
+```
+
+### 22.101 Error Handling and Monitoring
+
+The system should provide enough diagnostic information to determine:
+
+```text
+What failed?
+Where did it fail?
+Which operation failed?
+Can it be retried?
+Does the User need to act?
+```
+
+### 22.102 Error Handling and Observability
+
+Backend observability should support:
+
+```text
+Request ID
+Operation ID
+Device ID reference
+Error Code
+Timestamp
+Service Component
+```
+
+without unnecessarily logging sensitive payloads.
+
+### 22.103 Error Handling and Testing
+
+Every error category must have corresponding tests.
+
+At minimum:
+
+```text
+Validation Failure
+Authentication Failure
+Authorization Failure
+Network Failure
+Backend Failure
+Timeout
+Duplicate Operation
+Conflict
+Database Failure
+P2P Failure
+Application Restart
+Device Restart
+```
+
+### 22.104 Error Handling Test Principle
+
+For every retryable error:
+
+```text
+Error
+    ↓
+Retry
+    ↓
+No Duplicate Data
+```
+
+For every permanent error:
+
+```text
+Error
+    ↓
+No Infinite Retry
+```
+
+For every local transaction failure:
+
+```text
+Error
+    ↓
+No Partial Domain State
+```
+
+### 22.105 Error Handling Flow — Local Operation
+
+```text
+User Action
+      ↓
+Authorization
+      ↓
+Validation
+      ↓
+Room Transaction
+      ↓
+Success?
+   ┌──┴──┐
+  Yes    No
+   │      │
+Commit   Rollback
+   │      │
+Success  Classify Error
+```
+
+### 22.106 Error Handling Flow — Backend Sync
+
+```text
+Pending Operation
+      ↓
+Connectivity
+      ↓
+Authentication
+      ↓
+Send Operation
+      ↓
+Backend Result
+      ↓
+Classify
+      │
+      ├── APPLIED
+      │      ↓
+      │   COMPLETED
+      │
+      ├── ALREADY_APPLIED
+      │      ↓
+      │   COMPLETED
+      │
+      ├── RETRYABLE
+      │      ↓
+      │   Backoff / Retry
+      │
+      ├── CONFLICT
+      │      ↓
+      │   Conflict State
+      │
+      └── REJECTED
+             ↓
+          Permanent State
+```
+
+### 22.107 Error Handling Flow — P2P
+
+```text
+Peer Discovery
+      ↓
+Connection
+      ↓
+Authentication
+      ↓
+Authorization
+      ↓
+Synchronization
+      ↓
+Error?
+   ┌──┴──┐
+  No    Yes
+   │      │
+Success  Classify
+          │
+          ├── Retryable
+          ├── Authorization
+          ├── Security
+          ├── Conflict
+          └── Protocol
+```
+
+### 22.108 Error Handling Flow — Complete
+
+```text
+Operation
+    ↓
+Validate
+    ↓
+Authorize
+    ↓
+Persist / Synchronize
+    ↓
+Error?
+    │
+ ┌──┴───────────────────────────┐
+ │                              │
+No                              Yes
+ │                               │
+Success                    Classify Error
+                                │
+             ┌──────────────────┼──────────────────┐
+             │                  │                  │
+        Retryable          Permanent          User Action
+             │                  │                  │
+          Retry             Reject             Notify
+             │                  │                  │
+             └──────────────────┴──────────────────┘
+                                ↓
+                         Preserve Local Data
+```
+
+### 22.109 Error Handling Summary
+
+```text
+Error Handling
+│
+├── Local
+│   ├── Validation
+│   ├── Database
+│   └── Domain
+│
+├── Authentication
+│   └── Session / Identity
+│
+├── Authorization
+│   └── Permission / Membership
+│
+├── Network
+│   ├── Timeout
+│   ├── Offline
+│   └── Connection Failure
+│
+├── Backend
+│   ├── 4xx
+│   ├── 5xx
+│   └── Rate Limit
+│
+├── Synchronization
+│   ├── Operation Failure
+│   ├── Cursor Failure
+│   └── Dependency Failure
+│
+├── Conflict
+│   └── Concurrent Changes
+│
+├── P2P
+│   ├── Discovery
+│   ├── Connection
+│   ├── Authentication
+│   └── Protocol
+│
+├── Security
+│   ├── Integrity
+│   ├── Trust
+│   └── Revocation
+│
+└── Recovery
+    ├── Retry
+    ├── Backoff
+    ├── User Action
+    └── Preserve Local Data
+```
+
+### 22.110 Error Handling Invariants
+
+The following rules are mandatory for V1:
+
+- Error handling must never intentionally discard valid local financial data.
+- Local application errors must be distinguished from synchronization errors.
+- Validation errors must be distinguished from authorization errors.
+- Authentication errors must be distinguished from authorization errors.
+- Network errors must be distinguished from backend errors.
+- Synchronization conflicts must be distinguished from ordinary failures.
+- Security failures must fail closed.
+- Local Domain transactions must be atomic.
+- Expense creation must not leave partially persisted Expense data.
+- Expense Splits must remain consistent with their Expense.
+- Settlement creation must be atomic.
+- Domain changes requiring synchronization must be committed atomically with their SyncOperations.
+- A failed local transaction must not create a SyncOperation for an uncommitted change.
+- Network failure must not prevent valid local operations from being saved.
+- Backend failure must not make the local application unusable.
+- P2P failure must not roll back successfully committed local changes.
+- Retryable synchronization errors must remain retryable.
+- Permanent synchronization errors must not be retried indefinitely.
+- Retries must reuse the same Operation ID.
+- Idempotency must prevent duplicate financial records.
+- Timeouts must be safely retryable because the final backend result may be unknown.
+- Authentication failures must trigger appropriate authentication recovery.
+- Authorization failures must not be blindly retried.
+- Validation failures must not be blindly retried.
+- Conflict errors must create or update Conflict state.
+- Conflicts must not silently discard either relevant state.
+- Remote changes must be validated before local application.
+- Remote changes must be applied transactionally.
+- Synchronization cursors must not advance before successful local application.
+- SyncOperation state must accurately represent the operation's current outcome.
+- SyncState must accurately represent synchronization progress and failure.
+- Pending operations must survive application restart.
+- Pending operations must survive device restart.
+- Recoverable synchronization state must survive process termination.
+- Retry logic must use controlled backoff.
+- Rate-limited requests must respect server-provided retry information where available.
+- Dependency failures must not cause infinite retry loops.
+- Batch synchronization must preserve per-operation results where possible.
+- One failed operation must not unnecessarily discard unrelated successful operations.
+- User-facing error messages must be understandable and must not expose unnecessary technical details.
+- Logs must not contain sensitive credentials or unnecessary personal/financial information.
+- Backend error responses must not expose internal implementation details to the User.
+- P2P authentication failures must prevent unauthorized data exchange.
+- P2P authorization failures must prevent unauthorized Group synchronization.
+- P2P integrity failures must prevent application of tampered data.
+- Database failures must not be represented as network failures.
+- Synchronization unavailability must not be represented as failure to save a local Expense.
+- Balance calculations must never silently persist incorrect derived financial values.
+- Error recovery must prefer preserving valid local state over destructive synchronization.
+- Online-to-offline transitions must preserve pending synchronization state.
+- Offline-to-online transitions must automatically resume eligible synchronization.
+- Error handling must support eventual recovery whenever the underlying error is temporary.
+- All major error categories must be covered by automated tests.
+- Error handling must preserve the local-first architecture of SplitSync.
+
+## 23. Transaction Boundaries
+
+### 23.1 Purpose
+
+This section defines transaction boundaries for SplitSync V1.
+
+Transaction boundaries determine:
+
+- Which operations must be atomic.
+- Which data changes must succeed or fail together.
+- Which operations may be processed independently.
+- How local Room transactions maintain consistency.
+- How backend transactions maintain consistency.
+- How synchronization state is updated safely.
+- How failures and retries affect persisted data.
+
+The primary principle is:
+
+```text
+A transaction must never leave the system in an invalid intermediate state.
+```
+
+### 23.2 Core Principle
+
+SplitSync uses transactions at two primary persistence boundaries:
+
+```text
+Android
+   ↓
+Room / SQLite Transaction
+```
+
+and:
+
+```text
+Backend
+   ↓
+MySQL Transaction
+```
+
+The synchronization layer coordinates these two independent transaction systems.
+
+A local transaction and a backend transaction are not treated as one distributed transaction.
+
+### 23.3 No Distributed Transaction
+
+SplitSync V1 must not depend on:
+
+```text
+Android Room Transaction
+        +
+Backend MySQL Transaction
+```
+
+being part of one atomic distributed transaction.
+
+Instead:
+
+```text
+Local Transaction
+      ↓
+Committed Locally
+      ↓
+SyncOperation
+      ↓
+Backend Transaction
+      ↓
+Committed Remotely
+```
+
+This is fundamental to the offline-first architecture.
+
+### 23.4 Local Transaction Boundary
+
+A local transaction is responsible for maintaining consistency inside the Android database.
+
+Example:
+
+```text
+BEGIN TRANSACTION
+
+Expense
+Expense Splits
+SyncOperation
+
+COMMIT
+```
+
+If any required operation fails:
+
+```text
+ROLLBACK
+```
+
+### 23.5 Local Expense Creation
+
+Creating an Expense must be atomic.
+
+```text
+BEGIN TRANSACTION
+
+Create Expense
+      ↓
+Create Expense Splits
+      ↓
+Create SyncOperation
+
+COMMIT
+```
+
+The application must not commit only part of this operation.
+
+### 23.6 Local Expense Update
+
+An Expense update must include all locally required changes:
+
+```text
+BEGIN TRANSACTION
+
+Update Expense
+      ↓
+Update / Replace Expense Splits
+      ↓
+Create SyncOperation
+
+COMMIT
+```
+
+If the Expense update and its required Splits cannot be persisted consistently:
+
+```text
+ROLLBACK
+```
+
+### 23.7 Local Expense Deletion
+
+If Expense deletion is supported:
+
+```text
+BEGIN TRANSACTION
+
+Create Deletion / Tombstone
+      ↓
+Update Local Expense State
+      ↓
+Create SyncOperation
+
+COMMIT
+```
+
+The deletion must not be committed locally without the synchronization information required to propagate it.
+
+### 23.8 Local Settlement Creation
+
+Settlement creation must be atomic:
+
+```text
+BEGIN TRANSACTION
+
+Create Settlement
+      ↓
+Create SyncOperation
+
+COMMIT
+```
+
+If the SyncOperation cannot be created:
+
+```text
+ROLLBACK
+```
+
+### 23.9 Local Group Creation
+
+Group creation may include:
+
+```text
+Group
++
+Initial Membership
++
+SyncOperation
+```
+
+Therefore:
+
+```text
+BEGIN TRANSACTION
+
+Create Group
+      ↓
+Create Owner Membership
+      ↓
+Create SyncOperation
+
+COMMIT
+```
+
+### 23.10 Local Membership Creation
+
+Membership changes should be transactional when multiple local records must change together.
+
+Example:
+
+```text
+BEGIN TRANSACTION
+
+Create Membership
+      ↓
+Create SyncOperation
+
+COMMIT
+```
+
+### 23.11 Local Invitation Acceptance
+
+If accepting an invitation creates a Membership and synchronization operation:
+
+```text
+BEGIN TRANSACTION
+
+Accept Invitation
+      ↓
+Create Membership
+      ↓
+Update Invitation State
+      ↓
+Create SyncOperation
+
+COMMIT
+```
+
+### 23.12 Local Profile Creation
+
+Local User creation should be atomic with the required local identity information.
+
+Example:
+
+```text
+BEGIN TRANSACTION
+
+Create User
+      ↓
+Associate Device
+      ↓
+COMMIT
+```
+
+The exact Device/User relationship follows the Device Lifecycle and Authentication models.
+
+### 23.13 Local Device Association
+
+When a Device becomes associated with a local User:
+
+```text
+BEGIN TRANSACTION
+
+Create / Update User
+      ↓
+Associate Device
+
+COMMIT
+```
+
+### 23.14 SyncOperation Atomicity
+
+Any local Domain change that requires synchronization must create its corresponding SyncOperation in the same transaction.
+
+Mandatory relationship:
+
+```text
+Domain Change
+      +
+SyncOperation
+```
+
+must be atomic.
+
+### 23.15 Why SyncOperation Must Be Atomic
+
+Unsafe state:
+
+```text
+Expense Saved
+      ↓
+Application Crash
+      ↓
+SyncOperation Not Created
+```
+
+The Expense would exist locally but the system would have no durable record that it needs synchronization.
+
+Therefore V1 requires:
+
+```text
+Expense
++
+SyncOperation
+```
+
+to be committed together.
+
+### 23.16 Local SyncOperation State Update
+
+Updating the state of a SyncOperation should be transactional with related synchronization metadata when both must remain consistent.
+
+Example:
+
+```text
+BEGIN TRANSACTION
+
+SyncOperation = COMPLETED
+      ↓
+Update Related SyncState
+
+COMMIT
+```
+
+### 23.17 Local Pull Transaction
+
+Remote changes received from the backend should be applied transactionally.
+
+Example:
+
+```text
+BEGIN TRANSACTION
+
+Apply Remote Expense
+      ↓
+Apply Remote Expense Splits
+      ↓
+Record Applied Operation
+      ↓
+Update Sync Cursor
+
+COMMIT
+```
+
+If any required part fails:
+
+```text
+ROLLBACK
+```
+
+### 23.18 Cursor Atomicity
+
+The synchronization cursor must not advance before the corresponding remote data is successfully persisted.
+
+Unsafe:
+
+```text
+Cursor = C500
+      ↓
+Apply Change C500
+      ↓
+Failure
+```
+
+This could cause the change to be skipped later.
+
+Safe:
+
+```text
+BEGIN TRANSACTION
+
+Apply C500
+      ↓
+Update Cursor = C500
+
+COMMIT
+```
+
+### 23.19 Local Pull Batch Transaction
+
+For a batch:
+
+```text
+C501
+C502
+C503
+```
+
+the application may process the batch transactionally:
+
+```text
+BEGIN TRANSACTION
+
+Apply C501
+Apply C502
+Apply C503
+Update Cursor
+
+COMMIT
+```
+
+The exact batch size may be implementation-dependent.
+
+### 23.20 Large Pull Batches
+
+Large batches should not require an excessively large single transaction.
+
+Instead:
+
+```text
+Page 1
+    ↓
+Transaction
+    ↓
+Commit
+
+Page 2
+    ↓
+Transaction
+    ↓
+Commit
+```
+
+This reduces:
+
+```text
+Memory Usage
+Lock Duration
+Transaction Size
+Crash Recovery Cost
+```
+
+### 23.21 P2P Receive Transaction
+
+P2P operations must also be applied transactionally.
+
+Example:
+
+```text
+BEGIN TRANSACTION
+
+Validate Operation
+      ↓
+Apply Domain Change
+      ↓
+Record Applied Operation
+      ↓
+Update SyncState
+
+COMMIT
+```
+
+### 23.22 P2P Expense Transaction
+
+For a received Expense:
+
+```text
+BEGIN TRANSACTION
+
+Create / Update Expense
+      ↓
+Create / Update Expense Splits
+      ↓
+Record Operation
+      ↓
+Update SyncState
+
+COMMIT
+```
+
+### 23.23 P2P Settlement Transaction
+
+For a received Settlement:
+
+```text
+BEGIN TRANSACTION
+
+Create Settlement
+      ↓
+Record Operation
+      ↓
+Update SyncState
+
+COMMIT
+```
+
+### 23.24 P2P Membership Transaction
+
+For a received Membership operation:
+
+```text
+BEGIN TRANSACTION
+
+Validate Membership Change
+      ↓
+Apply Membership
+      ↓
+Record Operation
+      ↓
+Update SyncState
+
+COMMIT
+```
+
+### 23.25 Backend Transaction Boundary
+
+The backend must use database transactions for Domain changes that must remain atomic.
+
+Example:
+
+```text
+BEGIN TRANSACTION
+
+Validate Request
+      ↓
+Apply Domain Change
+      ↓
+Record Operation
+      ↓
+Create Change Record
+
+COMMIT
+```
+
+### 23.26 Backend Expense Creation
+
+```text
+BEGIN TRANSACTION
+
+Create Expense
+      ↓
+Create Expense Splits
+      ↓
+Record Operation
+      ↓
+Create Change Record
+
+COMMIT
+```
+
+If any step fails:
+
+```text
+ROLLBACK
+```
+
+### 23.27 Backend Expense Update
+
+```text
+BEGIN TRANSACTION
+
+Validate Version
+      ↓
+Update Expense
+      ↓
+Update Expense Splits if Required
+      ↓
+Record Operation
+      ↓
+Create Change Record
+
+COMMIT
+```
+
+### 23.28 Backend Settlement Creation
+
+```text
+BEGIN TRANSACTION
+
+Validate Settlement
+      ↓
+Create Settlement
+      ↓
+Record Operation
+      ↓
+Create Change Record
+
+COMMIT
+```
+
+### 23.29 Backend Group Creation
+
+```text
+BEGIN TRANSACTION
+
+Create Group
+      ↓
+Create Initial Membership
+      ↓
+Record Operation
+      ↓
+Create Change Record
+
+COMMIT
+```
+
+### 23.30 Backend Membership Change
+
+Membership changes should be atomic with their corresponding operation/change records.
+
+```text
+BEGIN TRANSACTION
+
+Validate Authorization
+      ↓
+Update Membership
+      ↓
+Record Operation
+      ↓
+Create Change Record
+
+COMMIT
+```
+
+### 23.31 Backend Invitation
+
+If an invitation and its operation/change record are persisted together:
+
+```text
+BEGIN TRANSACTION
+
+Create Invitation
+      ↓
+Record Operation
+      ↓
+Create Change Record
+
+COMMIT
+```
+
+### 23.32 Operation Record Atomicity
+
+The backend must not create:
+
+```text
+Operation Record
+```
+
+without the corresponding Domain result when the operation is reported as successfully applied.
+
+Similarly, the Domain change must not be committed without enough operation information to maintain idempotency.
+
+Therefore:
+
+```text
+Domain Change
++
+Operation Record
++
+Change Record
+```
+
+should be committed within the same backend transaction where applicable.
+
+### 23.33 Backend Idempotency Transaction
+
+For:
+
+```text
+operationId = O100
+```
+
+the backend transaction must safely handle:
+
+```text
+First Request
+```
+
+and:
+
+```text
+Retry Request
+```
+
+Example:
+
+```text
+BEGIN TRANSACTION
+
+Check O100
+      ↓
+Already Exists?
+      ↓
+Return Existing Result
+
+COMMIT
+```
+
+If it does not exist:
+
+```text
+BEGIN TRANSACTION
+
+Validate
+      ↓
+Apply Domain Change
+      ↓
+Persist O100
+      ↓
+Create Change Record
+
+COMMIT
+```
+
+### 23.34 Backend Conflict Transaction
+
+Conflict detection must occur inside the transaction that evaluates the relevant version/state.
+
+Example:
+
+```text
+BEGIN TRANSACTION
+
+Load Entity
+      ↓
+Compare Version
+      ↓
+Conflict?
+   ┌──┴──┐
+  No    Yes
+   │      │
+Apply   Record Conflict
+   │      │
+Operation Result
+      ↓
+COMMIT
+```
+
+### 23.35 Version Check Atomicity
+
+The following must not be separated:
+
+```text
+Read Current Version
+      ↓
+Compare Base Version
+      ↓
+Apply Update
+```
+
+Otherwise concurrent requests may both incorrectly pass the version check.
+
+Therefore these operations must be protected by the appropriate transaction/isolation/locking strategy.
+
+### 23.36 Backend Concurrent Update
+
+Example:
+
+```text
+Device A → E1 Version 5 → Version 6
+Device B → E1 Version 5 → Version 6
+```
+
+The backend must ensure that concurrent processing cannot incorrectly apply both as if they were based on the same valid state.
+
+### 23.37 Transaction Isolation
+
+The backend transaction strategy must provide sufficient isolation for:
+
+```text
+Version Validation
+Idempotency
+Concurrent Updates
+Membership Authorization
+```
+
+The exact isolation level may be selected during implementation based on MySQL requirements and performance.
+
+### 23.38 Local Database Transaction Isolation
+
+Room/SQLite transaction semantics provide the required atomicity for local operations.
+
+The application must use transactions where multiple related records must remain consistent.
+
+### 23.39 Transaction Scope
+
+Transactions should be:
+
+```text
+Small
+Focused
+Atomic
+Short-Lived
+```
+
+A transaction should contain only the operations that must succeed or fail together.
+
+### 23.40 Do Not Hold Transactions During Network Calls
+
+The Android application must not keep a Room transaction open while waiting for:
+
+```text
+HTTP
+Internet
+Backend
+P2P
+```
+
+Unsafe:
+
+```text
+BEGIN ROOM TRANSACTION
+      ↓
+HTTP Request
+      ↓
+Wait
+      ↓
+COMMIT
+```
+
+Safe:
+
+```text
+Local Transaction
+      ↓
+COMMIT
+      ↓
+Network Request
+      ↓
+Backend
+```
+
+### 23.41 Do Not Hold Backend Transactions During Network Calls
+
+The backend must not hold a MySQL transaction open while waiting for another external network service unless explicitly required by the architecture.
+
+Prefer:
+
+```text
+Receive Request
+      ↓
+Validate
+      ↓
+Database Transaction
+      ↓
+Commit
+      ↓
+Return Response
+```
+
+### 23.42 Network Independence
+
+Transactions must remain independent from network availability.
+
+For example:
+
+```text
+Internet OFF
+```
+
+does not prevent:
+
+```text
+Room Transaction
+```
+
+from committing a valid local Expense.
+
+### 23.43 Local Transaction and Backend Synchronization
+
+The correct sequence is:
+
+```text
+User Action
+      ↓
+Room Transaction
+      ↓
+COMMIT
+      ↓
+SyncOperation = PENDING
+      ↓
+Backend Synchronization
+```
+
+Not:
+
+```text
+User Action
+      ↓
+Backend Request
+      ↓
+Room Commit
+```
+
+### 23.44 Backend Response Transaction
+
+The backend response itself does not become part of the original local Domain transaction.
+
+Instead:
+
+```text
+Local Transaction
+      ↓
+Commit
+      ↓
+Network Synchronization
+      ↓
+Synchronization Result
+      ↓
+Separate Local Transaction
+```
+
+### 23.45 Sync Result Update
+
+When the backend returns:
+
+```text
+APPLIED
+```
+
+Android may perform:
+
+```text
+BEGIN TRANSACTION
+
+SyncOperation = COMPLETED
+Update SyncState
+
+COMMIT
+```
+
+### 23.46 Sync Conflict Update
+
+When the backend returns:
+
+```text
+CONFLICT
+```
+
+Android may perform:
+
+```text
+BEGIN TRANSACTION
+
+SyncOperation = CONFLICT
+Create / Update Conflict Record
+
+COMMIT
+```
+
+### 23.47 Sync Rejection Update
+
+When the backend returns:
+
+```text
+REJECTED
+```
+
+Android may perform:
+
+```text
+BEGIN TRANSACTION
+
+SyncOperation = REJECTED
+Persist Error Metadata
+
+COMMIT
+```
+
+### 23.48 Retryable Failure Update
+
+For a temporary failure:
+
+```text
+BEGIN TRANSACTION
+
+SyncOperation = FAILED
+Update Retry Metadata
+
+COMMIT
+```
+
+The Domain data remains unchanged.
+
+### 23.49 Local Domain vs Sync Metadata
+
+The transaction boundary should distinguish:
+
+```text
+Domain Data
+```
+
+from:
+
+```text
+Synchronization Metadata
+```
+
+However, when a Domain change requires a SyncOperation to represent that change, both must be committed together during creation.
+
+### 23.50 Derived Balance Data
+
+Balances are derived from:
+
+```text
+Expenses
++
+Expense Splits
++
+Settlements
+```
+
+Therefore, V1 should preferably calculate balances from source data rather than treating a separately stored balance value as the authoritative source.
+
+If derived balance caches are introduced, their update must follow an explicitly defined consistency strategy.
+
+### 23.51 Expense and Balance Transaction
+
+If the application stores a derived balance cache, the following must be considered one consistency boundary:
+
+```text
+Expense Change
++
+Expense Split Change
++
+Required Balance Cache Update
++
+SyncOperation
+```
+
+If balances are calculated dynamically, no separate balance persistence transaction is required.
+
+### 23.52 Settlement and Balance
+
+Similarly:
+
+```text
+Settlement
+```
+
+affects the calculated balance.
+
+The source-of-truth transaction is:
+
+```text
+Settlement
++
+SyncOperation
+```
+
+while the balance is recalculated from persisted source data.
+
+### 23.53 Group Deletion
+
+If Group deletion is supported, all required related state changes must follow a defined transaction boundary.
+
+Potentially:
+
+```text
+Group State
++
+Membership State
++
+Deletion/Tombstone
++
+SyncOperation
+```
+
+must be handled consistently.
+
+The exact deletion strategy depends on the final Group lifecycle.
+
+### 23.54 User Deletion
+
+If User deletion is supported, it must not be implemented as an uncontrolled cascade that destroys historical financial records.
+
+The final lifecycle must define whether:
+
+```text
+User
+```
+
+is:
+
+```text
+Deactivated
+Anonymized
+Soft Deleted
+```
+
+while preserving required financial history.
+
+### 23.55 Device Revocation
+
+Device revocation may be a backend security transaction:
+
+```text
+BEGIN TRANSACTION
+
+Mark Device Revoked
+      ↓
+Update Security State
+
+COMMIT
+```
+
+Subsequent synchronization attempts are rejected.
+
+### 23.56 Transaction Boundary for Authentication
+
+Authentication transactions should remain separate from Domain transactions.
+
+Example:
+
+```text
+Authentication
+      ↓
+Session Established
+```
+
+does not need to be part of:
+
+```text
+Expense Transaction
+```
+
+### 23.57 Transaction Boundary for Authorization
+
+Authorization checks that affect whether a Domain operation may proceed must occur within the appropriate consistency boundary.
+
+On the backend:
+
+```text
+Load Relevant Authorization State
+      ↓
+Validate Permission
+      ↓
+Apply Domain Change
+```
+
+must be protected against concurrent membership changes where required.
+
+### 23.58 Membership Authorization Race
+
+Example:
+
+```text
+Device A:
+Member of G1
+
+Device B:
+Removes A from G1
+```
+
+If A simultaneously attempts:
+
+```text
+Create Expense in G1
+```
+
+the backend must use an appropriate transaction/locking strategy so that authorization is evaluated consistently with the current membership state.
+
+### 23.59 P2P Authorization Race
+
+P2P authorization is more complex because peers may be temporarily disconnected from the backend.
+
+The P2P protocol must rely on the locally available authorized membership state and security mechanism defined for offline synchronization.
+
+Any resulting membership conflict must follow the Conflict Resolution model.
+
+### 23.60 P2P Transaction Boundary
+
+The P2P communication itself is not a database transaction.
+
+Instead:
+
+```text
+P2P Message
+      ↓
+Validate
+      ↓
+Local Transaction
+      ↓
+Commit
+      ↓
+Acknowledgement
+```
+
+### 23.61 Acknowledgement After Commit
+
+A P2P device should not acknowledge:
+
+```text
+APPLIED
+```
+
+before the corresponding local transaction has successfully committed.
+
+Correct:
+
+```text
+Receive
+   ↓
+Validate
+   ↓
+Commit
+   ↓
+ACK = APPLIED
+```
+
+### 23.62 Backend Response After Commit
+
+Similarly, the backend should return:
+
+```text
+APPLIED
+```
+
+only after the relevant database transaction has committed successfully.
+
+Correct:
+
+```text
+BEGIN
+ ↓
+Apply
+ ↓
+Commit
+ ↓
+HTTP Response = APPLIED
+```
+
+### 23.63 Crash Before Acknowledgement
+
+If the receiving device commits:
+
+```text
+O100
+```
+
+but crashes before sending the acknowledgement:
+
+```text
+Sender
+    ↓
+No ACK
+```
+
+the sender retries:
+
+```text
+O100
+```
+
+The receiver recognizes:
+
+```text
+O100 = ALREADY_APPLIED
+```
+
+This depends on persistent operation identity.
+
+### 23.64 Crash Before Backend Response
+
+If the backend commits:
+
+```text
+O100
+```
+
+but the response is lost:
+
+```text
+Android = uncertain
+```
+
+Android retries:
+
+```text
+O100
+```
+
+The backend returns:
+
+```text
+ALREADY_APPLIED
+```
+
+### 23.65 Transaction and Idempotency
+
+Transactions guarantee:
+
+```text
+Atomicity
+```
+
+Idempotency guarantees safe:
+
+```text
+Retry
+```
+
+Both are required.
+
+```text
+Transaction
+    +
+Idempotency
+    ↓
+Reliable Synchronization
+```
+
+### 23.66 Transaction and Conflict Resolution
+
+Transactions ensure that conflict detection and state updates occur consistently.
+
+They do not determine which conflicting state is correct.
+
+That decision belongs to:
+
+```text
+Conflict Resolution
+```
+
+### 23.67 Transaction and Eventual Consistency
+
+Transaction boundaries provide:
+
+```text
+Strong Local Consistency
+```
+
+while synchronization provides:
+
+```text
+Eventual Cross-Device Consistency
+```
+
+These are complementary.
+
+### 23.68 Transaction and Offline Mode
+
+Offline operations use the same local transaction boundaries as online operations.
+
+There must not be two separate Domain implementations:
+
+```text
+Offline Expense Logic
+Online Expense Logic
+```
+
+Instead:
+
+```text
+Same Domain Logic
++
+Same Room Transaction
+```
+
+### 23.69 Transaction and Online Mode
+
+When online:
+
+```text
+Local Transaction
+      ↓
+SyncOperation
+      ↓
+Backend Transaction
+```
+
+When offline:
+
+```text
+Local Transaction
+      ↓
+SyncOperation = PENDING
+```
+
+The difference is only when synchronization occurs.
+
+### 23.70 Transaction and P2P Mode
+
+When P2P is used:
+
+```text
+Local Transaction
+      ↓
+SyncOperation
+      ↓
+P2P Transfer
+      ↓
+Remote Local Transaction
+```
+
+### 23.71 Transaction and Backend Mode
+
+When Backend synchronization is used:
+
+```text
+Local Transaction
+      ↓
+SyncOperation
+      ↓
+Backend Transaction
+      ↓
+Remote Device Pull
+```
+
+### 23.72 Transaction Boundary for Complete Expense Lifecycle
+
+```text
+CREATE
+
+BEGIN
+ ├── Expense
+ ├── Expense Splits
+ └── SyncOperation
+COMMIT
+```
+
+```text
+UPDATE
+
+BEGIN
+ ├── Expense
+ ├── Expense Splits
+ └── SyncOperation
+COMMIT
+```
+
+```text
+DELETE
+
+BEGIN
+ ├── Tombstone / Delete State
+ └── SyncOperation
+COMMIT
+```
+
+### 23.73 Transaction Boundary for Complete Settlement Lifecycle
+
+```text
+CREATE
+
+BEGIN
+ ├── Settlement
+ └── SyncOperation
+COMMIT
+```
+
+```text
+UPDATE
+
+BEGIN
+ ├── Settlement
+ └── SyncOperation
+COMMIT
+```
+
+```text
+DELETE
+
+BEGIN
+ ├── Tombstone / Delete State
+ └── SyncOperation
+COMMIT
+```
+
+where the corresponding lifecycle operations are supported.
+
+### 23.74 Transaction Boundary for Complete Group Lifecycle
+
+```text
+CREATE
+
+BEGIN
+ ├── Group
+ ├── Owner Membership
+ └── SyncOperation
+COMMIT
+```
+
+Other Group lifecycle operations should follow the same principle.
+
+### 23.75 Transaction Boundary for Synchronization
+
+```text
+PUSH
+
+Local:
+BEGIN
+ └── Update SyncOperation
+COMMIT
+
+Network
+ ↓
+
+Backend:
+BEGIN
+ ├── Apply Domain Change
+ ├── Operation Record
+ └── Change Record
+COMMIT
+```
+
+### 23.76 Pull Transaction
+
+```text
+Backend
+   ↓
+Remote Changes
+   ↓
+Android
+
+BEGIN
+ ├── Apply Changes
+ ├── Record Applied Operations
+ └── Update Cursor
+COMMIT
+```
+
+### 23.77 P2P Transaction
+
+```text
+Peer A
+   ↓
+Operation
+   ↓
+Peer B
+
+BEGIN
+ ├── Validate
+ ├── Apply Domain Change
+ ├── Record Operation
+ └── Update SyncState
+COMMIT
+
+ACK
+```
+
+### 23.78 Transaction Failure
+
+If any required operation inside a transaction fails:
+
+```text
+ROLLBACK
+```
+
+No partial Domain state should remain.
+
+### 23.79 Transaction Rollback Does Not Mean Global Rollback
+
+A local rollback does not roll back:
+
+```text
+Backend
+```
+
+or:
+
+```text
+Peer Device
+```
+
+and vice versa.
+
+The architecture deliberately avoids distributed transactions.
+
+### 23.80 Compensating Operations
+
+When a previously committed operation must be corrected after synchronization, the system should prefer a new valid Domain operation where appropriate rather than attempting to perform a distributed rollback.
+
+Example:
+
+```text
+Original Expense
+      ↓
+Committed
+      ↓
+Later Correction
+      ↓
+New Update Operation
+```
+
+This follows the synchronization model.
+
+### 23.81 Transaction and Auditability
+
+Important Domain changes should preserve the operation identity needed to understand:
+
+```text
+What changed?
+Who originated it?
+Which Device originated it?
+When was it created?
+Was it synchronized?
+```
+
+The exact audit model is defined elsewhere.
+
+### 23.82 Transaction and Operation Ordering
+
+Transactions do not automatically determine cross-device ordering.
+
+Cross-device ordering is handled through:
+
+```text
+Operation IDs
+Versions
+Change Sequences
+SyncState
+```
+
+### 23.83 Transaction and Versioning
+
+When an entity is updated:
+
+```text
+Current Version
+      ↓
+Validate Base Version
+      ↓
+Apply Update
+      ↓
+Increment Version
+```
+
+These steps must occur consistently within the relevant backend transaction.
+
+### 23.84 Transaction and Concurrent Operations
+
+Concurrent operations must be handled using:
+
+```text
+Database Transactions
++
+Appropriate Isolation
++
+Version Checks
++
+Conflict Resolution
+```
+
+rather than relying solely on application-level timing.
+
+### 23.85 Transaction and Database Constraints
+
+Database constraints should provide an additional integrity layer.
+
+Examples:
+
+```text
+Foreign Keys
+Unique Operation IDs
+Required Fields
+Valid References
+```
+
+Application validation should still exist before database persistence.
+
+### 23.86 Transaction and Unique Operation ID
+
+The backend should enforce uniqueness for:
+
+```text
+operationId
+```
+
+where required.
+
+This provides an additional protection against duplicate operations.
+
+### 23.87 Transaction and Unique Entity Identity
+
+Entity identifiers such as:
+
+```text
+groupId
+expenseId
+settlementId
+```
+
+must remain stable across synchronization.
+
+Transactions must not generate new identities merely because an operation is retried.
+
+### 23.88 Transaction and Local IDs
+
+Offline-created entities must retain their locally generated IDs when synchronized to the backend.
+
+Example:
+
+```text
+Offline:
+expenseId = E100
+```
+
+After synchronization:
+
+```text
+Backend:
+expenseId = E100
+```
+
+A new ID must not be generated solely because the record crossed a synchronization boundary.
+
+### 23.89 Transaction and Referential Integrity
+
+When multiple related records are created:
+
+```text
+Group
+    ↓
+Expense
+    ↓
+Expense Split
+```
+
+their creation order and transaction boundaries must maintain valid references.
+
+### 23.90 Parent-Child Transaction
+
+For a new Expense:
+
+```text
+Expense
+   ├── ExpenseSplit 1
+   ├── ExpenseSplit 2
+   └── ExpenseSplit 3
+```
+
+the required parent and child records should be created atomically.
+
+### 23.91 Independent Operations
+
+Not every operation must share one transaction.
+
+Example:
+
+```text
+Expense E1
+```
+
+and:
+
+```text
+Expense E2
+```
+
+may be committed independently.
+
+This prevents an unrelated failure in E2 from rolling back E1.
+
+### 23.92 Batch Transaction Strategy
+
+The application may group operations into batches for synchronization, but Domain operations must not become incorrectly coupled.
+
+Example:
+
+```text
+O100 → Expense E1
+O101 → Expense E2
+O102 → Expense E3
+```
+
+If E2 fails validation, E1 and E3 should not necessarily be treated as invalid.
+
+### 23.93 Batch vs Domain Transaction
+
+Important distinction:
+
+```text
+Synchronization Batch
+        ≠
+One Domain Transaction
+```
+
+A batch is a transport mechanism.
+
+Transaction boundaries are determined by Domain consistency requirements.
+
+### 23.94 Backend Batch Processing
+
+The backend may receive multiple operations in one request.
+
+However, it must define whether:
+
+```text
+Entire Batch
+```
+
+or:
+
+```text
+Each Operation
+```
+
+is the transaction boundary.
+
+For V1, independent Domain operations should preferably be processed with independent logical results unless a dependency requires atomic processing.
+
+### 23.95 Dependency Batch
+
+If operations are tightly dependent:
+
+```text
+Create Group
++
+Create Owner Membership
+```
+
+they may be processed within the same backend transaction.
+
+### 23.96 Independent Batch
+
+For unrelated expenses:
+
+```text
+Expense E1
+Expense E2
+Expense E3
+```
+
+failure of E2 should not unnecessarily roll back E1 and E3.
+
+### 23.97 Transaction and Retry
+
+A failed transaction:
+
+```text
+ROLLBACK
+```
+
+may be safely retried if the operation is retryable.
+
+The same:
+
+```text
+operationId
+```
+
+must be reused.
+
+### 23.98 Transaction and Permanent Rejection
+
+If validation fails:
+
+```text
+ROLLBACK
+```
+
+and:
+
+```text
+Operation = REJECTED
+```
+
+The invalid Domain state must not be committed.
+
+### 23.99 Transaction and Conflict
+
+If a conflict is detected:
+
+```text
+BEGIN
+ ↓
+Detect Conflict
+ ↓
+Persist Conflict State / Result
+ ↓
+COMMIT
+```
+
+The conflicting update must not be incorrectly applied as a normal successful update.
+
+### 23.100 Transaction and Security Failure
+
+If authorization or integrity verification fails:
+
+```text
+ROLLBACK / Do Not Begin Domain Mutation
+```
+
+No unauthorized Domain change should be committed.
+
+### 23.101 Transaction and Error Recovery
+
+The general recovery model is:
+
+```text
+Transaction Start
+      ↓
+Validation
+      ↓
+Mutation
+      ↓
+Success?
+   ┌──┴──┐
+  Yes    No
+   │      │
+Commit   Rollback
+   │      │
+Continue Classify Error
+```
+
+### 23.102 Transaction and Application Crash
+
+If the application crashes during a local transaction:
+
+```text
+Transaction
+      ↓
+Crash
+```
+
+Room/SQLite transaction semantics must ensure that the database does not remain in a partially committed transaction state.
+
+### 23.103 Transaction and Backend Crash
+
+If the backend crashes during a MySQL transaction:
+
+```text
+Transaction
+      ↓
+Crash
+```
+
+the database transaction must either:
+
+```text
+Commit
+```
+
+or:
+
+```text
+Rollback
+```
+
+according to database transaction semantics.
+
+The client must safely retry uncertain operations using idempotency.
+
+### 23.104 Transaction and P2P Crash
+
+If a peer crashes during synchronization:
+
+```text
+Remote Transaction
+      ↓
+Crash
+```
+
+the remote device must recover its local database safely.
+
+The sender can retry the operation using:
+
+```text
+operationId
+```
+
+### 23.105 Transaction and Acknowledgement
+
+Acknowledgements must represent committed state.
+
+```text
+COMMIT
+   ↓
+ACK
+```
+
+not:
+
+```text
+ACK
+   ↓
+COMMIT
+```
+
+### 23.106 Transaction and SyncState
+
+SyncState must never indicate:
+
+```text
+SYNCED
+```
+
+when the corresponding Domain changes have not been successfully committed.
+
+### 23.107 Transaction and Cursor
+
+The cursor must never indicate:
+
+```text
+C500
+```
+
+if C500 has not been successfully applied locally.
+
+### 23.108 Transaction and Operation State
+
+Similarly:
+
+```text
+SyncOperation = COMPLETED
+```
+
+must only be persisted when the corresponding synchronization result is safely accepted.
+
+### 23.109 Transaction and Local Source of Truth
+
+The local source of truth remains:
+
+```text
+Room Database
+```
+
+after a successful local transaction.
+
+Derived UI state should be regenerated from the committed database state.
+
+### 23.110 Transaction and UI
+
+The UI must not display a successful state before the underlying local transaction has committed.
+
+Correct:
+
+```text
+Room Commit
+    ↓
+Observe Updated Data
+    ↓
+UI Updates
+```
+
+### 23.111 Transaction and Repository Layer
+
+Repository methods should define clear transaction boundaries.
+
+For example:
+
+```text
+ExpenseRepository.createExpense()
+```
+
+may internally perform:
+
+```text
+Expense
++
+Splits
++
+SyncOperation
+```
+
+within one transaction.
+
+### 23.112 Transaction and Domain Layer
+
+The Domain layer defines what must be logically atomic.
+
+The persistence layer implements the required transaction.
+
+Example:
+
+```text
+Create Expense
+```
+
+is a Domain operation.
+
+The Room transaction provides its persistence atomicity.
+
+### 23.113 Transaction and Network Layer
+
+The Network layer must not control local Domain transactions.
+
+Instead:
+
+```text
+Domain
+ ↓
+Local Repository
+ ↓
+Room Transaction
+```
+
+and:
+
+```text
+Sync Engine
+ ↓
+Network
+```
+
+remain separate.
+
+### 23.114 Transaction and Sync Engine
+
+The Sync Engine coordinates:
+
+```text
+Local Transaction
++
+Network Communication
++
+Remote Result
++
+Sync State
+```
+
+but does not turn them into one distributed transaction.
+
+### 23.115 Transaction and Backend Service Layer
+
+The Backend Service layer should define Domain operations, while the Repository/Data layer manages database transaction boundaries.
+
+Conceptually:
+
+```text
+Controller
+   ↓
+Service
+   ↓
+Repository
+   ↓
+MySQL Transaction
+```
+
+### 23.116 Transaction and REST API
+
+A REST request may represent:
+
+```text
+One Operation
+```
+
+or:
+
+```text
+A Synchronization Batch
+```
+
+but the transaction boundary must be explicitly defined rather than assuming:
+
+```text
+One HTTP Request = One Database Transaction
+```
+
+### 23.117 Transaction and HTTP Failure
+
+HTTP response failure does not necessarily mean the backend transaction failed.
+
+Example:
+
+```text
+Backend Commit
+      ↓
+Network Failure
+      ↓
+Client Timeout
+```
+
+The client must treat the result as uncertain and retry safely.
+
+### 23.118 Transaction and Eventual Consistency
+
+Transactions provide consistency within each persistence boundary:
+
+```text
+Device A Local DB
+Backend DB
+Device B Local DB
+```
+
+Synchronization connects these boundaries over time.
+
+### 23.119 Transaction and Offline-First Principle
+
+The transaction architecture directly supports:
+
+```text
+Local First
+```
+
+because local persistence does not wait for remote persistence.
+
+### 23.120 Transaction Boundary Summary
+
+```text
+Transaction Boundaries
+│
+├── Android / Room
+│   ├── Group
+│   ├── Membership
+│   ├── Expense
+│   ├── Expense Split
+│   ├── Settlement
+│   ├── SyncOperation
+│   └── SyncState
+│
+├── Backend / MySQL
+│   ├── Group
+│   ├── Membership
+│   ├── Expense
+│   ├── Expense Split
+│   ├── Settlement
+│   ├── Operation Record
+│   └── Change Record
+│
+├── Synchronization
+│   ├── Push Result
+│   ├── Pull Changes
+│   ├── Cursor
+│   └── Conflict
+│
+└── P2P
+    ├── Receive
+    ├── Validate
+    ├── Apply
+    ├── SyncState
+    └── Acknowledge
+```
+
+### 23.121 Complete Transaction Flow
+
+```text
+USER ACTION
+    ↓
+DOMAIN VALIDATION
+    ↓
+LOCAL ROOM TRANSACTION
+    ├── Domain Entity
+    ├── Related Entities
+    └── SyncOperation
+    ↓
+COMMIT
+    ↓
+LOCAL STATE AVAILABLE
+    ↓
+SYNCHRONIZATION
+    ↓
+BACKEND / P2P
+    ↓
+REMOTE VALIDATION
+    ↓
+REMOTE TRANSACTION
+    ├── Domain Entity
+    ├── Operation Record
+    └── Change Record
+    ↓
+COMMIT
+    ↓
+SYNC RESULT
+    ↓
+LOCAL SYNC TRANSACTION
+    ├── Operation State
+    └── SyncState
+    ↓
+COMMIT
+```
+
+### 23.122 Transaction Boundary Invariants
+
+The following rules are mandatory for V1:
+
+- Every transaction must preserve Domain consistency.
+- Local Domain changes must be persisted transactionally where multiple records must remain consistent.
+- Backend Domain changes must be persisted transactionally where multiple records must remain consistent.
+- An Expense and its required Expense Splits must be created atomically.
+- An Expense and its required SyncOperation must be created atomically.
+- A Settlement and its required SyncOperation must be created atomically.
+- A Group and its initial required Membership and SyncOperation must be created atomically.
+- Membership changes and their required SyncOperations must be created atomically.
+- Remote changes must be applied transactionally.
+- P2P received changes must be applied transactionally.
+- SyncOperation state updates must be persisted safely.
+- SyncState updates must be persisted safely.
+- Remote changes and their corresponding cursor advancement must be committed atomically.
+- The synchronization cursor must never advance before the corresponding data is safely persisted.
+- A synchronization acknowledgement must only indicate successfully committed state.
+- The backend must only return a successful operation result after the relevant transaction has committed.
+- A local transaction must not remain open while waiting for a network request.
+- A backend database transaction must not unnecessarily remain open while waiting for external network communication.
+- Local persistence must not depend on Internet connectivity.
+- Online and offline Domain operations must use the same local transaction rules.
+- Room transactions and MySQL transactions are separate persistence boundaries.
+- SplitSync V1 must not depend on distributed transactions between Android and Backend.
+- Local commit must occur before remote synchronization.
+- Remote synchronization failure must not roll back an already committed local Domain transaction.
+- Remote synchronization failure must not delete valid local data.
+- Retry must reuse the same Operation ID.
+- Transactions and idempotency must work together to prevent duplicate financial records.
+- Backend version checks and updates must be protected against concurrent modification.
+- Authorization checks must be consistent with the transaction that applies the protected Domain change.
+- Database constraints must provide an additional integrity layer.
+- Parent-child records must maintain referential integrity.
+- Independent Domain operations should not be unnecessarily coupled into one transaction.
+- Synchronization batches must not automatically imply one large Domain transaction.
+- Batch transport and transaction boundaries must remain conceptually separate.
+- A failed operation must not unnecessarily roll back unrelated successful operations.
+- A transaction failure must result in rollback of the affected atomic unit.
+- A retryable failure must preserve enough state for safe retry.
+- A permanent failure must not create an invalid committed Domain state.
+- A conflict must not be treated as a successful normal update.
+- Conflict state must be persisted according to the Conflict Data Model.
+- A crash during a transaction must not leave a partially committed atomic unit.
+- A crash after backend commit but before client acknowledgement must be recoverable through idempotency.
+- A crash after P2P commit but before acknowledgement must be recoverable through idempotency.
+- UI success state must be based on committed local data.
+- Derived balances must be based on committed source data.
+- The transaction architecture must preserve the local-first and offline-first principles of SplitSync.
 
 24. API Design Principles
 
