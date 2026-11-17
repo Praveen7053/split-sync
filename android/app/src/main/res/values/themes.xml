@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SplitSync" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <item name="colorPrimary">@color/splitsync_green</item>
+        <item name="colorPrimaryVariant">@color/splitsync_green_dark</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="android:statusBarColor">@color/splitsync_green_dark</item>
+        <item name="android:windowBackground">@color/splitsync_surface</item>
+        <item name="colorError">@color/splitsync_error</item>
+    </style>
+</resources>

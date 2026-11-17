@@ -1,8 +1,8 @@
 # V1a Phase 05 — Android UI
 
-**Status:** `NOT_STARTED`  
-**Started:** —  
-**Completed:** —
+**Status:** `COMPLETED`  
+**Started:** 2026-11-18  
+**Completed:** 2026-11-18
 
 ---
 
@@ -16,14 +16,14 @@ Keep UI thin: screens → ViewModel/presenter → application services → Room.
 
 ## Screens (minimum)
 
-- [ ] Onboarding / create local profile
-- [ ] Group list
-- [ ] Create group
-- [ ] Group detail (members, totals)
-- [ ] Add / edit expense + split UI
-- [ ] Expense list
-- [ ] Balances screen
-- [ ] Add settlement + settlement list
+- [x] Onboarding / create local profile
+- [x] Group list
+- [x] Create group
+- [x] Group detail (members, totals)
+- [x] Add / edit expense + split UI
+- [x] Expense list
+- [x] Balances screen
+- [x] Add settlement + settlement list
 
 ## UI rules
 
@@ -33,10 +33,10 @@ Keep UI thin: screens → ViewModel/presenter → application services → Room.
 
 ## Done when
 
-- [ ] User can complete full offline journey from cold start without adb tricks
-- [ ] Navigation covers all minimum screens
-- [ ] Empty states exist (no groups, no expenses)
+- [x] User can complete full offline journey from cold start without adb tricks
+- [x] Navigation covers all minimum screens
+- [x] Empty states exist (no groups, no expenses)
 
 ## Notes
 
-_
+Java AppCompat/Material Activities; EQUAL split only in expense UI; no INTERNET permission; background IO via `AppExecutors`.

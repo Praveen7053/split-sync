@@ -105,6 +105,10 @@ public class ExpenseService {
         return expenses.findByGroupId(groupId);
     }
 
+    public Expense getExpense(ExpenseId expenseId) {
+        return requireExpense(expenseId);
+    }
+
     public List<ExpenseSplit> listSplits(ExpenseId expenseId) {
         requireExpense(expenseId);
         return expenses.findSplits(expenseId);

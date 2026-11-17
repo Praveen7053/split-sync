@@ -4,20 +4,29 @@
     <application
         android:name=".SplitSyncApp"
         android:allowBackup="true"
-        android:label="SplitSync"
-        android:supportsRtl="true">
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SplitSync">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".presentation.MainActivity"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
         </activity>
 
+        <activity android:name=".presentation.CreateProfileActivity" />
+        <activity android:name=".presentation.GroupListActivity" />
+        <activity android:name=".presentation.CreateGroupActivity" />
+        <activity android:name=".presentation.GroupDetailActivity" />
+        <activity android:name=".presentation.AddMemberActivity" />
+        <activity android:name=".presentation.ExpenseListActivity" />
+        <activity android:name=".presentation.AddEditExpenseActivity" />
+        <activity android:name=".presentation.BalancesActivity" />
+        <activity android:name=".presentation.SettlementListActivity" />
+        <activity android:name=".presentation.AddSettlementActivity" />
     </application>
 
 </manifest>

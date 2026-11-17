@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="splitsync_green">#1B7F5A</color>
+    <color name="splitsync_green_dark">#145C41</color>
+    <color name="splitsync_surface">#F4F7F5</color>
+    <color name="splitsync_on_surface">#14211B</color>
+    <color name="splitsync_error">#B3261E</color>
+    <color name="splitsync_muted">#5F6F67</color>
+    <color name="white">#FFFFFF</color>
+</resources>

@@ -148,6 +148,59 @@ public class OfflineOperationsTest {
     }
 
     @Test
+    public void exactPercentageAndSharesExpensesAffectBalances() {
+        Context context = ApplicationProvider.getApplicationContext();
+        database = Room.inMemoryDatabaseBuilder(context, SplitSyncDatabase.class).allowMainThreadQueries().build();
+        ApplicationServices services = new ApplicationServices(database);
+
+        User owner = services.profiles().createLocalProfile("Praveen", "Pixel");
+        Group group = services.groups().createGroup("Goa Trip", GroupType.TRIP, "INR");
+        Membership friend = services.groups().addLocalMember(group.groupId(), "Rahul", MembershipRole.MEMBER);
+
+        services.expenses().addExpense(
+                group.groupId(),
+                "Exact Taxi",
+                Money.of("100.00"),
+                owner.userId(),
+                LocalDate.of(2026, 11, 18),
+                SplitType.EXACT,
+                List.of(
+                        SplitParticipantInput.exact(owner.userId(), new java.math.BigDecimal("70.00")),
+                        SplitParticipantInput.exact(friend.userId(), new java.math.BigDecimal("30.00"))));
+
+        services.expenses().addExpense(
+                group.groupId(),
+                "Percent Snacks",
+                Money.of("50.00"),
+                friend.userId(),
+                LocalDate.of(2026, 11, 18),
+                SplitType.PERCENTAGE,
+                List.of(
+                        SplitParticipantInput.percentage(owner.userId(), new java.math.BigDecimal("40")),
+                        SplitParticipantInput.percentage(friend.userId(), new java.math.BigDecimal("60"))));
+
+        services.expenses().addExpense(
+                group.groupId(),
+                "Shares Hotel",
+                Money.of("90.00"),
+                owner.userId(),
+                LocalDate.of(2026, 11, 18),
+                SplitType.SHARES,
+                List.of(
+                        SplitParticipantInput.shares(owner.userId(), new java.math.BigDecimal("2")),
+                        SplitParticipantInput.shares(friend.userId(), new java.math.BigDecimal("1"))));
+
+        Map<UserId, Money> balances = toMap(services.balances().getGroupBalances(group.groupId()));
+        // Exact: owner +30, friend -30
+        // Percent: owner -20, friend +20
+        // Shares: owner +30, friend -30
+        // Net: owner +40, friend -40
+        assertEquals(Money.of("40.00"), balances.get(owner.userId()));
+        assertEquals(Money.of("-40.00"), balances.get(friend.userId()));
+        assertEquals(3, services.expenses().listExpenses(group.groupId()).size());
+    }
+
+    @Test
     public void invalidOperationsAreRejectedLocallyWithoutNetwork() {
         Context context = ApplicationProvider.getApplicationContext();
         database = Room.inMemoryDatabaseBuilder(context, SplitSyncDatabase.class).allowMainThreadQueries().build();

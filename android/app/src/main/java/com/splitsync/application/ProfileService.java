@@ -5,6 +5,7 @@ import com.splitsync.data.repository.UserLocalRepository;
 import com.splitsync.domain.model.Device;
 import com.splitsync.domain.model.User;
 import com.splitsync.domain.validation.DomainValidator;
+import com.splitsync.domain.valueobject.UserId;
 
 /**
  * Local profile and device identity use cases.
@@ -42,6 +43,11 @@ public class ProfileService {
 
     public User findLocalProfileOrNull() {
         return users.findLocalProfile();
+    }
+
+    public String displayNameOf(UserId userId) {
+        User user = users.findById(userId);
+        return user == null ? userId.value() : user.displayName();
     }
 
     public Device ensureDevice(User user, String deviceName) {

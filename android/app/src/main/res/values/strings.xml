@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SplitSync</string>
+    <string name="create_profile_title">Create local profile</string>
+    <string name="display_name">Display name</string>
+    <string name="device_name">Device name</string>
+    <string name="continue_label">Continue</string>
+    <string name="groups_title">Groups</string>
+    <string name="create_group">Create group</string>
+    <string name="group_name">Group name</string>
+    <string name="group_type">Group type</string>
+    <string name="currency">Currency</string>
+    <string name="save">Save</string>
+    <string name="members">Members</string>
+    <string name="add_member">Add member</string>
+    <string name="expenses">Expenses</string>
+    <string name="balances">Balances</string>
+    <string name="settlements">Settlements</string>
+    <string name="add_expense">Add expense</string>
+    <string name="edit_expense">Edit expense</string>
+    <string name="description">Description</string>
+    <string name="amount">Amount</string>
+    <string name="paid_by">Paid by</string>
+    <string name="delete">Delete</string>
+    <string name="add_settlement">Add settlement</string>
+    <string name="paid_to">Paid to</string>
+    <string name="empty_groups">No groups yet. Create your first group.</string>
+    <string name="empty_expenses">No expenses yet.</string>
+    <string name="empty_settlements">No settlements yet.</string>
+    <string name="empty_balances">No balances yet.</string>
+    <string name="error_generic">Something went wrong</string>
+    <string name="split_equal_hint">Split: EQUAL across all members</string>
+    <string name="currency_default">INR</string>
+</resources>
