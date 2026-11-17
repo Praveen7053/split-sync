@@ -11,6 +11,7 @@ import com.splitsync.data.local.mapper.MembershipMapper;
 import com.splitsync.domain.model.Group;
 import com.splitsync.domain.model.Membership;
 import com.splitsync.domain.valueobject.GroupId;
+import com.splitsync.domain.valueobject.UserId;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,5 +62,10 @@ public class GroupLocalRepository {
             memberships.add(MembershipMapper.toDomain(entity));
         }
         return memberships;
+    }
+
+    public Membership findMembership(GroupId groupId, UserId userId) {
+        MembershipEntity entity = membershipDao.findByGroupAndUser(groupId.value(), userId.value());
+        return entity == null ? null : MembershipMapper.toDomain(entity);
     }
 }

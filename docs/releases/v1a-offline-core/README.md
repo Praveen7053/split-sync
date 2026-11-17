@@ -34,7 +34,7 @@
 |---|---|---|
 | 01 Domain Model | [phase-01-domain-model.md](phase-01-domain-model.md) | `COMPLETED` |
 | 02 Local Database | [phase-02-local-database.md](phase-02-local-database.md) | `COMPLETED` |
-| 03 Application Services | [phase-03-application-services.md](phase-03-application-services.md) | `NOT_STARTED` |
+| 03 Application Services | [phase-03-application-services.md](phase-03-application-services.md) | `COMPLETED` |
 | 04 Offline Operations | [phase-04-offline-operations.md](phase-04-offline-operations.md) | `NOT_STARTED` |
 | 05 Android UI | [phase-05-android-ui.md](phase-05-android-ui.md) | `NOT_STARTED` |
 | 06 Local Testing | [phase-06-local-testing.md](phase-06-local-testing.md) | `NOT_STARTED` |
