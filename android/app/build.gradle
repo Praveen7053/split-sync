@@ -27,4 +27,6 @@ android {
 }
 
 dependencies {
+    // Shared pure domain used by offline app and backend.
+    implementation project(':domain')
 }

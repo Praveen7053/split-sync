@@ -17,5 +17,6 @@ dependencyResolutionManagement {
 
 rootProject.name = 'split-sync'
 
+include ':domain'
 include ':android:app'
 include ':backend'

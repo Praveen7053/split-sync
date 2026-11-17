@@ -1,8 +1,8 @@
 # V1a Phase 01 — Domain Model
 
-**Status:** `NOT_STARTED`  
-**Started:** —  
-**Completed:** —
+**Status:** `COMPLETED`  
+**Started:** 2026-11-18  
+**Completed:** 2026-11-18
 
 ---
 
@@ -26,13 +26,13 @@ Start on **backend** domain package (folders already exist), then mirror the sam
 
 ## Deliverables
 
-- [ ] Entities / models: `User`, `Device`, `Group`, `Membership`, `Expense`, `ExpenseSplit`, `Settlement`
-- [ ] Value objects: `Money`, `UserId`, `GroupId`, `ExpenseId`, `DeviceId`, etc. (UUID-based)
-- [ ] Enums: `GroupType`, `SplitType`, `MembershipRole`
-- [ ] Domain validation + exceptions
-- [ ] Balance calculation rules (from expenses, splits, settlements)
-- [ ] Equal-split rounding rule (remainder by stable `userId` order)
-- [ ] Unit tests for split + balance math
+- [x] Entities / models: `User`, `Device`, `Group`, `Membership`, `Expense`, `ExpenseSplit`, `Settlement`
+- [x] Value objects: `Money`, `UserId`, `GroupId`, `ExpenseId`, `DeviceId`, etc. (UUID-based)
+- [x] Enums: `GroupType`, `SplitType`, `MembershipRole`
+- [x] Domain validation + exceptions
+- [x] Balance calculation rules (from expenses, splits, settlements)
+- [x] Equal-split rounding rule (remainder by stable `userId` order)
+- [x] Unit tests for split + balance math
 
 ## Locked rules for this phase
 
@@ -43,11 +43,11 @@ Start on **backend** domain package (folders already exist), then mirror the sam
 
 ## Done when
 
-- [ ] Domain compiles
-- [ ] Unit tests for EQUAL / EXACT / PERCENTAGE / SHARES pass
-- [ ] Balance tests pass
-- [ ] No Android / Spring / DB imports in domain code
+- [x] Domain compiles
+- [x] Unit tests for EQUAL / EXACT / PERCENTAGE / SHARES pass
+- [x] Balance tests pass
+- [x] No Android / Spring / DB imports in domain code
 
 ## Notes
 
-_
+Implemented as shared Gradle module `:domain` (Java 17) so Android and backend both depend on one pure domain codebase instead of duplicating packages.

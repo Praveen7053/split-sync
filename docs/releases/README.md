@@ -28,7 +28,7 @@ BLOCKED
 
 | Release | Goal | Depends on | Status |
 |---|---|---|---|
-| [V1a — Offline Core](v1a-offline-core/README.md) | Fully usable offline expense app (no backend required) | Project foundation | `NOT_STARTED` |
+| [V1a — Offline Core](v1a-offline-core/README.md) | Fully usable offline expense app (no backend required) | Project foundation | `IN_PROGRESS` |
 | [V1b — Backend Sync](v1b-backend-sync/README.md) | Backend API, auth, sync, basic conflicts | V1a complete | `NOT_STARTED` |
 | [V1c — P2P Sync](v1c-p2p-sync/README.md) | Nearby device sync without internet | V1b complete | `NOT_STARTED` |
 

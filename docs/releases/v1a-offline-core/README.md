@@ -2,8 +2,8 @@
 
 **Goal:** A fully usable SplitSync Android app that works with **no internet and no backend**.
 
-**Status:** `NOT_STARTED`  
-**Started:** —  
+**Status:** `IN_PROGRESS`  
+**Started:** 2026-11-18  
 **Completed:** —
 
 ---
@@ -32,7 +32,7 @@
 
 | Phase | File | Status |
 |---|---|---|
-| 01 Domain Model | [phase-01-domain-model.md](phase-01-domain-model.md) | `NOT_STARTED` |
+| 01 Domain Model | [phase-01-domain-model.md](phase-01-domain-model.md) | `COMPLETED` |
 | 02 Local Database | [phase-02-local-database.md](phase-02-local-database.md) | `NOT_STARTED` |
 | 03 Application Services | [phase-03-application-services.md](phase-03-application-services.md) | `NOT_STARTED` |
 | 04 Offline Operations | [phase-04-offline-operations.md](phase-04-offline-operations.md) | `NOT_STARTED` |
