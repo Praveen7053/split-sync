@@ -12,6 +12,15 @@ android {
         targetSdk 36
         versionCode 1
         versionName '0.1.0'
+
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+
+        // Room exports schema JSON so future migrations stay reviewable.
+        javaCompileOptions {
+            annotationProcessorOptions {
+                arguments += ['room.schemaLocation': "$projectDir/schemas".toString()]
+            }
+        }
     }
 
     buildTypes {
@@ -24,9 +33,29 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
 }
+
+def roomVersion = '2.7.2'
 
 dependencies {
     // Shared pure domain used by offline app and backend.
     implementation project(':domain')
+
+    implementation 'androidx.annotation:annotation:1.9.1'
+    implementation "androidx.room:room-runtime:$roomVersion"
+    annotationProcessor "androidx.room:room-compiler:$roomVersion"
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
+    testImplementation "androidx.room:room-testing:$roomVersion"
+    testImplementation 'androidx.test.ext:junit:1.2.1'
+    testImplementation 'androidx.test:core:1.6.1'
+
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation "androidx.room:room-testing:$roomVersion"
 }
