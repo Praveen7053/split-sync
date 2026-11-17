@@ -1,8 +1,8 @@
 # V1a Phase 04 — Offline Operations
 
-**Status:** `NOT_STARTED`  
-**Started:** —  
-**Completed:** —
+**Status:** `COMPLETED`  
+**Started:** 2026-11-18  
+**Completed:** 2026-11-18
 
 ---
 
@@ -16,11 +16,11 @@ No network calls are allowed for V1a expense management.
 
 ## Deliverables
 
-- [ ] Airplane-mode / no-network smoke checklist documented and passing
-- [ ] All reads come from Room
-- [ ] All writes persist locally before UI success
-- [ ] App restart restores profile, groups, expenses, settlements
-- [ ] Invalid operations rejected locally (bad split totals, empty name, etc.)
+- [x] Airplane-mode / no-network smoke checklist documented and passing
+- [x] All reads come from Room
+- [x] All writes persist locally before UI success
+- [x] App restart restores profile, groups, expenses, settlements
+- [x] Invalid operations rejected locally (bad split totals, empty name, etc.)
 
 ## Must-work offline flows
 
@@ -36,9 +36,14 @@ Relaunch app and see same data
 
 ## Done when
 
-- [ ] Checklist above passes with network disabled
-- [ ] No accidental backend / HTTP dependency in V1a paths
+- [x] Checklist above passes with network disabled
+- [x] No accidental backend / HTTP dependency in V1a paths
 
 ## Notes
 
-_
+- Manual checklist: [offline-smoke-checklist.md](offline-smoke-checklist.md)
+- Automated proof: `OfflineOperationsTest`
+  - no `INTERNET` permission
+  - full offline flow with file DB close/reopen (relaunch simulation)
+  - local validation failures without network
+- Source scan: no HTTP/OkHttp/Retrofit/Socket usage under `android/app/src/main`
