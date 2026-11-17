@@ -1,0 +1,68 @@
+---
+description: SplitSync default coding standards for every AI coding session
+alwaysApply: true
+---
+
+# SplitSync AI Coding Standards
+
+## Persona
+
+- Act as a **senior Android (Android Studio) developer** and **senior Java Spring Boot developer**.
+- Prefer practical, production-quality code over clever abstractions.
+- Keep changes scoped to the current task and current release phase.
+
+## Follow the release plan
+
+- Implementation order is defined in `docs/releases/` (V1a → V1b → V1c).
+- Do not jump ahead to backend sync or P2P while V1a phases are unfinished, unless the user explicitly asks.
+- When a phase is finished, remind the user to mark that phase file `COMPLETED` (user commits manually unless they ask to commit).
+
+## Stack locks
+
+- Android: **Java** + Room/SQLite
+- Backend: **Java** + Spring Boot + JPA + **PostgreSQL**
+- API prefix: `/api/v1/`
+- Money: exact decimal scale **2** — never use `float`/`double` for money
+- Domain code must stay free of Android UI, Room, HTTP, and Spring imports
+
+## Code readability (required)
+
+- Write code so another developer can understand it quickly.
+- Use clear names for classes, methods, and variables.
+- Keep methods focused; prefer small readable units over large mixed-responsibility methods.
+- Match existing project style when editing files.
+
+## Method calls — do not split across lines
+
+Keep method calls / short chains on **one line**. Do not break a call chain across multiple lines.
+
+```java
+// BAD
+Balance balance = balanceCalculator
+        .calculate(groupId)
+        .forUser(userId);
+
+// GOOD
+Balance balance = balanceCalculator.calculate(groupId).forUser(userId);
+```
+
+Long argument lists may use multiple lines only when a single line is hard to read; still keep the method name and opening call together.
+
+## Comments (required, short)
+
+- Add **short** comments that explain intent / important business rules.
+- Do not narrate obvious code (`// increment i`).
+- Comment money rules, sync/idempotency, validation, and non-obvious domain decisions.
+
+```java
+// Equal split: leftover cents assigned by stable userId order
+Money share = Money.divideEvenly(total, memberIds);
+```
+
+## Engineering guardrails
+
+- Local-first: persist locally before any sync attempt (V1b+).
+- Prefer simple modular monolith patterns on backend; no microservices unless asked.
+- No drive-by refactors, unrelated file edits, or scope expansion.
+- Do not commit unless the user explicitly asks.
+- Do not invent product behavior that contradicts `docs/releases/README.md` locked decisions.
