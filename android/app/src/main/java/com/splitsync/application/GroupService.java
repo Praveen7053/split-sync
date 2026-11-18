@@ -42,6 +42,10 @@ public class GroupService {
      * Creates a local member profile and adds them to the group (offline-only flow).
      */
     public Membership addLocalMember(GroupId groupId, String displayName, MembershipRole role) {
+        return addLocalMember(groupId, displayName, null, role);
+    }
+
+    public Membership addLocalMember(GroupId groupId, String displayName, String phoneNumber, MembershipRole role) {
         User actor = profiles.getLocalProfile();
         membershipGuard.requireMembership(groupId, actor.userId());
 
@@ -55,6 +59,9 @@ public class GroupService {
         }
 
         User memberUser = User.create(displayName);
+        if (phoneNumber != null && !phoneNumber.isBlank()) {
+            memberUser = memberUser.withProfile(displayName, phoneNumber, null, null);
+        }
         users.save(memberUser);
         Membership membership = Membership.create(groupId, memberUser.userId(), effectiveRole);
         groups.saveMembership(membership);

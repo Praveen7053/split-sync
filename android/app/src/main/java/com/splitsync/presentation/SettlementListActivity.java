@@ -5,9 +5,8 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
-
-import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
 import com.splitsync.R;
@@ -17,7 +16,7 @@ import com.splitsync.domain.valueobject.GroupId;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SettlementListActivity extends AppCompatActivity {
+public class SettlementListActivity extends SplitSyncActivity {
 
     private GroupId groupId;
 
@@ -46,7 +45,9 @@ public class SettlementListActivity extends AppCompatActivity {
     private void refresh() {
         ListView listItems = findViewById(R.id.listItems);
         TextView textEmpty = findViewById(R.id.textEmpty);
+        ProgressBar progressLoading = findViewById(R.id.progressLoading);
         textEmpty.setText(R.string.empty_settlements);
+        progressLoading.setVisibility(View.VISIBLE);
 
         AppExecutors.io(() -> {
             try {
@@ -55,15 +56,19 @@ public class SettlementListActivity extends AppCompatActivity {
                 for (Settlement settlement : settlements) {
                     String from = UiHelpers.services(this).profiles().displayNameOf(settlement.paidBy());
                     String to = UiHelpers.services(this).profiles().displayNameOf(settlement.paidTo());
-                    rows.add(from + " → " + to + " · " + settlement.amount());
+                    rows.add(from + " → " + to + " · " + UiHelpers.formatMoney(settlement.amount()));
                 }
                 runOnUiThread(() -> {
+                    progressLoading.setVisibility(View.GONE);
                     ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, rows);
                     listItems.setAdapter(adapter);
                     textEmpty.setVisibility(rows.isEmpty() ? View.VISIBLE : View.GONE);
                 });
             } catch (Exception error) {
-                runOnUiThread(() -> UiHelpers.showError(this, error));
+                runOnUiThread(() -> {
+                    progressLoading.setVisibility(View.GONE);
+                    UiHelpers.showError(this, error);
+                });
             }
         });
     }

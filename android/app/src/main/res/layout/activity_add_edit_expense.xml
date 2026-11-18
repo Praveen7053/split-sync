@@ -47,12 +47,32 @@
             android:layout_marginTop="8dp" />
 
         <TextView
-            android:id="@+id/textSplitHint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
+            android:text="@string/split_type" />
+
+        <Spinner
+            android:id="@+id/spinnerSplitType"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:id="@+id/textSplitHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
             android:text="@string/split_equal_hint"
             android:textColor="@color/splitsync_muted" />
+
+        <LinearLayout
+            android:id="@+id/layoutSplitValues"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical"
+            android:visibility="gone" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/buttonSaveExpense"

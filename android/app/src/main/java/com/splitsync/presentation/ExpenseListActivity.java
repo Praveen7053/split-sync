@@ -5,25 +5,26 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
-
-import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
 import com.splitsync.R;
 import com.splitsync.domain.model.Expense;
+import com.splitsync.domain.model.Membership;
 import com.splitsync.domain.valueobject.GroupId;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class ExpenseListActivity extends AppCompatActivity {
+public class ExpenseListActivity extends SplitSyncActivity {
 
     public static final String EXTRA_EXPENSE_ID = "expenseId";
 
     private GroupId groupId;
     private final List<Expense> expenses = new ArrayList<>();
     private ArrayAdapter<String> adapter;
+    private int memberCount;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,6 +50,10 @@ public class ExpenseListActivity extends AppCompatActivity {
         });
 
         buttonPrimary.setOnClickListener(v -> {
+            if (memberCount < 2) {
+                UiHelpers.showError(this, getString(R.string.error_need_two_members));
+                return;
+            }
             Intent intent = new Intent(this, AddEditExpenseActivity.class);
             intent.putExtra(GroupDetailActivity.EXTRA_GROUP_ID, groupId.value());
             startActivity(intent);
@@ -63,15 +68,25 @@ public class ExpenseListActivity extends AppCompatActivity {
 
     private void refresh() {
         TextView textEmpty = findViewById(R.id.textEmpty);
+        ProgressBar progressLoading = findViewById(R.id.progressLoading);
+        progressLoading.setVisibility(View.VISIBLE);
         AppExecutors.io(() -> {
             try {
+                List<Membership> memberships = UiHelpers.services(this).groups().listMembers(groupId);
                 List<Expense> loaded = UiHelpers.services(this).expenses().listExpenses(groupId);
                 List<String> rows = new ArrayList<>();
                 for (Expense expense : loaded) {
                     String payer = UiHelpers.services(this).profiles().displayNameOf(expense.paidBy());
-                    rows.add(expense.description() + " · " + expense.amount() + " · " + payer);
+                    rows.add(getString(
+                            R.string.expense_row,
+                            expense.description(),
+                            UiHelpers.formatMoney(expense.amount()),
+                            payer,
+                            expense.expenseDate().toString()));
                 }
                 runOnUiThread(() -> {
+                    progressLoading.setVisibility(View.GONE);
+                    memberCount = memberships.size();
                     expenses.clear();
                     expenses.addAll(loaded);
                     adapter.clear();
@@ -80,7 +95,10 @@ public class ExpenseListActivity extends AppCompatActivity {
                     textEmpty.setVisibility(rows.isEmpty() ? View.VISIBLE : View.GONE);
                 });
             } catch (Exception error) {
-                runOnUiThread(() -> UiHelpers.showError(this, error));
+                runOnUiThread(() -> {
+                    progressLoading.setVisibility(View.GONE);
+                    UiHelpers.showError(this, error);
+                });
             }
         });
     }

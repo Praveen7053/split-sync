@@ -11,7 +11,7 @@ import com.splitsync.domain.model.User;
 /**
  * Launcher that routes to onboarding or the group list.
  */
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends SplitSyncActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

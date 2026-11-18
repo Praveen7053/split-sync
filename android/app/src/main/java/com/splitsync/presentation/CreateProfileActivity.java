@@ -5,12 +5,10 @@ import android.os.Build;
 import android.os.Bundle;
 import android.widget.EditText;
 
-import androidx.appcompat.app.AppCompatActivity;
-
 import com.google.android.material.button.MaterialButton;
 import com.splitsync.R;
 
-public class CreateProfileActivity extends AppCompatActivity {
+public class CreateProfileActivity extends SplitSyncActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -21,6 +19,7 @@ public class CreateProfileActivity extends AppCompatActivity {
         EditText inputDisplayName = findViewById(R.id.inputDisplayName);
         EditText inputDeviceName = findViewById(R.id.inputDeviceName);
         MaterialButton buttonContinue = findViewById(R.id.buttonContinue);
+        CharSequence idleLabel = buttonContinue.getText();
 
         String defaultDevice = Build.MODEL == null || Build.MODEL.isBlank() ? "Android Device" : Build.MODEL;
         inputDeviceName.setText(defaultDevice);
@@ -28,15 +27,26 @@ public class CreateProfileActivity extends AppCompatActivity {
         buttonContinue.setOnClickListener(v -> {
             String displayName = textOf(inputDisplayName);
             String deviceName = textOf(inputDeviceName);
+            if (displayName.isEmpty()) {
+                inputDisplayName.setError(getString(R.string.error_required));
+                inputDisplayName.requestFocus();
+                return;
+            }
+            inputDisplayName.setError(null);
+            UiHelpers.setSaving(buttonContinue, true, idleLabel);
             AppExecutors.io(() -> {
                 try {
                     UiHelpers.services(this).profiles().createLocalProfile(displayName, deviceName);
                     runOnUiThread(() -> {
+                        UiHelpers.showSuccess(this, R.string.saved_profile);
                         startActivity(new Intent(this, GroupListActivity.class));
                         finish();
                     });
                 } catch (Exception error) {
-                    runOnUiThread(() -> UiHelpers.showError(this, error));
+                    runOnUiThread(() -> {
+                        UiHelpers.setSaving(buttonContinue, false, idleLabel);
+                        UiHelpers.showError(this, error);
+                    });
                 }
             });
         });

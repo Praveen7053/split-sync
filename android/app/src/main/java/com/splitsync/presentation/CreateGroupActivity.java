@@ -5,13 +5,11 @@ import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.Spinner;
 
-import androidx.appcompat.app.AppCompatActivity;
-
 import com.google.android.material.button.MaterialButton;
 import com.splitsync.R;
 import com.splitsync.domain.type.GroupType;
 
-public class CreateGroupActivity extends AppCompatActivity {
+public class CreateGroupActivity extends SplitSyncActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -23,6 +21,7 @@ public class CreateGroupActivity extends AppCompatActivity {
         EditText inputCurrency = findViewById(R.id.inputCurrency);
         Spinner spinnerGroupType = findViewById(R.id.spinnerGroupType);
         MaterialButton buttonSaveGroup = findViewById(R.id.buttonSaveGroup);
+        CharSequence idleLabel = buttonSaveGroup.getText();
 
         spinnerGroupType.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, GroupType.values()));
 
@@ -30,12 +29,40 @@ public class CreateGroupActivity extends AppCompatActivity {
             String name = textOf(inputGroupName);
             String currency = textOf(inputCurrency);
             GroupType type = (GroupType) spinnerGroupType.getSelectedItem();
+            boolean valid = true;
+            if (name.isEmpty()) {
+                inputGroupName.setError(getString(R.string.error_required));
+                inputGroupName.requestFocus();
+                valid = false;
+            } else {
+                inputGroupName.setError(null);
+            }
+            if (currency.isEmpty()) {
+                inputCurrency.setError(getString(R.string.error_required));
+                if (valid) {
+                    inputCurrency.requestFocus();
+                }
+                valid = false;
+            } else {
+                inputCurrency.setError(null);
+            }
+            if (!valid) {
+                return;
+            }
+
+            UiHelpers.setSaving(buttonSaveGroup, true, idleLabel);
             AppExecutors.io(() -> {
                 try {
                     UiHelpers.services(this).groups().createGroup(name, type, currency);
-                    runOnUiThread(this::finish);
+                    runOnUiThread(() -> {
+                        UiHelpers.showSuccess(this, R.string.saved_group);
+                        finish();
+                    });
                 } catch (Exception error) {
-                    runOnUiThread(() -> UiHelpers.showError(this, error));
+                    runOnUiThread(() -> {
+                        UiHelpers.setSaving(buttonSaveGroup, false, idleLabel);
+                        UiHelpers.showError(this, error);
+                    });
                 }
             });
         });

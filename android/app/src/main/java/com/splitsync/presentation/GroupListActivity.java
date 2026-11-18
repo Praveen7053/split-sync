@@ -16,7 +16,7 @@ import com.splitsync.domain.model.Group;
 import java.util.ArrayList;
 import java.util.List;
 
-public class GroupListActivity extends AppCompatActivity {
+public class GroupListActivity extends SplitSyncActivity {
 
     private final List<Group> groups = new ArrayList<>();
     private ArrayAdapter<String> adapter;

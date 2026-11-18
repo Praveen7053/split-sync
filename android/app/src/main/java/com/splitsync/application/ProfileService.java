@@ -50,6 +50,10 @@ public class ProfileService {
         return user == null ? userId.value() : user.displayName();
     }
 
+    public User findUserOrNull(UserId userId) {
+        return users.findById(userId);
+    }
+
     public Device ensureDevice(User user, String deviceName) {
         DomainValidator.requireNonNull(user, "user");
         Device existing = devices.findByUserId(user.userId());
